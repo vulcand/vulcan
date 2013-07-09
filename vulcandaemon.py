@@ -12,7 +12,8 @@ import vulcan
 
 def parse_args():
     global args
-    p = argparse.ArgumentParser(description="Proxies HTTP(S) and SMTP requests")
+    p = argparse.ArgumentParser(
+        description="Proxies HTTP(S) and SMTP requests")
     p.add_argument("--smtp-port", "-m", default=5050, type=int,
                    metavar='<PORT>', help="SMTP port number to listen on.")
     p.add_argument("--http-port", "-p", default=8080, type=int,
@@ -51,8 +52,10 @@ def main():
 
     throttling.initialize()
     reactor.listenTCP(args.http_port, HTTPFactory())
-    reactor.listenTCP(args.smtp_port, SMTPFactory(
-            Portal(SimpleRealm(), [CredentialsChecker()])))
+    reactor.listenTCP(args.smtp_port,
+                      SMTPFactory(
+                          Portal(SimpleRealm(),
+                                 [CredentialsChecker()])))
     reactor.suggestThreadPoolSize(vulcan.config.get("numthreads", 10))
     reactor.run()
 

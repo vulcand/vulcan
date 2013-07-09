@@ -26,11 +26,11 @@ setup(name='vulcan',
       ],
       extras_require={'test': ['nose', 'mock']},
       dependency_links=[
-        ('https://{u}:{p}@github.com/mailgun/expiringdict/'
-         'tarball/master#egg=expiringdict-1.0').format(
-            u=quote(env.get('MG_COLABORATOR')),
-            p=quote(env.get('MG_COLABORATOR_PASSWORD')))
-        ]
+          ('https://{u}:{p}@github.com/mailgun/expiringdict/tarball/'
+           'master#egg=expiringdict-1.0').format(
+              u=quote(env.get('MG_COLABORATOR')),
+              p=quote(env.get('MG_COLABORATOR_PASSWORD')))
+          ]
       )
 
 

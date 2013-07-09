@@ -78,7 +78,8 @@ class CredentialsChecker(object):
 
     def communicationFailed(self, d, reason):
         log.exception(reason.getTraceback())
-        return d.errback(smtp.SMTPServerError(
+        return d.errback(
+            smtp.SMTPServerError(
                 SMTP_TRANSACTION_FAILED, UNHANDLED_SMTP_ERROR))
 
     def authenticationFailed(self, d, reason=None):
@@ -116,9 +117,9 @@ class SmtpMessage(object):
 
     def toHTTPRequest(self, mime_message):
         return treq.post(
-            ("http://"+
-             pick_server(get_servers(self.delivery.settings["upstream"]))+
-             self.delivery.settings['http']['url']),
+            ("http://" +
+             pick_server(get_servers(self.delivery.settings["upstream"])) +
+             self.delivery.settings['http']['path']),
             data={"to": ",".join(recipients)},
             files={"message": FileStorage(stream=StringIO(mime_message),
                                           name="mime")})
@@ -126,7 +127,6 @@ class SmtpMessage(object):
     def lineReceived(self, line):
         if self.delivery:
             self.lines.append(line)
-
 
     def eomReceived(self):
         '''
@@ -144,14 +144,12 @@ class SmtpMessage(object):
 
         return self.pointerLookup(auth_ip)
 
-
     def pointerLookup(self, ip):
         addr = '{}.in-addr.arpa'.format('.'.join(reversed(ip.split('.'))))
         later = defer.Deferred()
         lookupPointer(addr).addBoth(
             partial(self.pointerLookupCompleted, later))
         return later
-
 
     def pointerLookupCompleted(self, later, result):
         rdns = 'Unknown'
@@ -163,27 +161,27 @@ class SmtpMessage(object):
             log.exception(e)
         self.submit(later, rdns)
 
-
     def submit(self, later, rdns):
         auth_user = None
         auth_ip = None
 
         try:
-            helo  = self.delivery.helo
+            helo = self.delivery.helo
             creds = self.delivery.creds
             if creds:
                 auth_user = creds.username
-                auth_ip = creds.password # yes, we store IP as 'password'
+                auth_ip = creds.password  # yes, we store IP as 'password'
 
             # Add "Received" header:
             if auth_ip and is_valid_ip(auth_ip) and helo:
-                rcv = "Received: from {} ({} [{}])\n "\
-                      "by mxa.mailgun.org with ESMTP id {};\n {} (UTC)".format(
-                            helo,
-                            rdns,
-                            auth_ip,
-                            make_esmtp_id(helo),
-                            formatdate(usegmt=False))
+                rcv = (
+                    "Received: from {} ({} [{}])\n "
+                    "by mxa.mailgun.org with ESMTP id {};\n {} (UTC)").format(
+                    helo,
+                    rdns,
+                    auth_ip,
+                    make_esmtp_id(helo),
+                    formatdate(usegmt=False))
                 self.lines.insert(0, rcv)
 
             # Add "X-Envelope-From" header for non-authenticated users
@@ -194,12 +192,12 @@ class SmtpMessage(object):
             # self.delivery.recipients is actualy an array of
             # twisted.mail.smtp.User objects that also have various useful
             # information there, like EHLO data
-            recipients   = list(set([str(r) for r in self.delivery.recipients]))
+            recipients = list(set([str(r) for r in self.delivery.recipients]))
             mime_message = "\r\n".join(self.lines)
 
             # erase this message and reset the session
             # (in case there will be another message after us):
-            self.lines   = []
+            self.lines = []
             if self.delivery:
                 self.delivery.message = None
                 self.delivery.recipients = []
@@ -264,10 +262,8 @@ class MessageDelivery(object):
         # SMTP DATA length
         self.data_length = 0
 
-
     def receivedHeader(self, helo, origin, recipients):
         self.recipients += recipients
-
 
     def validateFrom(self, helo, origin):
         # All addresses are accepted
@@ -277,7 +273,6 @@ class MessageDelivery(object):
         else:
             self.helo = 'unknown'
         return origin
-
 
     def validateTo(self, rcpt_to):
         '''
@@ -289,10 +284,11 @@ class MessageDelivery(object):
         if self.creds and self.creds.username:
             auth_user = self.creds.username
 
-        d = treq.get(("http://"+
-                      pick_server(get_servers('auxvalidation'))+
-                      config['validate_rcpt']),
-                     params={"auth_user": auth_user, "rcpt_to": str(rcpt_to)})
+        d = treq.get(
+            ("http://" +
+             pick_server(get_servers('auxvalidation')) +
+             config['validate_rcpt']),
+            params={"auth_user": auth_user, "rcpt_to": str(rcpt_to)})
 
         d.addCallback(partial(self.validateToReceived, d, rcpt_to))
         d.addErrback(partial(self.communicationFailed, d))
@@ -321,7 +317,8 @@ class MessageDelivery(object):
         else:
             # TODO could reason end up being unicode?
             reason = result.get("message") or SMTP_RELAY_DENIED
-            log.info("SMTP RCPT TO: {} rejected: {}".format(
+            log.info(
+                "SMTP RCPT TO: {} rejected: {}".format(
                     rcpt_to, reason))
             raise smtp.SMTPBadRcpt(rcpt_to, code=550, resp=str(reason))
 
@@ -375,7 +372,6 @@ class SimpleRealm:
         raise NotImplementedError()
 
 
-
 class SmtpProtocol(smtp.ESMTP):
     # increase the max. size of SMTP line
     MAX_LENGTH = 16384 * 100
@@ -383,7 +379,6 @@ class SmtpProtocol(smtp.ESMTP):
     @staticmethod
     def splitLines(data):
         return [line.rstrip("\r") for line in data.split("\n")]
-
 
     def dataReceived(self, data):
         """
@@ -417,7 +412,6 @@ class SmtpProtocol(smtp.ESMTP):
         if len(self._buffer) > self.MAX_LENGTH:
             return self.lineLengthExceeded(self._buffer)
 
-
     def do_XCLIENT(self, line):
         '''
         This is a non-standard SMTP extension. XCLIENT command looks like this:
@@ -434,13 +428,11 @@ class SmtpProtocol(smtp.ESMTP):
                                                self.xclient.get('ADDR', None))
         self.sendCode(250, "OK")
 
-
     def do_QUIT(self, rest):
         '''Our own version of Twisted's QUIT. Differs only by our bye message.
         '''
         self.sendCode(221, 'See you later. Yours truly, Mailgun')
         self.transport.loseConnection()
-
 
     def messageLengthExceeded(self):
         '''Message is big enough to reject it.
@@ -449,7 +441,6 @@ class SmtpProtocol(smtp.ESMTP):
             SMTP_TRANSACTION_FAILED,
             "Message is too big. Max message size is {} bytes".format(
                 MAX_MESSAGE_SIZE_BYTES))
-
 
     def _messageHandled(self, resultList):
         failures = []

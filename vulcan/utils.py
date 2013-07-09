@@ -23,7 +23,7 @@ def load_config(ini_file):
         if not exists(ini_file):
             raise Exception("Can't load ini-file; {}".format(ini_file))
 
-    # read name/value options from the ini-file and convert them into dictionary
+    # convert name/value options from the ini-file into dictionary
     file_conf = {k: v for k, v in parser.items("DEFAULT")}
 
     # also append the full path of the ini-file itself to it, so we'll always
@@ -34,7 +34,7 @@ def load_config(ini_file):
 
 def is_valid_ip(str_ip):
     """Determines if a given IP address is good"""
-    return RE_IP_ADDRESS.match(str_ip or '') != None
+    return RE_IP_ADDRESS.match(str_ip or '') is not None
 
 
 def to_utf8(str_or_unicode):

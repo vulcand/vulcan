@@ -36,13 +36,15 @@ class RestrictedChanel(HTTPChannel):
         request.method = self._command
 
         if request.getHeader("Authorization"):
-            d = authorize(dict(
-                    username=request.getUser(),
-                    password=request.getPassword(),
-                    protocol=request.clientproto,
-                    method=request.method,
-                    uri=request.uri,
-                    length=request.getHeader("Content-Length") or 0))
+            d = authorize(
+                {
+                    'username': request.getUser(),
+                    'password': request.getPassword(),
+                    'protocol': request.clientproto,
+                    'method': request.method,
+                    'uri': request.uri,
+                    'length': request.getHeader("Content-Length") or 0
+                })
 
             # pass request to callbacks to finish it later
             # we receive and process requests asynchronously
@@ -55,7 +57,7 @@ class RestrictedChanel(HTTPChannel):
         else:
             request.setResponseCode(UNAUTHORIZED, RESPONSES[UNAUTHORIZED])
             request.setHeader('WWW-Authenticate',
-                          'basic realm="%s"' % config['realm'])
+                              'basic realm="%s"' % config['realm'])
             request.write("")
             request.finishUnreceived()
 

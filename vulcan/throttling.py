@@ -12,8 +12,7 @@ from twisted.python.failure import Failure
 from telephus.pool import CassandraClusterPool
 from telephus.client import CassandraClient
 
-# TODO opensource expiringdict
-from arsenal.expiringdict import ExpiringDict
+from expiringdict import ExpiringDict
 
 from vulcan import config, log
 from vulcan.utils import safe_format
@@ -94,8 +93,10 @@ def _check_and_update_rate(request_params, limit, _):
 
 
 def _get_hits_counters(hits):
-    return client.execute_cql3_query(safe_format(
-            "select counter from hits where hit='{}' and ts >= {} and ts <= {}",
+    return client.execute_cql3_query(
+        safe_format(
+            ("select counter from hits where hit='{}' and "
+             "ts >= {} and ts <= {}"),
             hits['hit'], hits["timerange"][0], hits["timerange"][1]))
 
 
@@ -112,7 +113,8 @@ def _check_rate_against_limit(request_params, limit, result):
 
 
 def _update_usage(hit, ts, period, _):
-    d = client.execute_cql3_query(safe_format(
+    d = client.execute_cql3_query(
+        safe_format(
             ("update hits using  ttl {} "
              "set counter = counter + 1 where hit='{}' and ts={}"),
             period, hit, ts))

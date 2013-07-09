@@ -6,8 +6,7 @@ from twisted.web.http import RESPONSES
 
 import treq
 
-# TODO opensource expiringdict
-from arsenal.expiringdict import ExpiringDict
+from expiringdict import ExpiringDict
 
 from vulcan.utils import safe_format
 from vulcan.upstream import get_servers, pick_server
