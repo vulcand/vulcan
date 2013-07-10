@@ -108,8 +108,8 @@ def _check_rate_against_limit(request_params, limit, result):
 
         if rate >= limit["threshold"]:
             return Failure(RateLimitReached(request_params, limit))
-    except Exception, e:
-        log.exception(e)
+    except:
+        log.err()
 
 
 def _update_usage(hit, ts, period, _):

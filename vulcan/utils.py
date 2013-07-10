@@ -1,11 +1,10 @@
 from os.path import exists
-import logging
 from ConfigParser import ConfigParser
 
 import regex as re
+from vulcan import log
 
 
-log = logging.getLogger(__name__)
 RE_IP_ADDRESS = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 
@@ -66,6 +65,6 @@ def safe_format(format_string, *args, **kwargs):
         return format_string.format(*args, **kwargs)
 
     # ignore other errors
-    except Exception, e:
-        log.exception(e)
+    except:
+        log.err()
         return u''

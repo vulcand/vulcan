@@ -76,14 +76,14 @@ class CredentialsChecker(object):
         d.addErrback(partial(self.communicationFailed, d))
         return d
 
-    def communicationFailed(self, d, reason):
-        log.exception(reason.getTraceback())
+    def communicationFailed(self, d, failure):
+        log.err(failure)
         return d.errback(
             smtp.SMTPServerError(
                 SMTP_TRANSACTION_FAILED, UNHANDLED_SMTP_ERROR))
 
-    def authenticationFailed(self, d, reason=None):
-        log.exception(reason.getTraceback())
+    def authenticationFailed(self, d, failure):
+        log.err(failure)
         return d.errback(
             smtp.AUTHDeclinedError(535, '5.7.0 authentication failed'))
 
@@ -157,8 +157,8 @@ class SmtpMessage(object):
             if not isinstance(result, failure.Failure):
                 if result[0]:
                     rdns = result[0][0].payload.name
-        except Exception, e:
-            log.exception(e)
+        except:
+            log.err()
         self.submit(later, rdns)
 
     def submit(self, later, rdns):
@@ -203,8 +203,8 @@ class SmtpMessage(object):
                 self.delivery.recipients = []
                 self.delivery.data_length = 0
 
-            log.info("%s accept_via_smtp(rcpt=%s, msglen=%d)" % (
-                auth_ip, recipients, len(mime_message)))
+            log.msg("%s accept_via_smtp(rcpt=%s, msglen=%d)" % (
+                    auth_ip, recipients, len(mime_message)))
 
             d = self.toHTTPRequest(mime_message)
 
@@ -213,14 +213,14 @@ class SmtpMessage(object):
             return d
 
         # Unhandled error:
-        except Exception:
-            log.exception("Error in Message.eomReceived()")
+        except:
+            log.err()
             return later.errback(
                 smtp.SMTPServerError(
                     SMTP_TRANSACTION_FAILED, UNHANDLED_SMTP_ERROR))
 
-    def communicationFailed(self, later, reason):
-        log.exception(reason.getTraceback())
+    def communicationFailed(self, later, failure):
+        log.err(failure)
         return later.errback(
             smtp.SMTPServerError(
                 SMTP_TRANSACTION_FAILED, json.loads(result)["message"]))
@@ -294,8 +294,8 @@ class MessageDelivery(object):
         d.addErrback(partial(self.communicationFailed, d))
         return d
 
-    def communicationFailed(self, d, reason):
-        log.exception(reason.getTraceback())
+    def communicationFailed(self, d, failure):
+        log.err(failure)
         return d.errback(smtp.SMTPServerError(SMTP_TRANSACTION_FAILED,
                                               UNHANDLED_SMTP_ERROR))
 
@@ -317,7 +317,7 @@ class MessageDelivery(object):
         else:
             # TODO could reason end up being unicode?
             reason = result.get("message") or SMTP_RELAY_DENIED
-            log.info(
+            log.msg(
                 "SMTP RCPT TO: {} rejected: {}".format(
                     rcpt_to, reason))
             raise smtp.SMTPBadRcpt(rcpt_to, code=550, resp=str(reason))

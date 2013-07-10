@@ -54,7 +54,7 @@ def _authorization_received(hit, response):
 
 
 def _failed_receive_auth_failure_reason(hit, code, failure):
-    log.exception(failure.getErrorMessage())
+    log.err(failure)
     error = AuthorizationFailed(code, RESPONSES[code])
     CACHE[hit] = (False, error)
     return False, error

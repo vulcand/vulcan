@@ -5,7 +5,6 @@ import argparse
 import setproctitle
 
 from twisted.internet import epollreactor
-from twisted.python import usage
 
 import vulcan
 
@@ -42,6 +41,8 @@ def main():
     # any other Twisted imports
     epollreactor.install()
 
+    initialize()
+
     from twisted.internet import reactor
     from twisted.cred.portal import Portal
 
@@ -61,5 +62,4 @@ def main():
 
 
 if __name__ == '__main__':
-    initialize()
     main()

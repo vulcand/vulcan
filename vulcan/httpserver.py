@@ -75,7 +75,7 @@ class RestrictedChanel(HTTPChannel):
         else:
             # unknown exception we haven't logged before
             if not isinstance(failure.value, CommunicationFailed):
-                log.exception(failure.getErrorMessage())
+                log.err(failure)
 
             request.setResponseCode(SERVICE_UNAVAILABLE,
                                     RESPONSES[SERVICE_UNAVAILABLE])

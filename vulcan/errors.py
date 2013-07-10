@@ -13,7 +13,7 @@ class CommunicationFailed(Exception):
 def communication_failed(known_errors, failure):
     if type(failure.value) in known_errors:
         return failure
-    log.exception(failure.getErrorMessage())
+    log.err(failure)
     return Failure(CommunicationFailed())
 
 
