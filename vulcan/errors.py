@@ -29,7 +29,9 @@ class RateLimitReached(Exception):
 
 
 class AuthorizationFailed(Error):
-    pass
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
 
 
 # http://tools.ietf.org/html/rfc6585
