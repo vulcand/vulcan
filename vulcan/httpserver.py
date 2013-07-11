@@ -50,7 +50,6 @@ class RestrictedChanel(HTTPChannel):
             # we receive and process requests asynchronously
             # so self.requests[-1] could point to a different request
             # by the time we access it
-            d.addCallback(partial(self.authorizationReceived, request))
             d.addCallback(partial(self.checkAndUpdateRates, request))
             d.addCallback(partial(self.proxyPass, request))
             d.addErrback(partial(self.errorToHTTPResponse, request))
@@ -67,11 +66,11 @@ class RestrictedChanel(HTTPChannel):
         if isinstance(failure.value, RateLimitReached):
             request.setResponseCode(TOO_MANY_REQUESTS,
                                     RESPONSES[TOO_MANY_REQUESTS])
-            request.write(failure.getErrorMessage())
+            request.write(failure.getErrorMessage() or "")
         elif isinstance(failure.value, AuthorizationFailed):
             request.setResponseCode(failure.value.status,
                                     failure.value.message)
-            request.write(failure.value.response)
+            request.write(failure.value.response or "")
         else:
             # unknown exception we haven't logged before
             if not isinstance(failure.value, CommunicationFailed):
@@ -82,13 +81,6 @@ class RestrictedChanel(HTTPChannel):
             request.write("")
 
         request.finishUnreceived()
-
-    def authorizationReceived(self, request, verdict):
-        allowed, details = verdict
-        if allowed:
-            return details
-        else:
-            return Failure(details)
 
     def checkAndUpdateRates(self, request, settings):
         request_params = dict(

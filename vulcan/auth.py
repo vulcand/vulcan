@@ -10,8 +10,8 @@ from expiringdict import ExpiringDict
 
 from vulcan.utils import safe_format
 from vulcan.upstream import get_servers, pick_server
-from vulcan.errors import communication_failed, AuthorizationFailed
-from vulcan import config
+from vulcan.errors import CommunicationFailed, AuthorizationFailed
+from vulcan import config, log
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
@@ -35,8 +35,16 @@ def authorize(request_params):
                config["auth_path"])
         d = treq.get(url, params=request_params)
         d.addCallback(partial(_authorization_received, hit))
-        d.addErrback(partial(communication_failed, []))
+        d.addErrback(_errback)
         return d
+
+
+def _errback(failure):
+    if isinstance(failure.value, AuthorizationFailed):
+        return failure
+    else:
+        log.err(failure)
+        return Failure(CommunicationFailed())
 
 
 def _authorization_received(hit, response):
@@ -48,24 +56,23 @@ def _authorization_received(hit, response):
     else:
         d = treq.json_content(response)
         d.addCallback(partial(_authorization_succeeded, hit))
-        d.addErrback(partial(communication_failed, []))
 
     return d
 
 
 def _failed_receive_auth_failure_reason(hit, code, failure):
-    log.err(failure)
-    error = AuthorizationFailed(code, RESPONSES[code])
-    CACHE[hit] = (False, error)
-    return False, error
+    # log.err(failure)
+    failure = Failure(AuthorizationFailed(code, RESPONSES[code]))
+    CACHE[hit] = failure
+    return failure
 
 
 def _authorization_failed(hit, code, reason):
-    error = AuthorizationFailed(code, RESPONSES[code], reason)
-    CACHE[hit] = (False, error)
-    return False, error
+    failure = Failure(AuthorizationFailed(code, RESPONSES[code], reason))
+    CACHE[hit] = failure
+    return failure
 
 
 def _authorization_succeeded(hit, result):
-    CACHE[hit] = (True, result)
-    return True, result
+    CACHE[hit] = result
+    return result
