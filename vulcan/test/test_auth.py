@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionRefusedError
 from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.web.client import ResponseDone, ResponseFailed
-from twisted.web.http import FORBIDDEN, OK
+from twisted.web.http import FORBIDDEN, SERVICE_UNAVAILABLE, BAD_GATEWAY, OK
 
 from vulcan import auth
 from vulcan.errors import CommunicationFailed, AuthorizationFailed, RESPONSES
@@ -44,7 +44,7 @@ class AuthTest(TestCase):
         self.assertEquals(auth.CACHE, {})
 
     @patch.object(treq, 'get')
-    def test_wrong_creds(self, treq_get):
+    def test_4xx(self, treq_get):
         self.setUpResponse(FORBIDDEN)
         treq_get.return_value = defer.succeed(self.response)
         d = auth.authorize(request_params())
@@ -61,7 +61,7 @@ class AuthTest(TestCase):
 
     @patch.object(treq, 'get')
     @patch.object(log, 'err')
-    def test_wrong_creds_fail_receive_reason(self, log_err, treq_get):
+    def test_4xx_fail_receive_response_body(self, log_err, treq_get):
         self.setUpResponse(FORBIDDEN)
         treq_get.return_value = defer.succeed(self.response)
         d = auth.authorize(request_params())
@@ -73,6 +73,54 @@ class AuthTest(TestCase):
         self.assertEqual(
             auth.CACHE.values()[-1].value,
             AuthorizationFailed(FORBIDDEN, RESPONSES[FORBIDDEN]))
+
+    @patch.object(treq, 'get')
+    def test_4xx_response_has_no_reason(self, treq_get):
+        self.setUpResponse(FORBIDDEN)
+        treq_get.return_value = defer.succeed(self.response)
+        d = auth.authorize(request_params())
+        self.protocol.connectionLost(Failure(ResponseDone()))
+        self.assertFailure(d, AuthorizationFailed)
+
+        # the failure was cached
+        self.assertEqual(
+            auth.CACHE.values()[-1].value,
+            AuthorizationFailed(FORBIDDEN, RESPONSES[FORBIDDEN], ''))
+
+    @patch.object(treq, 'get')
+    @patch.object(log, 'err')
+    def test_5xx(self, log_err, treq_get):
+        self.setUpResponse(BAD_GATEWAY)
+        treq_get.return_value = defer.succeed(self.response)
+        d = auth.authorize(request_params())
+        data = {"message": "Bad Gateway"}
+        self.protocol.dataReceived(json.dumps(data))
+        self.protocol.connectionLost(Failure(ResponseDone()))
+        self.assertFailure(d, CommunicationFailed)
+        # we log twice:
+        # * when we got the response code
+        # * when we got the response body
+        # this way if we fail to receive response body we'll still know that
+        # authorization failed with 5xx code
+        self.assertEquals(2, log_err.call_count)
+        self.assertIn(str(BAD_GATEWAY), log_err.call_args_list[0][0][0])
+        self.assertIn(json.dumps(data), log_err.call_args_list[1][0][0])
+
+    @patch.object(treq, 'get')
+    @patch.object(log, 'err')
+    def test_5xx_fail_receive_response_body(self, log_err, treq_get):
+        self.setUpResponse(BAD_GATEWAY)
+        treq_get.return_value = defer.succeed(self.response)
+        d = auth.authorize(request_params())
+        failure = Failure(ResponseFailed("Bam!"))
+        self.protocol.connectionLost(failure)
+        self.assertFailure(d, CommunicationFailed)
+        # we log twice:
+        # * we log that authorization failed with 5xx code
+        # * we log error that prevented us from getting the response body
+        self.assertEquals(2, log_err.call_count)
+        self.assertIn(str(BAD_GATEWAY), log_err.call_args_list[0][0][0])
+        self.assertEquals(failure, log_err.call_args_list[1][0][0])
 
     @patch.object(treq, 'get')
     @patch.object(log, 'err')
