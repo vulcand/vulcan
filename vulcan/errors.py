@@ -10,13 +10,6 @@ class CommunicationFailed(Exception):
     pass
 
 
-def communication_failed(known_errors, failure):
-    if type(failure.value) in known_errors:
-        return failure
-    log.err(failure)
-    return Failure(CommunicationFailed())
-
-
 class RateLimitReached(Exception):
     def __init__(self, request_params, limit):
         Exception.__init__(self, safe_format(

@@ -16,7 +16,7 @@ from expiringdict import ExpiringDict
 
 from vulcan import config, log
 from vulcan.utils import safe_format
-from vulcan.errors import communication_failed, RateLimitReached
+from vulcan.errors import CommunicationFailed, RateLimitReached
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
@@ -41,8 +41,16 @@ def get_limits():
 
     limits = client.execute_cql3_query("select * from limits")
     limits.addCallback(_limits_received)
-    limits.addErrback(partial(communication_failed, []))
+    limits.addErrback(_errback)
     return limits
+
+
+def _errback(failure):
+    if isinstance(failure.value, RateLimitReached):
+        return failure
+    else:
+        log.err(failure)
+        return Failure(CommunicationFailed())
 
 
 def _limits_received(result):
@@ -88,7 +96,7 @@ def _check_and_update_rate(request_params, limit, _):
     d.addCallback(partial(_check_rate_against_limit, request_params, limit))
     d.addCallback(partial(_update_usage,
                           hits["hit"], hits["timerange"][1], limit["period"]))
-    d.addErrback(partial(communication_failed, [RateLimitReached]))
+    d.addErrback(_errback)
     return d
 
 
@@ -113,16 +121,11 @@ def _check_rate_against_limit(request_params, limit, result):
 
 
 def _update_usage(hit, ts, period, _):
-    d = client.execute_cql3_query(
+    client.execute_cql3_query(
         safe_format(
             ("update hits using  ttl {} "
              "set counter = counter + 1 where hit='{}' and ts={}"),
-            period, hit, ts))
-    d.addErrback(_failed_update_usage)
-
-
-def _failed_update_usage(failure):
-    communication_failed([], failure)
+            period, hit, ts)).addErrback(_errback)
 
 
 def _hits_spec(auth_token, limit):
