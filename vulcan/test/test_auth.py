@@ -5,7 +5,6 @@ import json
 import treq
 from treq.test.util import TestCase
 
-# from twisted.trial.unittest import TestCase
 from twisted.internet.error import ConnectionRefusedError
 from twisted.internet import defer
 from twisted.python.failure import Failure
