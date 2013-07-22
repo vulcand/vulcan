@@ -50,7 +50,7 @@ class RestrictedChanel(HTTPChannel):
             # we receive and process requests asynchronously
             # so self.requests[-1] could point to a different request
             # by the time we access it
-            d.addCallback(partial(self.checkAndUpdateRates, request))
+            # d.addCallback(partial(self.checkAndUpdateRates, request))
             d.addCallback(partial(self.proxyPass, request))
             d.addErrback(partial(self.errorToHTTPResponse, request))
         else:
@@ -94,8 +94,8 @@ class RestrictedChanel(HTTPChannel):
         d.addCallback(lambda _: settings["upstream"])
         return d
 
-    def proxyPass(self, request, upstream):
-        host, port = pick_server(upstream).split(":")
+    def proxyPass(self, request, settings):
+        host, port = pick_server(settings['upstream']).split(":")
         port = int(port)
         # treq converts upstream string we got from server to unicode
         # host should be an encoded bytestring since we're sending it

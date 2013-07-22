@@ -15,16 +15,15 @@ setup(name='vulcan',
       include_package_data=True,
       zip_safe=True,
       install_requires=[
-          'coverage',
           'twisted==12.2.0',
           # to convert strings to file-like objects
-          'Werkzeug==0.8.3',
+          # 'Werkzeug==0.8.3',
           # required by telephus
-          'pure-sasl==0.1.4',
+          # 'pure-sasl==0.1.4',
           'expiringdict==1.0',
           'regex==0.1.20110315',
       ],
-      extras_require={'test': ['nose', 'mock']},
+      extras_require={'test': ['nose', 'mock', 'coverage']},
       dependency_links=[
           ('https://{u}:{p}@github.com/mailgun/expiringdict/tarball/'
            'master#egg=expiringdict-1.0').format(
