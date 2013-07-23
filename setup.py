@@ -1,6 +1,21 @@
+import sys
+import os
 from os import environ as env
+from os.path import join, dirname
 from urllib import quote
 from setuptools import setup, find_packages
+
+
+def run(command):
+    if os.system(command) != 0:
+        raise Exception("Failed '{}'".format(command))
+    else:
+        return 0
+
+
+def pip(command):
+    command = '{} {}'.format(join(dirname(sys.executable), 'pip'), command)
+    run(command)
 
 
 setup(name='vulcan',
@@ -17,9 +32,6 @@ setup(name='vulcan',
       install_requires=[
         'setproctitle',
         'twisted==12.2.0',
-        # PyPi has treq-0.2, we require a higher version,
-        # so setuptools will try github and install treq-0.2 from github
-        'treq<=0.2.0.p.b7e40c2310',
         # to convert strings to file-like objects
         # 'Werkzeug==0.8.3',
         # required by telephus
@@ -33,8 +45,6 @@ setup(name='vulcan',
            'master#egg=expiringdict-1.0').format(
               u=quote(env.get('MG_COLABORATOR')),
               p=quote(env.get('MG_COLABORATOR_PASSWORD'))),
-          ('https://github.com/klizhentas/treq/tarball/'
-           'b7e40c23108c810d81641d38a12e900bf4f2e599/master#egg=treq-0.2.0')
           ]
 
       )
@@ -43,3 +53,12 @@ setup(name='vulcan',
 # TODO install thrift==1.0.0-dev
 # TODO install telephus==1.0.0-beta1
 # TODO install Cassandra 1.2.5 (using chef)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] in ['develop', 'install']:
+        # adding github repo to dependency_links and requiring treq version
+        # higher than on PyPi won't work for packages that require vulcan
+        # so w explicitly install it from github here
+        pip("install https://github.com/klizhentas/treq/tarball/"
+            "b7e40c23108c810d81641d38a12e900bf4f2e599/master#egg=treq-0.2.0")
