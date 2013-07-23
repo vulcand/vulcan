@@ -56,7 +56,7 @@ setup(name='vulcan',
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] in ['develop', 'install']:
+    if any(cmd in sys.argv[1:] for cmd in ['develop', 'install', 'bdist_egg']):
         # adding github repo to dependency_links and requiring treq version
         # higher than on PyPi won't work for packages that require vulcan
         # so w explicitly install it from github here
