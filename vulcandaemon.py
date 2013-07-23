@@ -23,7 +23,7 @@ def parse_args():
     args = p.parse_args()
 
 
-def initialize():
+def initialize(process_name="vulcan"):
     parse_args()
 
     vulcan.initialize(path.join(path.dirname(__file__), args.ini_file))
@@ -33,7 +33,7 @@ def initialize():
             pidfile.write(str(getpid()))
 
     # Change the name of the process to "vulcan"
-    setproctitle.setproctitle("vulcan")
+    setproctitle.setproctitle(process_name)
 
 
 def main():
@@ -48,8 +48,8 @@ def main():
 
     from vulcan import config
     from vulcan.httpserver import HTTPFactory
-    from vulcan.smtpserver import SMTPFactory, SimpleRealm, CredentialsChecker
-    from vulcan import throttling
+    # from vulcan.smtpserver import SMTPFactory, SimpleRealm, CredentialsChecker
+    # from vulcan import throttling
 
     # throttling.initialize()
     reactor.listenTCP(args.http_port, HTTPFactory())
