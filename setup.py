@@ -17,7 +17,9 @@ setup(name='vulcan',
       install_requires=[
         'setproctitle',
         'twisted==12.2.0',
-        'treq==0.2.0',
+        # PyPi has treq-0.2, we require a higher version,
+        # so setuptools will try github and install treq-0.2 from github
+        'treq<=0.2.0.p.b7e40c2310',
         # to convert strings to file-like objects
         # 'Werkzeug==0.8.3',
         # required by telephus
