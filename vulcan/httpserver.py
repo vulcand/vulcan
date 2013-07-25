@@ -119,7 +119,7 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         we do nothing here.
         """
         if hasattr(self, "factory"):
-            ReverseProxyRequest.process(self)
+            self._process()
         else:
             self.received = True
 
@@ -130,7 +130,22 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         the response to this request.
         """
         if hasattr(self, "received"):
-            ReverseProxyRequest.process(self)
+            self._process()
+
+    def _process(self):
+        """
+        Handle this request by connecting to the proxied server and forwarding
+        it there, then forwarding the response back as the response to this
+        request.
+
+        Copy of ReverseProxyRequest's process() method except that
+        it doesn't set Host header to proxied server hostname.
+        """
+        clientFactory = self.proxyClientFactoryClass(
+            self.method, self.uri, self.clientproto, self.getAllHeaders(),
+            self.content.read(), self)
+        self.reactor.connectTCP(self.factory.host, self.factory.port,
+                                clientFactory)
 
     def finishUnreceived(self):
         """Finishes request that isn't fully received.
