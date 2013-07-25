@@ -18,13 +18,14 @@ from vulcan.upstream import pick_server
 from vulcan import config, log
 from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
                            AuthorizationFailed, CommunicationFailed)
+from vulcan.utils import to_utf8
 # from vulcan.throttling import check_and_update_rates
 
 
 EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
 
 
-class RestrictedChanel(HTTPChannel):
+class RestrictedChannel(HTTPChannel):
     def allHeadersReceived(self):
         HTTPChannel.allHeadersReceived(self)
         request = self.requests[-1]
@@ -100,7 +101,7 @@ class RestrictedChanel(HTTPChannel):
         # treq converts upstream string we got from server to unicode
         # host should be an encoded bytestring since we're sending it
         # over network
-        host = str(host)
+        host = to_utf8(host)
         request.factory = EndpointFactory(host, port)
         request.processWhenReady()
 
@@ -157,7 +158,7 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         self.transport.loseConnection()
 
 
-class RestrictedReverseProxy(RestrictedChanel):
+class RestrictedReverseProxy(RestrictedChannel):
     requestFactory = DynamicallyRoutedRequest
 
 

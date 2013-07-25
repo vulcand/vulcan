@@ -11,7 +11,7 @@ from twisted.web.proxy import reactor
 from twisted.test import proto_helpers
 
 from vulcan.errors import AuthorizationFailed, RESPONSES
-from vulcan.httpserver import HTTPFactory, RestrictedChanel
+from vulcan.httpserver import HTTPFactory, RestrictedChannel
 from vulcan import httpserver
 
 
@@ -22,7 +22,7 @@ class HTTPServerTest(TestCase):
         self.transport = proto_helpers.StringTransport()
         self.protocol.makeConnection(self.transport)
 
-    @patch.object(RestrictedChanel, 'proxyPass')
+    @patch.object(RestrictedChannel, 'proxyPass')
     def test_no_auth_header(self, proxyPass):
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("\r\n")
@@ -31,7 +31,7 @@ class HTTPServerTest(TestCase):
         self.assertFalse(proxyPass.called)
 
     @patch.object(httpserver, 'authorize')
-    @patch.object(RestrictedChanel, 'proxyPass')
+    @patch.object(RestrictedChannel, 'proxyPass')
     def test_wrong_credentials(self, proxyPass, authorize):
         data = {"message": "Wrong API key"}
         d = defer.fail(
