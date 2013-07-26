@@ -31,7 +31,7 @@ setup(name='vulcan',
       zip_safe=True,
       install_requires=[
         'setproctitle',
-        'twisted==12.2.0',
+        'twisted',
         # to convert strings to file-like objects
         # 'Werkzeug==0.8.3',
         # required by telephus
