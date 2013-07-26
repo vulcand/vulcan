@@ -8,7 +8,8 @@ from twisted.web import http
 from twisted.web.http import (HTTPChannel, HTTPFactory as StandardHTTPFactory,
                               OK, UNAUTHORIZED, SERVICE_UNAVAILABLE)
 
-from twisted.web.proxy import ReverseProxyRequest, ProxyClientFactory
+from twisted.web.proxy import (ReverseProxyRequest, ProxyClientFactory,
+                               ProxyClient)
 from twisted.internet.defer import maybeDeferred
 from twisted.web.error import Error
 from twisted.python.failure import Failure
@@ -18,7 +19,7 @@ from vulcan.upstream import pick_server
 from vulcan import config, log
 from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
                            AuthorizationFailed, CommunicationFailed)
-from vulcan.utils import to_utf8
+from vulcan.utils import to_utf8, safe_format
 # from vulcan.throttling import check_and_update_rates
 
 
@@ -106,8 +107,27 @@ class RestrictedChannel(HTTPChannel):
         request.processWhenReady()
 
 
+class ReportingProxyClientFactory(ProxyClientFactory):
+    protocol = ProxyClient
+
+    def clientConnectionFailed(self, connector, reason):
+        """
+        Report a connection failure in a response to the incoming request as
+        an error.
+        """
+        log.err(safe_format("couldn't connect to {}: {} {}",
+                            connector.getDestination(),
+                            reason.getErrorMessage(),
+                            reason.getTraceback()))
+        self.father.setResponseCode(SERVICE_UNAVAILABLE,
+                                    RESPONSES[SERVICE_UNAVAILABLE])
+        self.father.write("")
+        self.father.finish()
+
+
+
 class DynamicallyRoutedRequest(ReverseProxyRequest):
-    proxyClientFactoryClass = ProxyClientFactory
+    proxyClientFactoryClass = ReportingProxyClientFactory
 
     def process(self):
         """
