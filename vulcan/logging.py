@@ -1,3 +1,5 @@
+# -*- test-case-name: vulcan.test.test_logging -*-
+
 from twisted.python import log
 from twisted.python.log import FileLogObserver, _safeFormat, textFromEventDict
 from twisted.python import util
@@ -10,7 +12,7 @@ INFO = "INFO"
 class CustomizableFileLogObserver(FileLogObserver):
     timeFormat = None
 
-    def __init__(self, f, fmt="[%(system)s] [%(level)s] %(text)s\n"):
+    def __init__(self, f, fmt="[%(system)s] [%(logLevel)s] %(text)s\n"):
         self.write = f.write
         self.flush = f.flush
         self.fmt = fmt
@@ -21,11 +23,11 @@ class CustomizableFileLogObserver(FileLogObserver):
             return
 
         timeStr = self.formatTime(eventDict['time'])
-        level = eventDict.get("logLevel",
+        fmtDict = eventDict.copy()
+        logLevel = eventDict.get("logLevel",
                               ERROR if eventDict["isError"] else INFO)
-        fmtDict = {'system': eventDict['system'],
-                   'text': text.replace("\n", "\n\t"),
-                   'level': level}
+        fmtDict["logLevel"] = logLevel
+        fmtDict["text"] = text.replace("\n", "\n\t")
         msgStr = _safeFormat(self.fmt, fmtDict)
 
         util.untilConcludes(self.write, timeStr + " " + msgStr)

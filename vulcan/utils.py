@@ -1,3 +1,5 @@
+# -*- test-case-name: vulcan.test.test_utils -*-
+
 from os.path import exists
 from ConfigParser import ConfigParser
 

@@ -1,3 +1,5 @@
+# -*- test-case-name: vulcan.test.test_httpserver -*-
+
 import json
 from collections import namedtuple
 from functools import partial
