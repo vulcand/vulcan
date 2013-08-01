@@ -2,7 +2,7 @@ from twisted.python.failure import Failure
 from twisted.web.error import Error
 from twisted.web import http
 
-from vulcan import log
+from twisted.python import log
 from vulcan.utils import safe_format
 
 

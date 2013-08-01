@@ -2,7 +2,7 @@ from . import *
 
 import json
 
-from treq.test.util import TestCase
+from twisted.trial.unittest import TestCase
 
 from twisted.internet import defer, task
 from twisted.python.failure import Failure
