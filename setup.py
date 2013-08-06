@@ -35,9 +35,11 @@ setup(name='vulcan',
         # to convert strings to file-like objects
         # 'Werkzeug==0.8.3',
         # required by telephus
-        # 'pure-sasl==0.1.4',
+        'pure-sasl==0.1.4',
         'expiringdict==1.0',
         'regex==0.1.20110315',
+        'thrift',
+        'telephus==1.0.0-beta1'
         ],
       extras_require={'test': ['nose', 'mock', 'coverage']},
       dependency_links=[
@@ -45,14 +47,11 @@ setup(name='vulcan',
            'master#egg=expiringdict-1.0').format(
               u=quote(env.get('MG_COLABORATOR')),
               p=quote(env.get('MG_COLABORATOR_PASSWORD'))),
+          ('https://github.com/driftx/Telephus/tarball/'
+           'master#egg=telephus-1.0.0-beta1')
           ]
 
       )
-
-
-# TODO install thrift==1.0.0-dev
-# TODO install telephus==1.0.0-beta1
-# TODO install Cassandra 1.2.5 (using chef)
 
 
 if __name__ == '__main__':

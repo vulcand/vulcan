@@ -5,8 +5,10 @@ import argparse
 import setproctitle
 
 from twisted.internet import epollreactor
+from twisted.python import log
 
 import vulcan
+from vulcan.logging import CustomizableFileLogObserver
 
 
 def parse_args():
@@ -35,6 +37,7 @@ def initialize(process_name="vulcan"):
     # Change the name of the process to "vulcan"
     setproctitle.setproctitle(process_name)
 
+    log.addObserver(CustomizableFileLogObserver(sys.stdout).emit)
 
 def main():
     # pick epoll()-based twisted reactor. this needs to appear before
@@ -49,9 +52,9 @@ def main():
     from vulcan import config
     from vulcan.httpserver import HTTPFactory
     # from vulcan.smtpserver import SMTPFactory, SimpleRealm, CredentialsChecker
-    # from vulcan import throttling
+    from vulcan import throttling
 
-    # throttling.initialize()
+    throttling.initialize()
     reactor.listenTCP(args.http_port, HTTPFactory())
     # reactor.listenTCP(args.smtp_port,
     #                   SMTPFactory(

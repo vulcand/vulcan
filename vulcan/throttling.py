@@ -8,13 +8,14 @@ from twisted.web.http import RESPONSES, FORBIDDEN
 from twisted.internet import defer, threads
 from twisted.internet.defer import Deferred
 from twisted.python.failure import Failure
+from twisted.python import log
 
 from telephus.pool import CassandraClusterPool
 from telephus.client import CassandraClient
 
 from expiringdict import ExpiringDict
 
-from vulcan import config, log
+from vulcan import config
 from vulcan.utils import safe_format
 from vulcan.errors import CommunicationFailed, RateLimitReached
 

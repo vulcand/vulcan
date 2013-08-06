@@ -22,7 +22,7 @@ from vulcan import config, log
 from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
                            AuthorizationFailed, CommunicationFailed)
 from vulcan.utils import to_utf8, safe_format
-# from vulcan.throttling import check_and_update_rates
+from vulcan.throttling import check_and_update_rates
 
 
 EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
@@ -54,7 +54,7 @@ class RestrictedChannel(HTTPChannel):
             # we receive and process requests asynchronously
             # so self.requests[-1] could point to a different request
             # by the time we access it
-            # d.addCallback(partial(self.checkAndUpdateRates, request))
+            d.addCallback(partial(self.checkAndUpdateRates, request))
             d.addCallback(partial(self.proxyPass, request))
             d.addErrback(partial(self.errorToHTTPResponse, request))
         else:
@@ -86,17 +86,17 @@ class RestrictedChannel(HTTPChannel):
 
         request.finishUnreceived()
 
-    # def checkAndUpdateRates(self, request, settings):
-    #     request_params = dict(
-    #         auth_token=settings["auth_token"],
-    #         protocol=request.clientproto,
-    #         method=request.method,
-    #         uri=request.uri,
-    #         length=request.getHeader("Content-Length") or 0)
+    def checkAndUpdateRates(self, request, settings):
+        request_params = dict(
+            auth_token=settings["auth_token"],
+            protocol=request.clientproto,
+            method=request.method,
+            uri=request.uri,
+            length=request.getHeader("Content-Length") or 0)
 
-    #     d = check_and_update_rates(request_params)
-    #     d.addCallback(lambda _: settings["upstream"])
-    #     return d
+        d = check_and_update_rates(request_params)
+        d.addCallback(lambda _: settings)
+        return d
 
     def proxyPass(self, request, settings):
         host, port = pick_server(settings['upstream']).split(":")

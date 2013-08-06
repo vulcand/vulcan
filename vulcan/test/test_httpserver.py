@@ -54,12 +54,14 @@ class HTTPServerTest(TestCase):
         self.assertIn(json.dumps(data), self.transport.value())
         self.assertFalse(proxyPass.called)
 
-    @patch.object(httpserver, 'authorize')
     @patch.object(reactor, 'connectTCP')
-    def test_success(self, connectTCP, authorize):
-        data = {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"}
-        d = defer.succeed(data)
-        authorize.return_value = d
+    @patch.object(httpserver, 'check_and_update_rates')
+    @patch.object(httpserver, 'authorize')
+    def test_success(self, authorize, check_and_update_rates, connectTCP):
+        authorize.return_value = defer.succeed(
+            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
+
+        check_and_update_rates.return_value = defer.succeed(None)
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
@@ -137,7 +139,9 @@ class HTTPServerTest(TestCase):
         self.assertEquals(1, request.finishUnreceived.call_count)
 
     @patch.object(reactor, 'connectTCP')
-    def test_request_received_before_checks(self, connectTCP):
+    @patch.object(httpserver, 'check_and_update_rates')
+    def test_request_received_before_checks(self,
+                                            check_and_update_rates, connectTCP):
         self.clock = task.Clock()
         data = {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"}
 
@@ -147,6 +151,7 @@ class HTTPServerTest(TestCase):
             return d
 
         with patch.object(httpserver, 'authorize', delayed_auth):
+            check_and_update_rates.return_value = defer.succeed(None)
             self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
             self.protocol.dataReceived(
                 "Authorization: Basic YXBpOmFwaWtleQ==\r\n")
@@ -157,12 +162,15 @@ class HTTPServerTest(TestCase):
                                   "Host should be an encoded bytestring")
             self.assertEquals(3000, connectTCP.call_args[0][1])
 
+    @patch.object(httpserver, 'check_and_update_rates')
     @patch.object(httpserver, 'authorize')
-    def test_clientConnectionFailed(self, authorize):
+    def test_clientConnectionFailed(self, authorize, check_and_update_rates):
         # assume there is nobody listening on this port
         data = {"auth_token": u"abc", "upstream": u"127.0.0.1:69"}
         d = defer.succeed(data)
         authorize.return_value = d
+
+        check_and_update_rates.return_value = defer.succeed(None)
 
         # had to overwrite factories/protocols for testing purposes
         # mocks set before reactor.callLater() won't work afterwords
