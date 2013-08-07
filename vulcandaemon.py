@@ -51,15 +51,10 @@ def main():
 
     from vulcan import config
     from vulcan.httpserver import HTTPFactory
-    # from vulcan.smtpserver import SMTPFactory, SimpleRealm, CredentialsChecker
     from vulcan import throttling
 
     throttling.initialize()
     reactor.listenTCP(args.http_port, HTTPFactory())
-    # reactor.listenTCP(args.smtp_port,
-    #                   SMTPFactory(
-    #                       Portal(SimpleRealm(),
-    #                              [CredentialsChecker()])))
     reactor.suggestThreadPoolSize(vulcan.config.get("numthreads", 10))
     reactor.run()
 
