@@ -27,6 +27,10 @@ class AuthorizationFailed(Error):
             return self.__dict__ == other.__dict__
 
 
+class TimeoutError(Exception):
+    """Raised when time expires in timeout decorator"""
+
+
 # http://tools.ietf.org/html/rfc6585
 TOO_MANY_REQUESTS = 429
 

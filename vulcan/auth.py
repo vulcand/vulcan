@@ -21,6 +21,7 @@ from functools import partial
 from twisted.internet import defer, threads
 from twisted.python.failure import Failure
 from twisted.web.http import RESPONSES
+from twisted.python import log
 
 import treq
 
@@ -29,7 +30,7 @@ from expiringdict import ExpiringDict
 from vulcan.utils import safe_format
 from vulcan.upstream import get_servers, pick_server
 from vulcan.errors import CommunicationFailed, AuthorizationFailed
-from vulcan import config, log
+from vulcan import config
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)

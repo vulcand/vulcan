@@ -6,8 +6,8 @@ import os
 from ConfigParser import ConfigParser
 
 from twisted.trial.unittest import TestCase
+from twisted.python import log
 
-from vulcan import log
 from vulcan.utils import safe_format, load_config, is_valid_ip
 
 

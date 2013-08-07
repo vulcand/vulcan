@@ -10,10 +10,10 @@ from twisted.internet import defer
 from twisted.python.failure import Failure
 from twisted.web.client import ResponseDone, ResponseFailed
 from twisted.web.http import FORBIDDEN, SERVICE_UNAVAILABLE, BAD_GATEWAY, OK
+from twisted.python import log
 
 from vulcan import auth
 from vulcan.errors import CommunicationFailed, AuthorizationFailed, RESPONSES
-from vulcan import log
 
 
 class AuthTest(TestCase):

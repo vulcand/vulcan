@@ -1,3 +1,5 @@
+# -*- test-case-name: vulcan.test.test_throttling -*-
+
 from time import time
 import struct
 import regex as re
@@ -17,10 +19,18 @@ from expiringdict import ExpiringDict
 
 from vulcan import config
 from vulcan.utils import safe_format
-from vulcan.errors import CommunicationFailed, RateLimitReached
+
+from vulcan.timeout import timeout
+from vulcan.errors import CommunicationFailed, RateLimitReached, TimeoutError
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
+CONN_TIMEOUT = 1
+
+class ResponsiveCassandraClient(CassandraClient):
+    @timeout(CONN_TIMEOUT)
+    def execute_cql3_query(self, *args, **kwargs):
+        return CassandraClient.execute_cql3_query(self, *args, **kwargs)
 
 
 def initialize():
@@ -30,14 +40,15 @@ def initialize():
     for s in servers:
         host, port = s.split(":")
         seed_nodes.append((host, int(port)))
-    pool = CassandraClusterPool(seed_nodes, keyspace=config['keyspace'])
+    pool = CassandraClusterPool(seed_nodes, keyspace=config['keyspace'],
+                                conn_timeout=0.5)
     pool.startService()
-    client = CassandraClient(pool)
+    client = ResponsiveCassandraClient(pool)
 
 
 def get_limits():
     limits = CACHE.get("limits")
-    if limits:
+    if limits is not None:
         return defer.succeed(limits)
 
     limits = client.execute_cql3_query("select * from limits")
@@ -49,6 +60,11 @@ def get_limits():
 def _errback(failure):
     if isinstance(failure.value, RateLimitReached):
         return failure
+    if isinstance(failure.value, TimeoutError):
+        log.err(failure, "All Cassandra nodes are down")
+        # if requests couldn't be throttled let them pass
+        # switch to callback
+        return []
     else:
         log.err(failure)
         return Failure(CommunicationFailed())

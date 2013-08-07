@@ -2,6 +2,7 @@
 
 from . import *
 
+import gc
 from StringIO import StringIO
 
 from twisted.trial.unittest import SynchronousTestCase
@@ -51,18 +52,21 @@ class LoggingTest(SynchronousTestCase):
         log.err(Failure(MyException("Bam!")))
         self.assertIn("[-] [ERROR]", self.output.getvalue())
         self.assertIn("MyException: Bam!", self.output.getvalue())
+        gc.collect()
         self.flushLoggedErrors(MyException)
 
     def test_err_logLevel(self):
         log.err(Failure(MyException("Bam!")), logLevel="CRITICAL")
         self.assertIn("[-] [CRITICAL]", self.output.getvalue())
         self.assertIn("MyException: Bam!", self.output.getvalue())
+        gc.collect()
         self.flushLoggedErrors(MyException)
 
     def test_err_unknown_param(self):
         log.err(Failure(MyException("Bam!")), unknown_param="value")
         self.assertIn("[-] [ERROR]", self.output.getvalue())
         self.assertIn("MyException: Bam!", self.output.getvalue())
+        gc.collect()
         self.flushLoggedErrors(MyException)
 
     def test_err_custom_format(self):
@@ -76,6 +80,7 @@ class LoggingTest(SynchronousTestCase):
                 threadname="vulcan-0", system="vulcan")
         self.assertIn("[vulcan][vulcan-0] [ERROR]", self.output.getvalue())
         self.assertIn("MyException: Bam!", self.output.getvalue())
+        gc.collect()
         self.flushLoggedErrors(MyException)
 
 

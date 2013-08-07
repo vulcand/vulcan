@@ -9,11 +9,12 @@ from twisted.python.failure import Failure
 from twisted.web.http import FORBIDDEN, SERVICE_UNAVAILABLE
 from twisted.web.proxy import reactor
 from twisted.test import proto_helpers
+from twisted.python import log
 
 from vulcan.errors import (AuthorizationFailed, RateLimitReached, RESPONSES,
                            TOO_MANY_REQUESTS, CommunicationFailed)
 from vulcan.httpserver import HTTPFactory, RestrictedChannel
-from vulcan import httpserver, log
+from vulcan import httpserver
 from vulcan import httpserver as hs
 
 

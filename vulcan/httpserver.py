@@ -15,10 +15,11 @@ from twisted.web.proxy import (ReverseProxyRequest, ProxyClientFactory,
 from twisted.internet.defer import maybeDeferred
 from twisted.web.error import Error
 from twisted.python.failure import Failure
+from twisted.python import log
 
 from vulcan.auth import authorize
 from vulcan.upstream import pick_server
-from vulcan import config, log
+from vulcan import config
 from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
                            AuthorizationFailed, CommunicationFailed)
 from vulcan.utils import to_utf8, safe_format

@@ -4,7 +4,8 @@ from os.path import exists
 from ConfigParser import ConfigParser
 
 import regex as re
-from vulcan import log
+
+from twisted.python import log
 
 
 RE_IP_ADDRESS = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
