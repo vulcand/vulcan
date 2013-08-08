@@ -1,12 +1,10 @@
 vulcan
-======
+------
 
-Introduction
--------------
 HTTP and SMTP reverse proxy with authorization and rate limiting capabilities
 
-Usage
------
+Installation
+------------
 
 Download source files and install the egg:
 ```
@@ -17,13 +15,15 @@ $ python setup.py develop
 You'll also need:
 
 * cassandra (I used version 1.2.5)
-* expiringdict (from our github repository, it could be installed automatically by vulcan's setup.py but you'll
-need environment variables `MG_COLABORATOR` and `MG_COLABORATOR_PASSWORD` i.e. username/password for our github
-private repo)
 * create keyspace "Keyspace1" in cassandra (probably it should be changed to "Development" or smth) and `hits`
-and `limits` databases (bellow are queries in cql3):
+and `limits` tables (bellow are queries in cql3):
  * ```create table hits (hit text, ts int, counter counter, primary key (hit, ts));```
  * ```create table limits (id uuid, auth_token text, protocol text, method text, path text, data_size int, period int, threshold int, primary key (id));```
+
+
+Usage
+-----
+
 
 To run server:
 
@@ -75,32 +75,8 @@ The request is proxied to the corresponding upstream and response is returned to
 What if some upstream down? This information should be cached in upstream.py cache and the request shouldn't be sent
 to the server. upstream.py is responsible for picking up the server from upstream to send request to.
 
-Main modules and their status
+Status
 -----------------------------
 
-All modules implemented, tested manually, 100% covered with tests and documented (at least partially):
-
-```
-$ coverage report --show-missing
-Name                          Stmts   Miss  Cover   Missing
------------------------------------------------------------
-vulcan/__init__                   3      0   100%   
-vulcan/auth                      58      0   100%   
-vulcan/errors                    18      0   100%   
-vulcan/httpserver                83      0   100%   
-vulcan/logging                   23      0   100%   
-vulcan/test/__init__             12      0   100%   
-vulcan/test/test_auth           113      0   100%   
-vulcan/test/test_httpserver     131      0   100%   
-vulcan/test/test_logging         61      0   100%   
-vulcan/test/test_throttling     103      0   100%   
-vulcan/test/test_timeout         47      0   100%   
-vulcan/test/test_upstream         9      0   100%   
-vulcan/test/test_utils           24      0   100%   
-vulcan/throttling                99      0   100%   
-vulcan/timeout                   23      0   100%   
-vulcan/upstream                  10      0   100%   
-vulcan/utils                     32      0   100%   
------------------------------------------------------------
-TOTAL                           849      0   100%   
-```
+Undergoing development. 100% test coverage. Authorization and rate-limiting for HTTP are implemented and under active
+testing.
