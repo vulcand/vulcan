@@ -78,4 +78,5 @@ to the server. upstream.py is responsible for picking up the server from upstrea
 Status
 -----------------------------
 
-Undergoing development. 100% test coverage.
+Undergoing development. 100% test coverage. Authorization and rate-limiting for HTTP are implemented and under active
+testing.
