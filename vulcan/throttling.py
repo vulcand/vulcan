@@ -3,6 +3,7 @@
 from time import time
 import struct
 import regex as re
+
 from functools import partial
 
 from twisted.web.error import Error
@@ -58,7 +59,7 @@ def get_limits():
 
 
 def _errback(failure):
-    if isinstance(failure.value, RateLimitReached):
+    if isinstance(failure.value, (RateLimitReached, CommunicationFailed)):
         return failure
     if isinstance(failure.value, TimeoutError):
         log.err(failure, "All Cassandra nodes are down")
@@ -92,12 +93,15 @@ def check_and_update_rates(request_params):
 
 
 def _match_limits(request_params, limits):
-    return [limit for limit in limits
-            if limit["data_size"] <= request_params["length"] and
-            re.match(limit["auth_token"], request_params["auth_token"]) and
-            re.match(limit["protocol"], request_params["protocol"]) and
-            re.match(limit["method"], request_params["method"]) and
-            re.match(limit["uri"], request_params["uri"])]
+    return [
+        limit for limit in limits
+        if limit["data_size"] <= request_params["length"] and
+        re.match(limit["auth_token"], request_params["auth_token"]) and
+        re.match(limit["protocol"], request_params["protocol"],
+                 re.IGNORECASE) and
+        re.match(limit["method"], request_params["method"],
+                 re.IGNORECASE) and
+        re.match(limit["uri"], request_params["uri"])]
 
 
 def _run_checks(request_params, limits):
@@ -120,8 +124,8 @@ def _check_and_update_rate(request_params, limit, _):
 def _get_hits_counters(hits):
     return client.execute_cql3_query(
         safe_format(
-            ("select counter from hits where hit='{}' and "
-             "ts >= {} and ts <= {}"),
+            "select counter from hits where hit='{}' and "
+            "ts >= {} and ts <= {}",
             hits['hit'], hits["timerange"][0], hits["timerange"][1]))
 
 
