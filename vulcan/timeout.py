@@ -1,3 +1,5 @@
+# -*- test-case-name: vulcan.test.test_timeout -*-
+
 from twisted.internet import defer, reactor
 from vulcan.errors import TimeoutError
 
