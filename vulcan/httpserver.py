@@ -31,7 +31,7 @@ EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
 
 class RestrictedChannel(HTTPChannel):
     # authorization module
-    auth=auth
+    auth = auth
 
     def allHeadersReceived(self):
         HTTPChannel.allHeadersReceived(self)
@@ -129,7 +129,6 @@ class ReportingProxyClientFactory(ProxyClientFactory):
                                     RESPONSES[SERVICE_UNAVAILABLE])
         self.father.write("")
         self.father.finish()
-
 
 
 class DynamicallyRoutedRequest(ReverseProxyRequest):

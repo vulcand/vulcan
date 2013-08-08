@@ -28,6 +28,7 @@ from vulcan.errors import CommunicationFailed, RateLimitReached, TimeoutError
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
 CONN_TIMEOUT = 1
 
+
 class ResponsiveCassandraClient(CassandraClient):
     @timeout(CONN_TIMEOUT)
     def execute_cql3_query(self, *args, **kwargs):

@@ -142,7 +142,8 @@ class HTTPServerTest(TestCase):
     @patch.object(reactor, 'connectTCP')
     @patch.object(httpserver, 'check_and_update_rates')
     def test_request_received_before_checks(self,
-                                            check_and_update_rates, connectTCP):
+                                            check_and_update_rates,
+                                            connectTCP):
         self.clock = task.Clock()
         data = {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"}
 
@@ -199,11 +200,10 @@ class HTTPServerTest(TestCase):
                         code=SERVICE_UNAVAILABLE,
                         message=RESPONSES[SERVICE_UNAVAILABLE]),
                     status_line)
-                hs.DynamicallyRoutedRequest.finish(self_, *args, **kwargs);
+                hs.DynamicallyRoutedRequest.finish(self_, *args, **kwargs)
 
         class RestrictedReverseProxy(hs.RestrictedChannel):
             requestFactory = DynamicallyRoutedRequest
-
 
         class HTTPFactory(hs.HTTPFactory):
             def buildProtocol(self_, addr):

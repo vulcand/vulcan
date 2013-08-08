@@ -25,7 +25,7 @@ class CustomizableFileLogObserver(FileLogObserver):
         timeStr = self.formatTime(eventDict['time'])
         fmtDict = eventDict.copy()
         logLevel = eventDict.get("logLevel",
-                              ERROR if eventDict["isError"] else INFO)
+                                 ERROR if eventDict["isError"] else INFO)
         fmtDict["logLevel"] = logLevel
         fmtDict["text"] = text.replace("\n", "\n\t")
         msgStr = _safeFormat(self.fmt, fmtDict)

@@ -84,14 +84,13 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, '_get_hits_counters')
     @patch.object(throttling, 'get_limits')
     def test_rate_limit_reached(self, get_limits, _get_hits_counters,
-                                      _update_usage):
+                                _update_usage):
         get_limits.return_value = defer.succeed([_limit(data_size=100),
                                                  _limit()])
         _get_hits_counters.return_value = defer.succeed(_cassandra_hits)
         self.assertFailure(
             check_and_update_rates(_request_params()), RateLimitReached)
         self.assertFalse(_update_usage.called)
-
 
     @patch.object(throttling, 'time', Mock(return_value=40.5))
     @patch.object(CassandraClient, 'execute_cql3_query')
@@ -115,7 +114,7 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, '_get_hits_counters')
     @patch.object(throttling, 'get_limits')
     def test_update_usage_failure(self, get_limits, _get_hits_counters,
-                                    query, log_err):
+                                  query, log_err):
         get_limits.return_value = defer.succeed([_limit(threshold=3)])
         _get_hits_counters.return_value = defer.succeed(_cassandra_hits)
         # this query will be run only inside _update_usage
@@ -136,7 +135,6 @@ class ThrottlingTest(TestCase):
         self.assertFailure(check_and_update_rates(_request_params()),
                            CommunicationFailed)
         self.assertEquals(1, log_err.call_count)
-
 
     @patch.object(CassandraClient, 'execute_cql3_query')
     @patch.object(log, 'err')
@@ -199,8 +197,10 @@ def _request_params(**kwargs):
     return d
 
 
-_cassandra_limits = CqlResult(rows=[
-        CqlRow(columns=[
+_cassandra_limits = CqlResult(
+    rows=[
+        CqlRow(
+            columns=[
                 Column(timestamp=None, name='id',
                        value='\x124Vx\x124\x124\x124\x124Vx\x9a\xbc',
                        ttl=None),
@@ -234,6 +234,7 @@ _cassandra_limits = CqlResult(rows=[
                     'uri': 'UTF8Type', 'period': 'UTF8Type',
                     'method': 'UTF8Type', 'data_size': 'UTF8Type',
                     'threshold': 'UTF8Type', 'id': 'UTF8Type'}))
+
 
 _cassandra_hits = CqlResult(
     rows=[
