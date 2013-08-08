@@ -33,7 +33,7 @@ class HTTPServerTest(TestCase):
         self.assertEquals("HTTP/1.1 401 Unauthorized", status_line)
         self.assertFalse(proxyPass.called)
 
-    @patch.object(httpserver, 'authorize')
+    @patch.object(hs.auth, 'authorize')
     @patch.object(RestrictedChannel, 'proxyPass')
     def test_wrong_credentials(self, proxyPass, authorize):
         data = {"message": "Wrong API key"}
@@ -56,8 +56,8 @@ class HTTPServerTest(TestCase):
         self.assertFalse(proxyPass.called)
 
     @patch.object(reactor, 'connectTCP')
-    @patch.object(httpserver, 'check_and_update_rates')
-    @patch.object(httpserver, 'authorize')
+    @patch.object(hs, 'check_and_update_rates')
+    @patch.object(hs.auth, 'authorize')
     def test_success(self, authorize, check_and_update_rates, connectTCP):
         authorize.return_value = defer.succeed(
             {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
@@ -151,7 +151,7 @@ class HTTPServerTest(TestCase):
             self.clock.callLater(2, d.callback, data)
             return d
 
-        with patch.object(httpserver, 'authorize', delayed_auth):
+        with patch.object(hs.auth, 'authorize', delayed_auth):
             check_and_update_rates.return_value = defer.succeed(None)
             self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
             self.protocol.dataReceived(
@@ -163,8 +163,8 @@ class HTTPServerTest(TestCase):
                                   "Host should be an encoded bytestring")
             self.assertEquals(3000, connectTCP.call_args[0][1])
 
-    @patch.object(httpserver, 'check_and_update_rates')
-    @patch.object(httpserver, 'authorize')
+    @patch.object(hs, 'check_and_update_rates')
+    @patch.object(hs.auth, 'authorize')
     def test_clientConnectionFailed(self, authorize, check_and_update_rates):
         # assume there is nobody listening on this port
         data = {"auth_token": u"abc", "upstream": u"127.0.0.1:69"}

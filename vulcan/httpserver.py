@@ -17,7 +17,7 @@ from twisted.web.error import Error
 from twisted.python.failure import Failure
 from twisted.python import log
 
-from vulcan.auth import authorize
+from vulcan import auth
 from vulcan.upstream import pick_server
 from vulcan import config
 from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
@@ -30,6 +30,9 @@ EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
 
 
 class RestrictedChannel(HTTPChannel):
+    # authorization module
+    auth=auth
+
     def allHeadersReceived(self):
         HTTPChannel.allHeadersReceived(self)
         request = self.requests[-1]
@@ -41,7 +44,7 @@ class RestrictedChannel(HTTPChannel):
         request.method = self._command
 
         if request.getHeader("Authorization"):
-            d = authorize(
+            d = self.auth.authorize(
                 {
                     'username': request.getUser(),
                     'password': request.getPassword(),
