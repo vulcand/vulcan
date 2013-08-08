@@ -39,6 +39,7 @@ def initialize(process_name="vulcan"):
 
     log.addObserver(CustomizableFileLogObserver(sys.stdout).emit)
 
+
 def main():
     # pick epoll()-based twisted reactor. this needs to appear before
     # any other Twisted imports

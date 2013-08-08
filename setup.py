@@ -30,22 +30,22 @@ setup(name='vulcan',
       include_package_data=True,
       zip_safe=True,
       install_requires=[
-        'setproctitle',
-        'twisted',
-        # required by telephus
-        'pure-sasl==0.1.4',
-        'expiringdict==1.0',
-        'regex==0.1.20110315',
-        'thrift',
-        'telephus==1.0.0-beta1'
-        ],
+          'setproctitle',
+          'twisted',
+          # required by telephus
+          'pure-sasl==0.1.4',
+          'expiringdict==1.0',
+          'regex==0.1.20110315',
+          'thrift',
+          'telephus==1.0.0-beta1'
+          ],
       extras_require={'test': ['nose', 'mock', 'coverage']},
       dependency_links=[
-        ('https://github.com/mailgun/expiringdict/tarball/'
-         'master#egg=expiringdict-1.0'),
-        ('https://github.com/driftx/Telephus/tarball/'
-         'master#egg=telephus-1.0.0-beta1')
-        ]
+          ('https://github.com/mailgun/expiringdict/tarball/'
+           'master#egg=expiringdict-1.0'),
+          ('https://github.com/driftx/Telephus/tarball/'
+           'master#egg=telephus-1.0.0-beta1')
+          ]
 
       )
 
