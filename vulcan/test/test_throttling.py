@@ -42,11 +42,11 @@ class ThrottlingTest(TestCase):
                                'period': 300,
                                'protocol': '.*',
                                'threshold': 2,
-                               'uri': '.*'}]
+                               'uri': '.*',
+                               'ip': '127.'}]
                              )
 
     def test_match_limits(self):
-        # limit and request exactly match
         self.assertEquals([_limit()],
                           _match_limits(_request_params(), [_limit()]))
 
@@ -103,8 +103,8 @@ class ThrottlingTest(TestCase):
         self.successResultOf(check_and_update_rates(_request_params()),
                              None)
         self.assertEquals(
-            "update hits using  ttl 30 set counter = counter + 1 "
-            "where hit='abc http get http://localhost/test 0' and "
+            "update hits using ttl 30 set counter = counter + 1 "
+            "where hit='127. abc http get http://localhost/test 0' and "
             "ts=40",
             query.call_args[0][1].lower())
 
@@ -166,7 +166,7 @@ class ThrottlingTest(TestCase):
     @patch.object(vulcan, 'config', {'bucket_size': 2})
     def test_hits_spec(self):
         self.assertEquals(
-            {"hit": "auth_token http get http://localhost/test 0",
+            {"hit": "127. auth_token http get http://localhost/test 0",
              "timerange": [10, 40]},
             throttling._hits_spec("auth_token", _limit()))
 
@@ -179,7 +179,8 @@ def _limit(**kwargs):
         "method": "get",
         "uri": "http://localhost/test",
         "data_size": 0,
-        "threshold": 2
+        "threshold": 2,
+        "ip": "127."
         }
     d.update(kwargs)
     return d
@@ -192,6 +193,7 @@ def _request_params(**kwargs):
         "method": "get",
         "uri": "http://localhost/test",
         "length": 0,
+        "ip": "127.0.0.1"
         }
     d.update(kwargs)
     return d
@@ -216,7 +218,8 @@ _cassandra_limits = CqlResult(
                        value='.*', ttl=None),
                 Column(timestamp=None, name='threshold',
                        value='\x00\x00\x00\x02', ttl=None),
-                Column(timestamp=None, name='uri', value='.*', ttl=None)
+                Column(timestamp=None, name='uri', value='.*', ttl=None),
+                Column(timestamp=None, name='ip', value='127.', ttl=None),
                 ], key='')
         ], type=1, num=None, schema=CqlMetadata(
         default_value_type='UTF8Type',
@@ -224,6 +227,7 @@ _cassandra_limits = CqlResult(
             'protocol': 'org.apache.cassandra.db.marshal.UTF8Type',
             'auth_token': 'org.apache.cassandra.db.marshal.UTF8Type',
             'uri': 'org.apache.cassandra.db.marshal.UTF8Type',
+            'ip': 'org.apache.cassandra.db.marshal.UTF8Type',
             'period': 'org.apache.cassandra.db.marshal.Int32Type',
             'method': 'org.apache.cassandra.db.marshal.UTF8Type',
             'data_size': 'org.apache.cassandra.db.marshal.Int32Type',
@@ -233,7 +237,8 @@ _cassandra_limits = CqlResult(
         name_types={'protocol': 'UTF8Type', 'auth_token': 'UTF8Type',
                     'uri': 'UTF8Type', 'period': 'UTF8Type',
                     'method': 'UTF8Type', 'data_size': 'UTF8Type',
-                    'threshold': 'UTF8Type', 'id': 'UTF8Type'}))
+                    'threshold': 'UTF8Type', 'id': 'UTF8Type',
+                    'ip': 'UTF8Type'}))
 
 
 _cassandra_hits = CqlResult(

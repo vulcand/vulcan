@@ -27,6 +27,7 @@ from vulcan.throttling import check_and_update_rates
 
 
 EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
+IP_HEADER = "X-REAL-IP"
 
 
 class RestrictedChannel(HTTPChannel):
@@ -96,7 +97,8 @@ class RestrictedChannel(HTTPChannel):
             protocol=request.clientproto,
             method=request.method,
             uri=request.uri,
-            length=request.getHeader("Content-Length") or 0)
+            length=request.getHeader("Content-Length") or 0,
+            ip=request.getHeader(IP_HEADER) or "")
 
         d = check_and_update_rates(request_params)
         d.addCallback(lambda _: settings)

@@ -16,6 +16,7 @@ from vulcan.errors import (AuthorizationFailed, RateLimitReached, RESPONSES,
 from vulcan.httpserver import HTTPFactory, RestrictedChannel
 from vulcan import httpserver
 from vulcan import httpserver as hs
+from vulcan import throttling as th
 
 
 class HTTPServerTest(TestCase):
@@ -56,13 +57,15 @@ class HTTPServerTest(TestCase):
         self.assertFalse(proxyPass.called)
 
     @patch.object(reactor, 'connectTCP')
-    @patch.object(hs, 'check_and_update_rates')
+    @patch.object(th, 'get_limits')
+    @patch.object(th, '_run_checks')
     @patch.object(hs.auth, 'authorize')
-    def test_success(self, authorize, check_and_update_rates, connectTCP):
+    def test_success(self, authorize, run_checks, get_limits, connectTCP):
         authorize.return_value = defer.succeed(
             {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
 
-        check_and_update_rates.return_value = defer.succeed(None)
+        get_limits.return_value = defer.succeed([_limit()])
+        run_checks.return_value = defer.succeed(None)
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
@@ -70,6 +73,7 @@ class HTTPServerTest(TestCase):
         self.assertIsInstance(connectTCP.call_args[0][0], str,
                               "Host should be an encoded bytestring")
         self.assertEquals(3000, connectTCP.call_args[0][1])
+        self.assertEquals([_limit()], run_checks.call_args[0][1])
 
     def test_errorToHTTPResponse(self):
         request = Mock()
@@ -218,3 +222,18 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived(
             "Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
+
+
+def _limit(**kwargs):
+    d = {
+        "auth_token": "abc",
+        "period": 30,
+        "protocol": "http",
+        "method": "get",
+        "uri": "/foo/bar",
+        "data_size": 0,
+        "threshold": 2,
+        "ip": ".*"
+        }
+    d.update(kwargs)
+    return d

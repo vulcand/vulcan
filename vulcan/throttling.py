@@ -102,7 +102,8 @@ def _match_limits(request_params, limits):
                  re.IGNORECASE) and
         re.match(limit["method"], request_params["method"],
                  re.IGNORECASE) and
-        re.match(limit["uri"], request_params["uri"])]
+        re.match(limit["uri"], request_params["uri"]) and
+        re.match(limit["ip"], request_params["ip"])]
 
 
 def _run_checks(request_params, limits):
@@ -145,7 +146,7 @@ def _check_rate_against_limit(request_params, limit, result):
 def _update_usage(hit, ts, period, _):
     client.execute_cql3_query(
         safe_format(
-            ("update hits using  ttl {} "
+            ("update hits using ttl {} "
              "set counter = counter + 1 where hit='{}' and ts={}"),
             period, hit, ts)).addErrback(_errback)
 
@@ -158,12 +159,14 @@ def _hits_spec(auth_token, limit):
                 period_in_buckets) * int(config['bucket_size'])
     end_ts = time_in_buckets * int(config['bucket_size'])
 
-    hit = safe_format("{auth_token} {protocol} {method} {uri} {data_size}",
-                      auth_token=auth_token,
-                      protocol=limit['protocol'],
-                      method=limit['method'],
-                      uri=limit['uri'],
-                      period=limit['period'],
-                      data_size=limit['data_size'])
+    hit = safe_format(
+        "{ip} {auth_token} {protocol} {method} {uri} {data_size}",
+        ip=limit["ip"],
+        auth_token=auth_token,
+        protocol=limit['protocol'],
+        method=limit['method'],
+        uri=limit['uri'],
+        period=limit['period'],
+        data_size=limit['data_size'])
 
     return {"hit": hit, "timerange": [start_ts, end_ts]}
