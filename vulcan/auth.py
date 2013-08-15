@@ -95,7 +95,7 @@ def authorize(request_params):
     if auth_result:
         return defer.succeed(auth_result)
     else:
-        url = ("http://" + pick_server(get_servers("authorization")) +
+        url = ("http://" + pick_server(config["authorization"]) +
                config["auth_path"])
         d = treq.get(url, params=request_params)
         d.addCallback(partial(_authorization_received, hit))

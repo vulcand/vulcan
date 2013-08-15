@@ -20,32 +20,12 @@ from expiringdict import ExpiringDict
 
 from vulcan import config
 from vulcan.utils import safe_format
-
+from vulcan.cassandra import client
 from vulcan.timeout import timeout
 from vulcan.errors import CommunicationFailed, RateLimitReached, TimeoutError
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
-CONN_TIMEOUT = 1
-
-
-class ResponsiveCassandraClient(CassandraClient):
-    @timeout(CONN_TIMEOUT)
-    def execute_cql3_query(self, *args, **kwargs):
-        return CassandraClient.execute_cql3_query(self, *args, **kwargs)
-
-
-def initialize():
-    global client, cache
-    seed_nodes = []
-    servers = config['cassandra'].split(",")
-    for s in servers:
-        host, port = s.split(":")
-        seed_nodes.append((host, int(port)))
-    pool = CassandraClusterPool(seed_nodes, keyspace=config['keyspace'],
-                                conn_timeout=0.5)
-    pool.startService()
-    client = ResponsiveCassandraClient(pool)
 
 
 def get_limits():

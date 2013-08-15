@@ -19,6 +19,8 @@ def parse_args():
                    metavar='<PORT>', help="SMTP port number to listen on.")
     p.add_argument("--http-port", "-p", default=8080, type=int,
                    metavar='<PORT>', help="HTTP port number to listen on.")
+    p.add_argument("--admin-port", "-a", default=8096, type=int,
+                   metavar='<PORT>', help="HTTP port for admin interface.")
     p.add_argument("--ini-file", "-f", metavar='<FILENAME>', required=True,
                    help="config file name")
     p.add_argument('--pid-file', help="pid file path")
@@ -49,13 +51,16 @@ def main():
 
     from twisted.internet import reactor
     from twisted.cred.portal import Portal
+    from twisted.web.server import Site
 
     from vulcan import config
     from vulcan.httpserver import HTTPFactory
-    from vulcan import throttling
+    from vulcan import cassandra
+    from vulcan.routing import AdminResource
 
-    throttling.initialize()
+    cassandra.pool.startService()
     reactor.listenTCP(args.http_port, HTTPFactory())
+    reactor.listenTCP(args.admin_port, Site(AdminResource()))
     reactor.suggestThreadPoolSize(vulcan.config.get("numthreads", 10))
     reactor.run()
 
