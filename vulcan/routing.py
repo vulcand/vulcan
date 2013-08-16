@@ -31,6 +31,10 @@ class AdminResource(Resource):
                             data["name"], data["path"],
                             data["upstream"])
         _run_query(query, request)
+
+        CACHE[data["name"]] = {"path": data["path"],
+                               "upstream": data["upstream"]}
+
         return NOT_DONE_YET
 
     def render_PUT(self, request):
@@ -41,12 +45,24 @@ class AdminResource(Resource):
         query = safe_format("update services set {} where name = '{}'",
                             updates, service)
         _run_query(query, request)
+
+        cached = CACHE.get(service)
+        if cached:
+            cached.update(data)
+            CACHE[service] = cached
+
         return NOT_DONE_YET
 
     def render_DELETE(self, request):
         service = request.uri.split("/")[-1]
         query = safe_format("delete from services where name = '{}'", service)
         _run_query(query, request)
+
+        try:
+            del CACHE[service]
+        except KeyError:
+            pass
+
         return NOT_DONE_YET
 
 
@@ -76,7 +92,7 @@ def pick_service(uri):
         for row in r.rows:
             name = row.columns[0].value
             path = row.columns[1].value
-            CACHE[path] = name
+            CACHE[name] = path
         s = _pick_service(uri, CACHE)
         defer.returnValue(s)
     except TimeoutError:
@@ -88,6 +104,6 @@ def _pick_service(uri, routes):
     # we use expiringdict for caching
     # iteration over dict won't remove expired values
     # so we access values directly
-    for rule in routes.keys():
-        if re.match(rule, uri):
-            return routes[rule]
+    for rule in routes:
+        if re.match(routes[rule]["path"], uri):
+            return rule

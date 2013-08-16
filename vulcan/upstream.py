@@ -2,8 +2,6 @@ from random import randint
 
 from functools import partial
 
-from expiringdict import ExpiringDict
-
 from twisted.internet import defer
 from twisted.python import log
 
@@ -12,9 +10,7 @@ from vulcan.cassandra import client
 from vulcan import config
 from vulcan.errors import TimeoutError
 from vulcan.utils import safe_format
-
-
-CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
+from vulcan.routing import CACHE
 
 
 def pick_server(servers):
@@ -45,15 +41,17 @@ def is_active(server):
 def get_servers(service):
     # TODO servers for upstreams should be stored in cassandra
     # so that we could register/unregister servers during servers deployment
-    upstream = CACHE.get(service)
+    upstream = CACHE.get(service, {}).get("upstream")
     if upstream:
         defer.returnValue(upstream)
 
     try:
         r = yield client.execute_cql3_query(
             safe_format(
-                "select upstream from services where name = '{}'", service))
-        upstream = r.rows[0].columns[0].value
+                "select path, upstream from services where name = '{}'",
+                service))
+        CACHE[service] = {"path": r.rows[0].columns[0].value,
+                          "upstream": r.rows[0].columns[1].value}
         defer.returnValue(upstream)
     except TimeoutError, e:
         log.err("All Cassandra nodes are down")
