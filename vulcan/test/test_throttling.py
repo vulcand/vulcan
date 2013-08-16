@@ -13,9 +13,9 @@ from twisted.python.failure import Failure
 from twisted.python import log
 
 from vulcan import throttling
-from vulcan.throttling import (ResponsiveCassandraClient, _match_limits,
-                               check_and_update_rates,
+from vulcan.throttling import (_match_limits, check_and_update_rates,
                                _check_rate_against_limit, get_limits)
+from vulcan.cassandra import ResponsiveCassandraClient
 from vulcan.errors import RateLimitReached, CommunicationFailed, TimeoutError
 from vulcan import timeout
 import vulcan
