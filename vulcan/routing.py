@@ -88,15 +88,16 @@ def pick_service(uri):
         defer.returnValue(service)
 
     try:
-        r = yield client.execute_cql3_query("select name, path from services")
+        r = yield client.execute_cql3_query(
+            "select name, path, upstream from services")
         for row in r.rows:
             name = row.columns[0].value
             path = row.columns[1].value
-            CACHE[name] = path
-        s = _pick_service(uri, CACHE)
-        defer.returnValue(s)
-    except TimeoutError:
-        log.err("All Cassandra nodes are down")
+            upstream = row.columns[2].value
+            CACHE[name] = {"path": path, "upstream": upstream}
+        defer.returnValue(_pick_service(uri, CACHE))
+    except TimeoutError, e:
+        log.err(e, "All Cassandra nodes are down")
         raise
 
 

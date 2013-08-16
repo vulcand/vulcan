@@ -4,6 +4,7 @@ from functools import partial
 
 from twisted.internet import defer
 from twisted.python import log
+from twisted.python.failure import Failure
 
 from vulcan import config
 from vulcan.cassandra import client
@@ -50,11 +51,12 @@ def get_servers(service):
             safe_format(
                 "select path, upstream from services where name = '{}'",
                 service))
-        CACHE[service] = {"path": r.rows[0].columns[0].value,
-                          "upstream": r.rows[0].columns[1].value}
+        path = r.rows[0].columns[0].value,
+        upstream = r.rows[0].columns[1].value
+        CACHE[service] = {"path": path, "upstream": upstream}
         defer.returnValue(upstream)
     except TimeoutError, e:
-        log.err("All Cassandra nodes are down")
-        defer.returnValue(config.get(service, e))
+        log.err(e, "All Cassandra nodes are down")
+        defer.returnValue(config.get(service, Failure(e)))
     except Exception, e:
-        defer.returnValue(config.get(service, e))
+        defer.returnValue(config.get(service, Failure(e)))
