@@ -13,6 +13,7 @@ from twisted.web.http import (HTTPChannel, HTTPFactory as StandardHTTPFactory,
 from twisted.web.proxy import (ReverseProxyRequest, ProxyClientFactory,
                                ProxyClient)
 from twisted.internet.defer import maybeDeferred
+from twisted.internet import defer
 from twisted.web.error import Error
 from twisted.python.failure import Failure
 from twisted.python import log
@@ -91,18 +92,27 @@ class RestrictedChannel(HTTPChannel):
 
         request.finishUnreceived()
 
+    @defer.inlineCallbacks
     def checkAndUpdateRates(self, request, settings):
-        request_params = dict(
-            auth_token=settings["auth_token"],
-            protocol=request.clientproto,
-            method=request.method,
-            uri=request.uri,
-            length=request.getHeader("Content-Length") or 0,
-            ip=request.getHeader(IP_HEADER) or "")
-
-        d = check_and_update_rates(request_params)
-        d.addCallback(lambda _: settings)
-        return d
+        """
+        Checks if request exceeds allowed request's rate. Raises
+        RateLimitReached exception if it does and updates request's rate
+        otherwise. Ignores all other exceptions.
+        """
+        try:
+            request_params = dict(
+                auth_token=settings["auth_token"],
+                protocol=request.clientproto,
+                method=request.method,
+                uri=request.uri,
+                length=request.getHeader("Content-Length") or 0,
+                ip=request.getHeader(IP_HEADER) or "")
+            r = yield check_and_update_rates(request_params)
+        except RateLimitReached:
+            raise
+        except Exception, e:
+            log.err(e)
+        defer.returnValue(settings)
 
     def proxyPass(self, request, settings):
         host, port = pick_server(settings['upstream']).split(":")
