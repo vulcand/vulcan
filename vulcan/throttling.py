@@ -4,7 +4,6 @@ from time import time
 import struct
 
 import regex as re
-from functools import partial
 
 from twisted.internet import defer
 from twisted.python import log
@@ -95,21 +94,11 @@ def _update_usage(hit, ts, period):
     Saves request's id/hash called ``hit`` with timestamp ``ts``
     for the next ``period`` seconds. Ignores any exceptions.
     """
-    # try:
-    #     yield client.execute_cql3_query(
-    #         safe_format(
-    #             "update hits using ttl {} "
-    #             "set counter = counter + 1 where hit='{}' and ts={}",
-    #             period, hit, ts))
-    # except Exception:
-    #     log.err()
-
-    d = client.execute_cql3_query(
+    client.execute_cql3_query(
         safe_format(
             "update hits using ttl {} "
             "set counter = counter + 1 where hit='{}' and ts={}",
-            period, hit, ts))
-    d.addErrback(log.err)
+            period, hit, ts)).addErrback(log.err)
 
 
 def _hits_spec(auth_token, limit):

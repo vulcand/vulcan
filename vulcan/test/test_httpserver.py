@@ -6,7 +6,7 @@ from twisted.trial.unittest import TestCase
 
 from twisted.internet import defer, task
 from twisted.python.failure import Failure
-from twisted.web.http import FORBIDDEN, SERVICE_UNAVAILABLE
+from twisted.web.http import SERVICE_UNAVAILABLE, UNAUTHORIZED
 from twisted.web.proxy import reactor
 from twisted.test import proto_helpers
 from twisted.python import log
@@ -39,7 +39,7 @@ class HTTPServerTest(TestCase):
     def test_wrong_credentials(self, proxyPass, authorize):
         data = {"message": "Wrong API key"}
         d = defer.fail(
-            Failure(AuthorizationFailed(FORBIDDEN, RESPONSES[FORBIDDEN],
+            Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
                                         json.dumps(data))))
         authorize.return_value = d
 
@@ -50,8 +50,8 @@ class HTTPServerTest(TestCase):
         status_line = self.transport.value().splitlines()[0]
         self.assertEquals(
             "HTTP/1.1 {code} {message}".format(
-                code=FORBIDDEN,
-                message=RESPONSES[FORBIDDEN]),
+                code=UNAUTHORIZED,
+                message=RESPONSES[UNAUTHORIZED]),
             status_line)
         self.assertIn(json.dumps(data), self.transport.value())
         self.assertFalse(proxyPass.called)
@@ -98,24 +98,24 @@ class HTTPServerTest(TestCase):
         request.reset_mock()
 
         # AuthorizationFailed
-        f = Failure(AuthorizationFailed(FORBIDDEN, RESPONSES[FORBIDDEN],
+        f = Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
                                         "Wrong API key"))
         rc.errorToHTTPResponse(request, f)
         request.setResponseCode.assert_called_once_with(
-            FORBIDDEN,
-            RESPONSES[FORBIDDEN])
+            UNAUTHORIZED,
+            RESPONSES[UNAUTHORIZED])
         request.write.assert_called_once_with(f.value.response)
         self.assertEquals(1, request.finishUnreceived.call_count)
 
         request.reset_mock()
 
         # AuthorizationFailed with no response body
-        f = Failure(AuthorizationFailed(FORBIDDEN, RESPONSES[FORBIDDEN],
+        f = Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
                                         response=None))
         rc.errorToHTTPResponse(request, f)
         request.setResponseCode.assert_called_once_with(
-            FORBIDDEN,
-            RESPONSES[FORBIDDEN])
+            UNAUTHORIZED,
+            RESPONSES[UNAUTHORIZED])
         request.write.assert_called_once_with("")
         self.assertEquals(1, request.finishUnreceived.call_count)
 
@@ -223,6 +223,53 @@ class HTTPServerTest(TestCase):
             "Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
 
+    @patch.object(reactor, 'connectTCP')
+    @patch.object(hs, 'check_and_update_rates')
+    @patch.object(hs.auth, 'authorize')
+    @patch.object(log, 'err')
+    def test_throttling_crashes(self, log_err, authorize,
+                                check_and_update_rates, connectTCP):
+        authorize.return_value = defer.succeed(
+            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
+
+        e = Exception("Bam!")
+
+        check_and_update_rates.side_effect = lambda *args: defer.fail(e)
+
+        self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
+        self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
+        self.protocol.dataReceived("\r\n")
+
+        log_err.assert_called_once_with(e)
+        self.assertEquals("10.241.0.25", connectTCP.call_args[0][0])
+        self.assertIsInstance(connectTCP.call_args[0][0], str,
+                              "Host should be an encoded bytestring")
+        self.assertEquals(3000, connectTCP.call_args[0][1])
+
+    @patch.object(RestrictedChannel, 'proxyPass')
+    @patch.object(hs, 'check_and_update_rates')
+    @patch.object(hs.auth, 'authorize')
+    def test_rate_limit_reached(self, authorize,
+                                check_and_update_rates, proxyPass):
+        authorize.return_value = defer.succeed(
+            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
+
+        check_and_update_rates.side_effect = lambda *args: defer.fail(
+            RateLimitReached(_request_params(), _limit()))
+
+        self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
+        self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
+        self.protocol.dataReceived("\r\n")
+
+        status_line = self.transport.value().splitlines()[0]
+        self.assertEquals(
+            "HTTP/1.1 {code} {message}".format(
+                code=TOO_MANY_REQUESTS,
+                message=RESPONSES[TOO_MANY_REQUESTS]),
+            status_line)
+
+        self.assertFalse(proxyPass.called)
+
 
 def _limit(**kwargs):
     d = {
@@ -234,6 +281,19 @@ def _limit(**kwargs):
         "data_size": 0,
         "threshold": 2,
         "ip": ".*"
+        }
+    d.update(kwargs)
+    return d
+
+
+def _request_params(**kwargs):
+    d = {
+        "auth_token": "abc",
+        "protocol": "http",
+        "method": "get",
+        "uri": "http://localhost/test",
+        "length": 0,
+        "ip": "127.0.0.1"
         }
     d.update(kwargs)
     return d

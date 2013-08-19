@@ -7,7 +7,7 @@ import twisted
 import vulcan
 
 
-twisted.internet.base.DelayedCall.debug = True
+# twisted.internet.base.DelayedCall.debug = True
 epollreactor.install()
 
 from telephus.pool import CassandraClusterPool

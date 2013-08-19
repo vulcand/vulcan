@@ -8,16 +8,16 @@ from treq.test.util import TestCase
 from telephus.cassandra.ttypes import *
 from telephus.client import CassandraClient
 
-from twisted.internet import defer
-from twisted.python.failure import Failure
+from twisted.internet import defer, task
+from twisted import internet
 from twisted.python import log
 
 from vulcan import throttling
 from vulcan.throttling import (_match_limits, check_and_update_rates,
                                _check_rate_against_limit, get_limits)
 from vulcan.cassandra import ResponsiveCassandraClient
-from vulcan.errors import RateLimitReached, CommunicationFailed, TimeoutError
-from vulcan import timeout
+from vulcan import cassandra
+from vulcan.errors import RateLimitReached
 import vulcan
 
 
@@ -85,11 +85,19 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, 'get_limits')
     def test_rate_limit_reached(self, get_limits, _get_hits_counters,
                                 _update_usage):
+        # we have 2 limits for requests with length greater then 0 and 100
+        # both with threshold 2
         get_limits.return_value = defer.succeed([_limit(data_size=100),
                                                  _limit()])
+        # and there are 2 hits (for  any limit that matches)
         _get_hits_counters.return_value = defer.succeed(_cassandra_hits)
+
+        # request matches 2nd limit, now we have 3 hits for it with threshold 2
+        # so we should raise RateLimitReached exception
         self.assertFailure(
             check_and_update_rates(_request_params()), RateLimitReached)
+
+        # we don't update usage if we reached rate limit
         self.assertFalse(_update_usage.called)
 
     @patch.object(throttling, 'time', Mock(return_value=40.5))
@@ -113,50 +121,60 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling.client, 'execute_cql3_query')
     @patch.object(throttling, '_get_hits_counters')
     @patch.object(throttling, 'get_limits')
-    def test_update_usage_failure(self, get_limits, _get_hits_counters,
+    def test_update_usage_crash(self, get_limits, _get_hits_counters,
                                   query, log_err):
+        """
+        Test that if updating usage stats crashes rate limit check still passes.
+        """
         get_limits.return_value = defer.succeed([_limit(threshold=3)])
         _get_hits_counters.return_value = defer.succeed(_cassandra_hits)
-        # this query will be run only inside _update_usage
-        query.return_value = defer.fail(Exception("Bam!!!"))
+        query.return_value = defer.fail(Exception("Bam!"))
         self.successResultOf(check_and_update_rates(_request_params()), None)
         self.assertEquals(1, log_err.call_count)
 
+    @patch.object(cassandra, 'CONN_TIMEOUT', 10)
     @patch.object(log, 'err')
-    @patch.object(throttling, '_check_rate_against_limit')
+    @patch.object(throttling, 'time', Mock(return_value=40.5))
+    @patch.object(throttling.client, 'execute_cql3_query')
     @patch.object(throttling, '_get_hits_counters')
     @patch.object(throttling, 'get_limits')
-    def test_check_and_update_rate(self, get_limits, _get_hits_counters,
-                                   _check_rate_against_limit, log_err):
+    def test_update_usage_slow(self, get_limits, _get_hits_counters,
+                                  query, log_err):
+        """
+        Test that updating usage stats doesn't affect the time we require
+        to check rates.
+        """
         get_limits.return_value = defer.succeed([_limit(threshold=3)])
-        _get_hits_counters.return_value = defer.succeed(_cassandra_hits)
-        _check_rate_against_limit.return_value = defer.fail(Exception("Bam4!"))
 
-        self.assertFailure(check_and_update_rates(_request_params()),
-                           CommunicationFailed)
-        self.assertEquals(1, log_err.call_count)
+        # retrieving hits from cassandra takes 2 seconds
+        def g(*args, **kwargs):
+            d = defer.Deferred()
+            internet.reactor.callLater(2, d.callback, _cassandra_hits)
+            return d
 
-    @patch.object(CassandraClient, 'execute_cql3_query')
-    @patch.object(log, 'err')
-    def test_communication_failed(self, log_err, query):
-        query.return_value = Exception("Bam!")
-        self.assertFailure(get_limits(), CommunicationFailed)
-        self.assertEquals(1, log_err.call_count)
+        _get_hits_counters.side_effect = g
 
-    @patch.object(throttling.client, 'execute_cql3_query')
-    @patch.object(log, 'err')
-    def test_timeout(self, log_err, query):
-        query.return_value = defer.fail(TimeoutError("Bam!"))
-        d = get_limits()
-        self.successResultOf(d, [])
-        self.assertEquals(1, log_err.call_count)
+        # updating usage stats takes 5 seconds
+        usage_updated = defer.Deferred()
+        def f(*args, **kwargs):
+            internet.reactor.callLater(5, usage_updated.callback, None)
+            return usage_updated
 
-    @patch.object(log, 'err')
-    @patch.object(struct, 'unpack')
-    def test_check_rate_against_limit(self, unpack, log_err):
-        unpack.side_effect = Exception("Bam!")
-        _check_rate_against_limit(_request_params(), _limit(), _cassandra_hits)
-        self.assertEquals(1, log_err.call_count)
+        query.side_effect = f
+
+        self.clock = task.Clock()
+        with patch.object(internet, 'reactor', self.clock):
+            # we make deferred call
+            d = check_and_update_rates(_request_params())
+            self.assertFalse(d.called)
+            # and get results in 2 seconds
+            self.clock.advance(2)
+            self.assertTrue(d.called)
+            # usage stats isn't updated yet
+            self.assertFalse(usage_updated.called)
+            # usage stats will be updated only in 5 seconds
+            self.clock.advance(5)
+            self.assertTrue(usage_updated.called)
 
     @patch.object(throttling.client, 'execute_cql3_query')
     def test_get_hits_counters(self, query):
