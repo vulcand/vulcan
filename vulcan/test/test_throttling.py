@@ -69,16 +69,56 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, '_check_and_update_rate')
     @patch.object(throttling, 'get_limits')
     def test_no_limits(self, get_limits, _check_and_update_rate):
-        get_limits.return_value = defer.succeed([])
+        get_limits.side_effect = lambda *args, **kwargs: defer.succeed([])
         self.successResultOf(check_and_update_rates(_request_params()),
                              None)
-        self.assertFalse(_check_and_update_rate.called)
+        # get_limits called twice:
+        # * for custom limits (usually set per account)
+        # * for default limits (usually set for all customers)
+        self.assertEquals(2, get_limits.call_count)
+        get_limits.reset_mock()
 
-        get_limits.return_value = defer.succeed([_limit()])
+        self.assertFalse(_check_and_update_rate.called)
         with patch.object(throttling, '_match_limits', Mock(return_value=[])):
             self.successResultOf(check_and_update_rates(_request_params()),
                                  None)
+            self.assertEquals(2, get_limits.call_count)
+
         self.assertFalse(_check_and_update_rate.called)
+
+    @patch.object(throttling, 'get_limits')
+    @patch.object(throttling, '_run_checks')
+    def test_custom_limits(self, _run_checks, get_limits):
+        """
+        Test that if request matches any custom limit no default limit
+        will be checked.
+        """
+        get_limits.return_value = defer.succeed([_limit(auth_token="abc")])
+        check_and_update_rates(_request_params())
+        # only custom limits are checked
+        get_limits.assert_called_once_with(throttling.LIMITS)
+        _run_checks.assert_called_once_with(_request_params(),
+                                            [_limit(auth_token="abc")])
+
+    @patch.object(throttling, 'get_limits')
+    @patch.object(throttling, '_run_checks')
+    def test_default_limits(self, _run_checks, get_limits):
+        """
+        Test that if custom limits are not matched we fallback to
+        default limits.
+        """
+        def f(table):
+            # custom limits
+            if table == throttling.LIMITS:
+                return defer.succeed([_limit(auth_token="abc")])
+            elif table == throttling.DEFAULTS:
+                return defer.succeed([_limit(auth_token=".*")])
+
+        get_limits.side_effect = f
+        check_and_update_rates(_request_params(auth_token="qwerty123"))
+        _run_checks.assert_called_once_with(
+            _request_params(auth_token="qwerty123"),
+            [_limit(auth_token=".*")])
 
     @patch.object(throttling, '_update_usage')
     @patch.object(throttling, '_get_hits_counters')

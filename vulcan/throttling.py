@@ -17,15 +17,19 @@ from vulcan.errors import RateLimitReached
 
 
 CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
+# db tables
+LIMITS = "limits"
+DEFAULTS = "defaults"
 
 
 @defer.inlineCallbacks
-def get_limits():
-    limits = CACHE.get("limits", [])
+def get_limits(table=LIMITS):
+    limits = CACHE.get(table, [])
     if limits:
         defer.returnValue(limits)
 
-    result = yield client.execute_cql3_query("select * from limits")
+    result = yield client.execute_cql3_query(
+        safe_format("select * from {}", table))
     for row in result.rows:
         limit = {column.name: column.value for column in row.columns}
         limit["data_size"] = struct.unpack('>I', limit['data_size'])[0]
@@ -33,14 +37,19 @@ def get_limits():
         limit["period"] = struct.unpack('>I', limit['period'])[0]
         limits.append(limit)
 
-    CACHE["limits"] = limits
+    CACHE[table] = limits
     defer.returnValue(limits)
 
 
 @defer.inlineCallbacks
 def check_and_update_rates(request_params):
-    limits = yield get_limits()
-    yield _run_checks(request_params, _match_limits(request_params, limits))
+    # check custom limits, usually set per account
+    limits = yield get_limits(LIMITS)
+    limits = _match_limits(request_params, limits)
+    if not limits:
+        limits = yield get_limits(DEFAULTS)
+        limits = _match_limits(request_params, limits)
+    yield _run_checks(request_params, limits)
 
 
 def _match_limits(request_params, limits):
