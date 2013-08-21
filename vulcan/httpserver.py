@@ -127,6 +127,7 @@ class RestrictedChannel(HTTPChannel):
 
 class ReportingProxyClientFactory(ProxyClientFactory):
     protocol = ProxyClient
+    noisy = False
 
     def clientConnectionFailed(self, connector, reason):
         """
@@ -200,5 +201,7 @@ class RestrictedReverseProxy(RestrictedChannel):
 
 
 class HTTPFactory(StandardHTTPFactory):
+    noisy = False
+
     def buildProtocol(self, addr):
         return RestrictedReverseProxy()
