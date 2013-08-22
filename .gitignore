@@ -46,3 +46,6 @@ tramp
 # Org-mode
 .org-id-locations
 *_archive
+
+# Trial temp
+_trial_temp
