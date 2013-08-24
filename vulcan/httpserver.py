@@ -20,7 +20,7 @@ from vulcan.utils import safe_format
 from vulcan.routing import AuthRequest
 
 
-RETRY_IN = "X-Retry-In"
+RETRY_IN_SECONDS = "X-Retry-In-Seconds"
 
 class RestrictedChannel(HTTPChannel):
     # authorization module
@@ -41,7 +41,7 @@ class RestrictedChannel(HTTPChannel):
             request.setResponseCode(
                 UNAUTHORIZED, RESPONSES[UNAUTHORIZED])
             request.setHeader(
-                'WWW-Authenticate', 'basic realm="%s"' % config['realm'])
+                'WWW-Authenticate', 'basic realm="%s"' % config['auth']['realm'])
 
             request.write("")
             request.finishUnreceived()
@@ -67,12 +67,13 @@ class RestrictedChannel(HTTPChannel):
             request.setResponseCode(
                 TOO_MANY_REQUESTS,
                 RESPONSES[TOO_MANY_REQUESTS])
-            request.setHeader(RETRY_IN, "100 seconds")
+            request.setHeader(RETRY_IN_SECONDS, str(e.retry_seconds))
             request.write(str(e))
             request.finishUnreceived()
 
-        except Exception:
-            log.err("Unrecognized exception")
+        except Exception, e:
+            import traceback
+            traceback.print_exc("Blabla")
             request.setResponseCode(
                 SERVICE_UNAVAILABLE,
                 RESPONSES[SERVICE_UNAVAILABLE])
@@ -136,9 +137,11 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         Copy of ReverseProxyRequest's process() method except that
         it doesn't set Host header to proxied server hostname.
         """
+
         clientFactory = self.proxyClientFactoryClass(
-            self.method, self.factory.url, self.clientproto,
+            self.method, self.factory.path, self.clientproto,
             self.getAllHeaders(), self.content.read(), self)
+
         self.reactor.connectTCP(self.factory.host, self.factory.port,
                                 clientFactory)
 

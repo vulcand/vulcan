@@ -12,7 +12,6 @@ def run(command):
     else:
         return 0
 
-
 def pip(command):
     command = '{} {}'.format(join(dirname(sys.executable), 'pip'), command)
     run(command)
@@ -40,7 +39,8 @@ setup(name='vulcan',
           'telephus==1.0.0-beta1',
           'nose==1.3.0',
           'mock==1.0.1',
-          'coverage==3.6'
+          'coverage==3.6',
+          'pyyaml==3.10'
           ],
       dependency_links=[
           ('https://github.com/mailgun/expiringdict/tarball/'

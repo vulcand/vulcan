@@ -1,18 +1,18 @@
 from twisted.web.error import Error
 from twisted.web import http
 
-
-class CommunicationFailed(Exception):
-    pass
+from vulcan.utils import safe_format
 
 
 class RateLimitReached(Exception):
     def __init__(self, retry_seconds):
         self.retry_seconds = retry_seconds
-        Exception.__init__(
+        description = safe_format(
             "Rate limit reached. Retry in {} second{}",
             str(retry_seconds),
             's' if retry_seconds > 1 else '')
+
+        Exception.__init__(self, description)
 
 
 class AuthorizationFailed(Error):

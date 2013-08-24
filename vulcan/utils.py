@@ -1,7 +1,7 @@
 # -*- test-case-name: vulcan.test.test_utils -*-
 
 import random
-import copy
+from copy import copy
 
 from os.path import exists
 from ConfigParser import ConfigParser

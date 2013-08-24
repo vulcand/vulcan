@@ -1,0 +1,9 @@
+auth:
+  realm: 'localhost.localdomain'
+  urls:
+    - 'http://localhost:5000/auth'
+cassandra:
+  keyspace: 'dev'
+  servers:
+    - - 'localhost'
+      - 9160

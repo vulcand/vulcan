@@ -1,6 +1,5 @@
-import urlparse
 import json
-
+from urlparse import urlparse
 
 class Token(object):
     def __init__(self, id, rates):
@@ -19,7 +18,6 @@ class Rate(object):
         self.value = value
         self.period = period
 
-
     @property
     def period_as_seconds(self):
         return {
@@ -33,19 +31,26 @@ class Rate(object):
     def from_json(cls, obj):
         return cls(obj['value'], obj['period'])
 
+    def __str__(self):
+        return "Rate(value={}, period={})".format(self.value, self.period)
+
 
 class Upstream(object):
     def __init__(self, url, rates):
-        self.url = url
+        self.url = str(url)
         self.rates = rates
 
     @property
     def host(self):
-        return urlparse(self.url).host
+        return urlparse(self.url).hostname
 
     @property
     def port(self):
         return urlparse(self.url).port
+
+    @property
+    def path(self):
+        return urlparse(self.url).path
 
     @classmethod
     def from_json(cls, obj):
@@ -99,7 +104,7 @@ class AuthRequest(object):
             password=request.getPassword(),
             protocol=request.clientproto,
             method=request.method,
-            uri=request.uri,
+            url=request.uri,
             length=request.getHeader("Content-Length") or 0,
             ip=request.getHeader(IP_HEADER))
 

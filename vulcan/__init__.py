@@ -1,11 +1,8 @@
-from vulcan.utils import load_config
 
-
-def initialize(ini_file):
+def initialize(params):
     global config
-
-    config = load_config(ini_file)
+    config = params
 
     from vulcan import cassandra
-
-    cassandra.initialize()
+    cassandra.initialize(
+        config['cassandra']['servers'], config['cassandra']['keyspace'])

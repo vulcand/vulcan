@@ -1,6 +1,6 @@
 # -*- test-case-name: vulcan.test.test_throttling -*-
 
-from time import time
+import time
 import struct
 
 from twisted.internet import defer
@@ -16,13 +16,15 @@ def get_upstream(request):
     try:
         for token in request.tokens:
             throttled = yield _get_rates(token.id, token.rates)
+            print "Token counters:", throttled
             if any(throttled):
                 raise RateLimitReached(
                     _retry_seconds(max(throttled)))
 
         retries = []
         for u in shuffled(request.upstreams):
-            throttled = yield _get_rates(u.url, token.rates)
+            throttled = yield _get_rates(u.url, u.rates)
+            print "Upstream counters:", throttled
             if any(throttled):
                 retries.append(_retry_seconds(max(throttled)))
             else:
@@ -31,6 +33,9 @@ def get_upstream(request):
                     _update_rates(token.id, token.rates)
                 defer.returnValue(u)
 
+        print "Retries:", retries
+        print "Upstreams: ", request.upstreams
+
         if len(retries) == len(request.upstreams):
             raise RateLimitReached(min(retries))
 
@@ -38,6 +43,8 @@ def get_upstream(request):
         raise
 
     except Exception:
+        import traceback
+        traceback.print_exc("Failed to throttle")
         log.err(safe_format("Failed to throttle: {}", request))
 
 
@@ -62,7 +69,9 @@ def _is_throttled(key, rate):
             "select counter from hits where hit='{}'",
             _hit(key, rate)))
 
-    defer.returnValue(_result_to_int(result))
+    tr = ThrottledRate(rate, _result_to_int(result))
+    print "Got throttled rate: ", tr
+    defer.returnValue(tr)
 
 
 def _update_rate(key, rate):
@@ -74,7 +83,7 @@ def _update_rate(key, rate):
 
 
 def _hit(key, rate):
-    return safe_format("{}_{}_{}", key, rate.period, _now())
+    return safe_format("{}_{}_{}", key, rate.period, _rounded(_now(), rate))
 
 
 def _result_to_int(result):
@@ -85,18 +94,22 @@ def _result_to_int(result):
 
 def _retry_seconds(throttled):
     now = _now()
-    return now/throttled.rate.period_as_seconds + throttled.rate.period - now
+    return _rounded(now, throttled.rate)\
+        + throttled.rate.period_as_seconds - now
+
+def _rounded(time, rate):
+    return time/rate.period_as_seconds * rate.period_as_seconds
 
 def _now():
     return int(time.time())
 
 class ThrottledRate(object):
-    def __init__(self, rate, throttled):
+    def __init__(self, rate, count):
         self.rate = rate
-        self.throttled = throttled
+        self.count = count
 
     def __nonzero__(self):
-        return self.throttled
+        return self.count >= self.rate.value
 
     def __cmp__(self, other):
         s1 = self.rate.period_as_seconds
@@ -108,3 +121,10 @@ class ThrottledRate(object):
             return 0
         else:
             return 1
+
+    def __str__(self):
+        return "ThrottledRate(rate={}, hits={}".format(
+            self.rate, self.count)
+
+    def __repr__(self):
+        return str(self)

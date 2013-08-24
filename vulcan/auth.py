@@ -75,7 +75,7 @@ def authorize(request):
     CommunicationFailed exception is returned. The error is logged.
     """
 
-    url = random.choice(config["auth_urls"])
+    url = random.choice(config["auth"]["urls"])
     r = yield treq.get(url, params=request.to_json())
     content = yield treq.content(r)
 
