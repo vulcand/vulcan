@@ -1,110 +1,107 @@
-from functools import partial
+import urlparse
 import json
 
-import regex as re
 
-from twisted.web.resource import Resource
-from twisted.internet import defer
-from twisted.python import log
-from twisted.web.http import SERVICE_UNAVAILABLE, OK
-from twisted.web.server import NOT_DONE_YET
+class Token(object):
+    def __init__(self, id, rates):
+        self.id = id
+        self.rates = rates
 
-from expiringdict import ExpiringDict
-
-from vulcan.cassandra import client
-from vulcan.utils import safe_format
-from vulcan.errors import TimeoutError
-from vulcan.errors import RESPONSES
+    @classmethod
+    def from_json(cls, obj):
+        return cls(
+            id=obj['id'],
+            rates=[Rate.from_json(r) for r in obj.get('rates') or []])
 
 
-CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
+class Rate(object):
+    def __init__(self, value, period):
+        self.value = value
+        self.period = period
 
 
-class AdminResource(Resource):
-    def getChild(self, path, request):
-        return self
+    @property
+    def period_as_seconds(self):
+        return {
+            'second': 1,
+            'minute': 60,
+            'hour': 3600,
+            'day': 24 * 3600
+        }[self.period]
 
-    def render_POST(self, request):
-        data = json.loads(request.content.getvalue())
-        query = safe_format("insert into services (name, path, upstream)"
-                            "values('{}', '{}', '{}')",
-                            data["name"], data["path"],
-                            data["upstream"])
-        _run_query(query, request)
-
-        CACHE[data["name"]] = {"path": data["path"],
-                               "upstream": data["upstream"]}
-
-        return NOT_DONE_YET
-
-    def render_PUT(self, request):
-        service = request.uri.split("/")[-1]
-        data = json.loads(request.content.getvalue())
-        updates = ", ".join(
-            [safe_format("{} = '{}'", k, v) for k, v in data.iteritems()])
-        query = safe_format("update services set {} where name = '{}'",
-                            updates, service)
-        _run_query(query, request)
-
-        cached = CACHE.get(service)
-        if cached:
-            cached.update(data)
-            CACHE[service] = cached
-
-        return NOT_DONE_YET
-
-    def render_DELETE(self, request):
-        service = request.uri.split("/")[-1]
-        query = safe_format("delete from services where name = '{}'", service)
-        _run_query(query, request)
-
-        try:
-            del CACHE[service]
-        except KeyError:
-            pass
-
-        return NOT_DONE_YET
+    @classmethod
+    def from_json(cls, obj):
+        return cls(obj['value'], obj['period'])
 
 
-@defer.inlineCallbacks
-def _run_query(query, request):
-    try:
-        yield client.execute_cql3_query(query)
-        request.setResponseCode(OK, RESPONSES[OK])
-        request.write("")
-        request.finish()
-    except Exception, e:
-        log.err(e)
-        request.setResponseCode(SERVICE_UNAVAILABLE,
-                                RESPONSES[SERVICE_UNAVAILABLE])
-        request.write("")
-        request.finish()
+class Upstream(object):
+    def __init__(self, url, rates):
+        self.url = url
+        self.rates = rates
+
+    @property
+    def host(self):
+        return urlparse(self.url).host
+
+    @property
+    def port(self):
+        return urlparse(self.url).port
+
+    @classmethod
+    def from_json(cls, obj):
+        return cls(
+            url=obj['url'],
+            rates=[Rate.from_json(r) for r in obj.get('rates') or []])
 
 
-@defer.inlineCallbacks
-def pick_service(uri):
-    service = _pick_service(uri, CACHE)
-    if service:
-        defer.returnValue(service)
+class AuthResponse(object):
+    def __init__(self, tokens, upstreams, headers):
+        self.tokens = tokens
+        self.upstreams = upstreams
+        self.headers = headers
 
-    try:
-        r = yield client.execute_cql3_query(
-            "select name, path, upstream from services")
-        for row in r.rows:
-            name = row.columns[0].value
-            path = row.columns[1].value
-            upstream = row.columns[2].value
-            CACHE[name] = {"path": path, "upstream": upstream}
-        defer.returnValue(_pick_service(uri, CACHE))
-    except TimeoutError, e:
-        log.err(e, "All Cassandra nodes are down")
-        raise
+    @classmethod
+    def from_json(cls, obj):
+        tokens = [Token.from_json(t) for t in obj['tokens']]
+        upstreams = [Upstream.from_json(u) for u in obj['upstreams']]
+        headers = obj.get('headers') or []
+        return cls(tokens, upstreams, headers)
 
 
-def _pick_service(uri, routes):
-    # we use expiringdict for caching
-    # iteration over dict won't remove expired values
-    # so we access values directly
-    for rule in routes:
-        if re.match(routes[rule]["path"], uri):
-            return rule
+class AuthRequest(object):
+    def __init__(self, username, password, protocol, method, url, length, ip):
+        self.username = username
+        self.password = password
+        self.protocol = protocol
+        self.method = method
+        self.url = url
+        self.length = length
+        self.ip = ip
+
+    def to_json(self):
+        return {
+            'username': self.username,
+            'password': self.password,
+            'protocol': self.protocol,
+            'method': self.method,
+            'url': self.url,
+            'length': self.length,
+            'ip': self.ip
+            }
+
+    def __str__(self):
+        return json.dumps(self.to_json())
+
+    @classmethod
+    def from_http_request(cls, request):
+        return cls(
+            username=request.getUser(),
+            password=request.getPassword(),
+            protocol=request.clientproto,
+            method=request.method,
+            uri=request.uri,
+            length=request.getHeader("Content-Length") or 0,
+            ip=request.getHeader(IP_HEADER))
+
+IP_HEADER = "X-Real-IP"
+

@@ -1,9 +1,5 @@
-from twisted.python.failure import Failure
 from twisted.web.error import Error
 from twisted.web import http
-
-from twisted.python import log
-from vulcan.utils import safe_format
 
 
 class CommunicationFailed(Exception):
@@ -11,14 +7,12 @@ class CommunicationFailed(Exception):
 
 
 class RateLimitReached(Exception):
-    def __init__(self, request_params, limit):
-        Exception.__init__(self, safe_format(
-            ('Limit of {n} {method} requests in {period} seconds '
-             'for path "{path}" has been reached'),
-            n=limit["threshold"],
-            method=request_params["method"],
-            period=limit["period"],
-            path=request_params["uri"]))
+    def __init__(self, retry_seconds):
+        self.retry_seconds = retry_seconds
+        Exception.__init__(
+            "Rate limit reached. Retry in {} second{}",
+            str(retry_seconds),
+            's' if retry_seconds > 1 else '')
 
 
 class AuthorizationFailed(Error):

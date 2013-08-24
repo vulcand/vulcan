@@ -1,40 +1,32 @@
 # -*- test-case-name: vulcan.test.test_httpserver -*-
 
-import json
-from collections import namedtuple
-from functools import partial
-
-import treq
-
-from twisted.web import http
 from twisted.web.http import (HTTPChannel, HTTPFactory as StandardHTTPFactory,
-                              OK, UNAUTHORIZED, SERVICE_UNAVAILABLE)
+                              UNAUTHORIZED, SERVICE_UNAVAILABLE)
 
 from twisted.web.proxy import (ReverseProxyRequest, ProxyClientFactory,
                                ProxyClient)
-from twisted.internet.defer import maybeDeferred
 from twisted.internet import defer
-from twisted.web.error import Error
-from twisted.python.failure import Failure
 from twisted.python import log
 
 from vulcan import auth
-from vulcan.upstream import pick_server
 from vulcan import config
-from vulcan.errors import (TOO_MANY_REQUESTS, RESPONSES, RateLimitReached,
-                           AuthorizationFailed, CommunicationFailed)
-from vulcan.utils import to_utf8, safe_format
-from vulcan.throttling import check_and_update_rates
+from vulcan import throttling
+from vulcan.errors import (TOO_MANY_REQUESTS,
+                           RESPONSES,
+                           RateLimitReached,
+                           AuthorizationFailed)
+
+from vulcan.utils import safe_format
+from vulcan.routing import AuthRequest
 
 
-EndpointFactory = namedtuple('EndpointFactory', ['host', 'port'])
-IP_HEADER = "X-Real-IP"
-
+RETRY_IN = "X-Retry-In"
 
 class RestrictedChannel(HTTPChannel):
     # authorization module
     auth = auth
 
+    @defer.inlineCallbacks
     def allHeadersReceived(self):
         HTTPChannel.allHeadersReceived(self)
         request = self.requests[-1]
@@ -45,84 +37,48 @@ class RestrictedChannel(HTTPChannel):
         request.clientproto = self._version
         request.method = self._command
 
-        if request.getHeader("Authorization"):
-            d = self.auth.authorize(
-                {
-                    'username': request.getUser(),
-                    'password': request.getPassword(),
-                    'protocol': request.clientproto,
-                    'method': request.method,
-                    'uri': request.uri,
-                    'length': request.getHeader("Content-Length") or 0
-                })
+        if not request.getHeader("Authorization"):
+            request.setResponseCode(
+                UNAUTHORIZED, RESPONSES[UNAUTHORIZED])
+            request.setHeader(
+                'WWW-Authenticate', 'basic realm="%s"' % config['realm'])
 
-            # pass request to callbacks to finish it later
-            # we receive and process requests asynchronously
-            # so self.requests[-1] could point to a different request
-            # by the time we access it
-            d.addCallback(partial(self.checkAndUpdateRates, request))
-            d.addCallback(partial(self.proxyPass, request))
-            d.addErrback(partial(self.errorToHTTPResponse, request))
-        else:
-            request.setResponseCode(UNAUTHORIZED, RESPONSES[UNAUTHORIZED])
-            request.setHeader('WWW-Authenticate',
-                              'basic realm="%s"' % config['realm'])
+            request.write("")
+            request.finishUnreceived()
+            return
+
+        try:
+            r = yield self.auth.authorize(
+                AuthRequest.from_http_request(request))
+
+            upstream = yield throttling.get_upstream(r)
+
+            request.factory = upstream
+            request.processWhenReady()
+
+        except AuthorizationFailed, e:
+            log.err(e)
+            request.setResponseCode(e.status, e.message)
+            request.write(e.response or "")
+            request.finishUnreceived()
+
+        except RateLimitReached, e:
+            log.msg(safe_format(u"Rate limiting: {}", request))
+            request.setResponseCode(
+                TOO_MANY_REQUESTS,
+                RESPONSES[TOO_MANY_REQUESTS])
+            request.setHeader(RETRY_IN, "100 seconds")
+            request.write(str(e))
+            request.finishUnreceived()
+
+        except Exception:
+            log.err("Unrecognized exception")
+            request.setResponseCode(
+                SERVICE_UNAVAILABLE,
+                RESPONSES[SERVICE_UNAVAILABLE])
             request.write("")
             request.finishUnreceived()
 
-    def errorToHTTPResponse(self, request, failure):
-        """Converts errors into http responses.
-        """
-        if isinstance(failure.value, RateLimitReached):
-            request.setResponseCode(TOO_MANY_REQUESTS,
-                                    RESPONSES[TOO_MANY_REQUESTS])
-            request.write(failure.getErrorMessage() or "")
-        elif isinstance(failure.value, AuthorizationFailed):
-            request.setResponseCode(failure.value.status,
-                                    failure.value.message)
-            request.write(failure.value.response or "")
-        else:
-            # unknown exception we haven't logged before
-            if not isinstance(failure.value, CommunicationFailed):
-                log.err(failure)
-
-            request.setResponseCode(SERVICE_UNAVAILABLE,
-                                    RESPONSES[SERVICE_UNAVAILABLE])
-            request.write("")
-
-        request.finishUnreceived()
-
-    @defer.inlineCallbacks
-    def checkAndUpdateRates(self, request, settings):
-        """
-        Checks if request exceeds allowed request's rate. Raises
-        RateLimitReached exception if it does and updates request's rate
-        otherwise. Ignores all other exceptions.
-        """
-        try:
-            request_params = dict(
-                auth_token=settings["auth_token"],
-                protocol=request.clientproto,
-                method=request.method,
-                uri=request.uri,
-                length=request.getHeader("Content-Length") or 0,
-                ip=request.getHeader(IP_HEADER) or "")
-            r = yield check_and_update_rates(request_params)
-        except RateLimitReached:
-            raise
-        except Exception, e:
-            log.err(e)
-        defer.returnValue(settings)
-
-    def proxyPass(self, request, settings):
-        host, port = pick_server(settings['upstream']).split(":")
-        port = int(port)
-        # treq converts upstream string we got from server to unicode
-        # host should be an encoded bytestring since we're sending it
-        # over network
-        host = to_utf8(host)
-        request.factory = EndpointFactory(host, port)
-        request.processWhenReady()
 
 
 class ReportingProxyClientFactory(ProxyClientFactory):
@@ -181,8 +137,8 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         it doesn't set Host header to proxied server hostname.
         """
         clientFactory = self.proxyClientFactoryClass(
-            self.method, self.uri, self.clientproto, self.getAllHeaders(),
-            self.content.read(), self)
+            self.method, self.factory.url, self.clientproto,
+            self.getAllHeaders(), self.content.read(), self)
         self.reactor.connectTCP(self.factory.host, self.factory.port,
                                 clientFactory)
 
@@ -194,6 +150,8 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         we need to call loseConnection() explicitly
         """
         self.transport.loseConnection()
+
+
 
 
 class RestrictedReverseProxy(RestrictedChannel):

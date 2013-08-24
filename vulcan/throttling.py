@@ -3,129 +3,108 @@
 from time import time
 import struct
 
-import regex as re
-
 from twisted.internet import defer
 from twisted.python import log
 
-from expiringdict import ExpiringDict
-
-from vulcan import config
-from vulcan.utils import safe_format
+from vulcan.utils import safe_format, shuffled
 from vulcan.cassandra import client
 from vulcan.errors import RateLimitReached
 
 
-CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
-# db tables
-LIMITS = "limits"
-DEFAULTS = "defaults"
+@defer.inlineCallbacks
+def get_upstream(request):
+    try:
+        for token in request.tokens:
+            throttled = yield _get_rates(token.id, token.rates)
+            if any(throttled):
+                raise RateLimitReached(
+                    _retry_seconds(max(throttled)))
+
+        retries = []
+        for u in shuffled(request.upstreams):
+            throttled = yield _get_rates(u.url, token.rates)
+            if any(throttled):
+                retries.append(_retry_seconds(max(throttled)))
+            else:
+                _update_rates(u.url, u.rates)
+                for token in request.tokens:
+                    _update_rates(token.id, token.rates)
+                defer.returnValue(u)
+
+        if len(retries) == len(request.upstreams):
+            raise RateLimitReached(min(retries))
+
+    except RateLimitReached:
+        raise
+
+    except Exception:
+        log.err(safe_format("Failed to throttle: {}", request))
 
 
 @defer.inlineCallbacks
-def get_limits(table=LIMITS):
-    limits = CACHE.get(table, [])
-    if limits:
-        defer.returnValue(limits)
+def _get_rates(key, rates):
+    out = []
+    for rate in rates:
+        throttled = yield _is_throttled(key, rate)
+        out.append(throttled)
+    defer.returnValue(out)
 
+
+def _update_rates(key, rates):
+    for rate in rates:
+        _update_rate(key, rate)
+
+
+@defer.inlineCallbacks
+def _is_throttled(key, rate):
     result = yield client.execute_cql3_query(
-        safe_format("select * from {}", table))
-    for row in result.rows:
-        limit = {column.name: column.value for column in row.columns}
-        limit["data_size"] = struct.unpack('>I', limit['data_size'])[0]
-        limit["threshold"] = struct.unpack('>I', limit['threshold'])[0]
-        limit["period"] = struct.unpack('>I', limit['period'])[0]
-        limits.append(limit)
-
-    CACHE[table] = limits
-    defer.returnValue(limits)
-
-
-@defer.inlineCallbacks
-def check_and_update_rates(request_params):
-    # check custom limits, usually set per account
-    limits = yield get_limits(LIMITS)
-    limits = _match_limits(request_params, limits)
-    if not limits:
-        limits = yield get_limits(DEFAULTS)
-        limits = _match_limits(request_params, limits)
-    yield _run_checks(request_params, limits)
-
-
-def _match_limits(request_params, limits):
-    return [
-        limit for limit in limits
-        if limit["data_size"] <= request_params["length"] and
-        re.match(limit["auth_token"], request_params["auth_token"]) and
-        re.match(limit["protocol"], request_params["protocol"],
-                 re.IGNORECASE) and
-        re.match(limit["method"], request_params["method"],
-                 re.IGNORECASE) and
-        re.match(limit["uri"], request_params["uri"]) and
-        re.match(limit["ip"], request_params["ip"])]
-
-
-@defer.inlineCallbacks
-def _run_checks(request_params, limits):
-    for limit in limits:
-        yield _check_and_update_rate(request_params, limit)
-
-
-@defer.inlineCallbacks
-def _check_and_update_rate(request_params, limit, *args):
-    hits = _hits_spec(request_params["auth_token"], limit)
-    counters = yield _get_hits_counters(hits)
-    _check_rate_against_limit(request_params, limit, counters)
-    _update_usage(hits["hit"], hits["timerange"][1], limit["period"])
-
-
-@defer.inlineCallbacks
-def _get_hits_counters(hits):
-    counters = yield client.execute_cql3_query(
         safe_format(
-            "select counter from hits where hit='{}' and "
-            "ts >= {} and ts <= {}",
-            hits['hit'], hits["timerange"][0], hits["timerange"][1]))
-    defer.returnValue(counters)
+            "select counter from hits where hit='{}'",
+            _hit(key, rate)))
+
+    defer.returnValue(_result_to_int(result))
 
 
-def _check_rate_against_limit(request_params, limit, result):
-    rate = 0
-    for row in result.rows:
-        rate += struct.unpack('>Q', row.columns[0].value)[0]
-
-    if rate >= limit["threshold"]:
-        raise RateLimitReached(request_params, limit)
-
-
-def _update_usage(hit, ts, period):
-    """
-    Saves request's id/hash called ``hit`` with timestamp ``ts``
-    for the next ``period`` seconds. Ignores any exceptions.
-    """
+def _update_rate(key, rate):
     client.execute_cql3_query(
         safe_format(
             "update hits using ttl {} "
-            "set counter = counter + 1 where hit='{}' and ts={}",
-            period, hit, ts)).addErrback(log.err)
+            "set counter = counter + 1 where hit='{}'",
+            rate.period_as_seconds, _hit(key, rate))).addErrback(log.err)
 
 
-def _hits_spec(auth_token, limit):
-    now = int(time())
-    time_in_buckets = now / int(config['bucket_size'])
-    period_in_buckets = limit['period'] / int(config['bucket_size'])
-    start_ts = (time_in_buckets -
-                period_in_buckets) * int(config['bucket_size'])
-    end_ts = time_in_buckets * int(config['bucket_size'])
+def _hit(key, rate):
+    return safe_format("{}_{}_{}", key, rate.period, _now())
 
-    hit = safe_format(
-        "{ip} {auth_token} {protocol} {method} {uri} {data_size}",
-        ip=limit["ip"],
-        auth_token=auth_token,
-        protocol=limit['protocol'],
-        method=limit['method'],
-        uri=limit['uri'],
-        period=limit['period'],
-        data_size=limit['data_size'])
 
-    return {"hit": hit, "timerange": [start_ts, end_ts]}
+def _result_to_int(result):
+    val = 0
+    for row in result.rows:
+        val += struct.unpack('>Q', row.columns[0].value)[0]
+    return val
+
+def _retry_seconds(throttled):
+    now = _now()
+    return now/throttled.rate.period_as_seconds + throttled.rate.period - now
+
+def _now():
+    return int(time.time())
+
+class ThrottledRate(object):
+    def __init__(self, rate, throttled):
+        self.rate = rate
+        self.throttled = throttled
+
+    def __nonzero__(self):
+        return self.throttled
+
+    def __cmp__(self, other):
+        s1 = self.rate.period_as_seconds
+        s2 = other.rate.period_as_seconds
+
+        if s1 < s2:
+            return -1
+        elif s1 == s2:
+            return 0
+        else:
+            return 1

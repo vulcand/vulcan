@@ -1,5 +1,8 @@
 # -*- test-case-name: vulcan.test.test_utils -*-
 
+import random
+import copy
+
 from os.path import exists
 from ConfigParser import ConfigParser
 
@@ -71,3 +74,12 @@ def safe_format(format_string, *args, **kwargs):
     except:
         log.err()
         return u''
+
+
+def shuffled(values):
+    """Returns shuffled version of the passed list without
+    actually touching the original one.
+    """
+    v = copy(values)
+    random.shuffle(v)
+    return v

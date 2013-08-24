@@ -15,28 +15,20 @@ Authorization module for reverse proxy.
 ...     }
 >>> d = authorize(request_params)
 """
+import json
 
-from functools import partial
+from twisted.internet import defer
 
-from twisted.internet import defer, threads
-from twisted.python.failure import Failure
-from twisted.web.http import RESPONSES
-from twisted.python import log
-
+import random
 import treq
 
-from expiringdict import ExpiringDict
-
-from vulcan.utils import safe_format
-from vulcan.upstream import get_servers, pick_server
-from vulcan.errors import CommunicationFailed, AuthorizationFailed
 from vulcan import config
+from vulcan.routing import AuthResponse
+from vulcan.errors import AuthorizationFailed
 
 
-CACHE = ExpiringDict(max_len=100, max_age_seconds=60)
-
-
-def authorize(request_params):
+@defer.inlineCallbacks
+def authorize(request):
     """Authorize request based on the parameters extracted from the request.
 
     >>> request_params = {
@@ -82,78 +74,13 @@ def authorize(request_params):
     authorization server is unavailable) a Failure instance with
     CommunicationFailed exception is returned. The error is logged.
     """
-    hit = safe_format(
-        "{username} {password} {protocol} {method} {uri} {data_size}",
-        username=request_params["username"],
-        password=request_params["password"],
-        protocol=request_params['protocol'],
-        method=request_params['method'],
-        uri=request_params['uri'],
-        data_size=request_params['length'])
 
-    auth_result = CACHE.get(hit)
-    if auth_result:
-        return defer.succeed(auth_result)
-    else:
-        url = ("http://" + pick_server(config["authorization"]) +
-               config["auth_path"])
-        d = treq.get(url, params=request_params)
-        d.addCallback(partial(_authorization_received, hit))
-        d.addErrback(_errback)
-        return d
+    url = random.choice(config["auth_urls"])
+    r = yield treq.get(url, params=request.to_json())
+    content = yield treq.content(r)
 
+    if r.code >= 300 or r.code < 200:
+        raise AuthorizationFailed(r.code, r.phrase, content)
 
-def _errback(failure):
-    if isinstance(failure.value, (AuthorizationFailed, CommunicationFailed)):
-        return failure
-    else:
-        log.err(failure)
-        return Failure(CommunicationFailed())
+    defer.returnValue(AuthResponse.from_json(json.loads(content)))
 
-
-def _authorization_received(hit, response):
-    if response.code >= 400 and response.code < 500:
-        d = treq.content(response)
-        d.addCallback(partial(_authorization_failed, hit, response.code))
-        d.addErrback(partial(_failed_receive_auth_failure_reason,
-                             hit, response.code))
-    elif response.code >= 500:
-        log.err(safe_format("Authorization for request {} failed with code {}",
-                            hit, response.code))
-        d = treq.content(response)
-        d.addCallback(partial(_authorization_failed_with_5xx,
-                              hit, response.code))
-        d.addErrback(_errback)
-    else:
-        d = treq.json_content(response)
-        d.addCallback(partial(_authorization_succeeded, hit))
-
-    return d
-
-
-def _authorization_failed_with_5xx(hit, code, reason):
-    log.err(safe_format(
-            "Authorization for request {} failed with code {} and reason {}",
-            hit, code, reason))
-    return Failure(CommunicationFailed())
-
-
-def _failed_receive_auth_failure_reason(hit, code, failure):
-    if isinstance(failure.value, AuthorizationFailed):
-        return failure
-
-    log.err(failure)
-    failure = Failure(AuthorizationFailed(code, RESPONSES[code]))
-    CACHE[hit] = failure
-    return failure
-
-
-def _authorization_failed(hit, code, reason):
-    failure = Failure(AuthorizationFailed(code, RESPONSES[code], reason))
-    CACHE[hit] = failure
-    return failure
-
-
-def _authorization_succeeded(hit, result):
-    CACHE[hit] = result
-    return result

@@ -12,7 +12,6 @@ from vulcan.logging import CustomizableFileLogObserver
 
 
 def parse_args():
-    global args
     p = argparse.ArgumentParser(
         description="Proxies HTTP(S) and SMTP requests")
     p.add_argument("--smtp-port", "-m", default=5050, type=int,
@@ -24,16 +23,14 @@ def parse_args():
     p.add_argument("--ini-file", "-f", metavar='<FILENAME>', required=True,
                    help="config file name")
     p.add_argument('--pid-file', help="pid file path")
-    args = p.parse_args()
+    return p.parse_args()
 
-
-def initialize(process_name="vulcan"):
-    parse_args()
+def initialize(args, process_name="vulcan"):
 
     vulcan.initialize(path.join(path.dirname(__file__), args.ini_file))
     # Create the pidfile:
     if args.pid_file:
-        with open(pid_file, 'w') as pidfile:
+        with open(args.pid_file, 'w') as pidfile:
             pidfile.write(str(getpid()))
 
     # Change the name of the process to "vulcan"
@@ -46,14 +43,12 @@ def main():
     # pick epoll()-based twisted reactor. this needs to appear before
     # any other Twisted imports
     epollreactor.install()
-
-    initialize()
+    args = parse_args()
+    initialize(args)
 
     from twisted.internet import reactor
-    from twisted.cred.portal import Portal
     from twisted.web.server import Site
 
-    from vulcan import config
     from vulcan.httpserver import HTTPFactory
     from vulcan import cassandra
     from vulcan.routing import AdminResource
