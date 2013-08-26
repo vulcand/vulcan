@@ -8,8 +8,6 @@ from ConfigParser import ConfigParser
 
 import regex as re
 
-from twisted.python import log
-
 
 RE_IP_ADDRESS = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
@@ -72,7 +70,6 @@ def safe_format(format_string, *args, **kwargs):
 
     # ignore other errors
     except:
-        log.err()
         return u''
 
 

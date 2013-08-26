@@ -2,6 +2,7 @@ from os import path
 
 from mock import patch, Mock
 from twisted.internet import epollreactor
+import yaml
 import twisted
 
 import vulcan
@@ -12,6 +13,9 @@ epollreactor.install()
 
 from telephus.pool import CassandraClusterPool
 
+test_yml = path.abspath(path.join(path.dirname(__file__), "..", "..", "test.yml"))
+
 with patch.object(CassandraClusterPool, 'make_conn', Mock()):
-    vulcan.initialize(
-        path.join(path.dirname(__file__), "..", "..", "test.ini"))
+    with open(test_yml) as f:
+        params = yaml.load(f)
+    vulcan.initialize(params)

@@ -29,7 +29,6 @@ def initialize(args, process_name="vulcan"):
 
     with open(args.config) as f:
         params = yaml.load(f)
-        print params
 
     vulcan.initialize(params)
 

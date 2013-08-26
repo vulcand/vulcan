@@ -63,7 +63,7 @@ class RestrictedChannel(HTTPChannel):
             request.finishUnreceived()
 
         except RateLimitReached, e:
-            log.msg(safe_format(u"Rate limiting: {}", request))
+            log.msg("Rate limiting: %s" %(request,))
             request.setResponseCode(
                 TOO_MANY_REQUESTS,
                 RESPONSES[TOO_MANY_REQUESTS])
@@ -72,8 +72,7 @@ class RestrictedChannel(HTTPChannel):
             request.finishUnreceived()
 
         except Exception, e:
-            import traceback
-            traceback.print_exc("Blabla")
+            log.err(e, "Exception when processing request")
             request.setResponseCode(
                 SERVICE_UNAVAILABLE,
                 RESPONSES[SERVICE_UNAVAILABLE])

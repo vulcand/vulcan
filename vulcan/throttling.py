@@ -16,7 +16,8 @@ def get_upstream(request):
     try:
         for token in request.tokens:
             throttled = yield _get_rates(token.id, token.rates)
-            print "Token counters:", throttled
+            log.msg("Token %s counters: %s" % (token, throttled))
+
             if any(throttled):
                 raise RateLimitReached(
                     _retry_seconds(max(throttled)))
@@ -24,7 +25,7 @@ def get_upstream(request):
         retries = []
         for u in shuffled(request.upstreams):
             throttled = yield _get_rates(u.url, u.rates)
-            print "Upstream counters:", throttled
+            log.msg("Upstream counters: %s" %(u, throttled))
             if any(throttled):
                 retries.append(_retry_seconds(max(throttled)))
             else:
@@ -33,9 +34,6 @@ def get_upstream(request):
                     _update_rates(token.id, token.rates)
                 defer.returnValue(u)
 
-        print "Retries:", retries
-        print "Upstreams: ", request.upstreams
-
         if len(retries) == len(request.upstreams):
             raise RateLimitReached(min(retries))
 
@@ -43,9 +41,7 @@ def get_upstream(request):
         raise
 
     except Exception:
-        import traceback
-        traceback.print_exc("Failed to throttle")
-        log.err(safe_format("Failed to throttle: {}", request))
+        log.err("Failed to throttle: %s" %(request, ))
 
 
 @defer.inlineCallbacks
@@ -70,7 +66,7 @@ def _is_throttled(key, rate):
             _hit(key, rate)))
 
     tr = ThrottledRate(rate, _result_to_int(result))
-    print "Got throttled rate: ", tr
+    log.msg("Got throttled rate: key: %s rate: %s" %(key, tr,))
     defer.returnValue(tr)
 
 
