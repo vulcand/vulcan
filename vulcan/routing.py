@@ -12,6 +12,10 @@ class Token(object):
             id=obj['id'],
             rates=[Rate.from_json(r) for r in obj.get('rates') or []])
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+
 
 class Rate(object):
     def __init__(self, value, period):
@@ -33,6 +37,10 @@ class Rate(object):
 
     def __str__(self):
         return "Rate(value={}, period={})".format(self.value, self.period)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
 
 
 class Upstream(object):
@@ -58,6 +66,11 @@ class Upstream(object):
             url=obj['url'],
             rates=[Rate.from_json(r) for r in obj.get('rates') or []])
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+
+
 
 class AuthResponse(object):
     def __init__(self, tokens, upstreams, headers):
@@ -71,6 +84,10 @@ class AuthResponse(object):
         upstreams = [Upstream.from_json(u) for u in obj['upstreams']]
         headers = obj.get('headers') or []
         return cls(tokens, upstreams, headers)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
 
 
 class AuthRequest(object):
