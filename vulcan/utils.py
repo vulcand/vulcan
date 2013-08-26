@@ -12,29 +12,6 @@ import regex as re
 RE_IP_ADDRESS = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 
-def load_config(ini_file):
-    """Returns a config dictionary initialized from the given ini-file.
-
-    Config section it looks for is DEFAULT.
-
-    >>> conf = load_config('test.ini')
-    >>> conf['built_type']
-    "test"
-    """
-    parser = ConfigParser()
-    if not parser.read([ini_file]):
-        if not exists(ini_file):
-            raise Exception("Can't load ini-file; {}".format(ini_file))
-
-    # convert name/value options from the ini-file into dictionary
-    file_conf = {k: v for k, v in parser.items("DEFAULT")}
-
-    # also append the full path of the ini-file itself to it, so we'll always
-    # know which ini file was used:
-    file_conf['ini-file'] = ini_file
-    return file_conf
-
-
 def is_valid_ip(str_ip):
     """Determines if a given IP address is good"""
     return RE_IP_ADDRESS.match(str_ip or '') is not None

@@ -42,6 +42,7 @@ def get_upstream(request):
 
     except Exception:
         log.err("Failed to throttle: %s" %(request, ))
+        defer.returnValue(request.upstreams[0])
 
 
 @defer.inlineCallbacks

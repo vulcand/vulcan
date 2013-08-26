@@ -12,11 +12,13 @@ from twisted.test import proto_helpers
 from twisted.python import log
 
 from vulcan.errors import (AuthorizationFailed, RateLimitReached, RESPONSES,
-                           TOO_MANY_REQUESTS, CommunicationFailed)
-from vulcan.httpserver import HTTPFactory, RestrictedChannel
+                           TOO_MANY_REQUESTS)
+from vulcan.httpserver import (HTTPFactory, RestrictedChannel,
+                               DynamicallyRoutedRequest)
 from vulcan import httpserver
 from vulcan import httpserver as hs
-from vulcan import throttling as th
+from vulcan import throttling
+from vulcan.routing import AuthResponse, Upstream
 
 
 class HTTPServerTest(TestCase):
@@ -26,27 +28,28 @@ class HTTPServerTest(TestCase):
         self.transport = proto_helpers.StringTransport()
         self.protocol.makeConnection(self.transport)
 
-    @patch.object(RestrictedChannel, 'proxyPass')
-    def test_no_auth_header(self, proxyPass):
+    @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
+    def test_no_auth_header(self, processWhenReady):
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("\r\n")
         status_line = self.transport.value().splitlines()[0]
         self.assertEquals("HTTP/1.1 401 Unauthorized", status_line)
-        self.assertFalse(proxyPass.called)
+        self.assertEquals(0, processWhenReady.call_count)
 
-    @patch.object(hs.auth, 'authorize')
-    @patch.object(RestrictedChannel, 'proxyPass')
-    def test_wrong_credentials(self, proxyPass, authorize):
+    @patch.object(httpserver.auth, 'authorize')
+    @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
+    @patch.object(log, 'err')
+    def test_wrong_credentials(self, log_err, processWhenReady, authorize):
         data = {"message": "Wrong API key"}
-        d = defer.fail(
-            Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
-                                        json.dumps(data))))
-        authorize.return_value = d
+        e = AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
+                                json.dumps(data))
+        authorize.return_value = defer.fail(e)
 
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
 
+        log_err.assert_called_once_with(e)
         status_line = self.transport.value().splitlines()[0]
         self.assertEquals(
             "HTTP/1.1 {code} {message}".format(
@@ -54,129 +57,61 @@ class HTTPServerTest(TestCase):
                 message=RESPONSES[UNAUTHORIZED]),
             status_line)
         self.assertIn(json.dumps(data), self.transport.value())
-        self.assertFalse(proxyPass.called)
+        self.assertEquals(0, processWhenReady.call_count)
 
     @patch.object(reactor, 'connectTCP')
-    @patch.object(th, 'get_limits')
-    @patch.object(th, '_run_checks')
-    @patch.object(hs.auth, 'authorize')
-    def test_success(self, authorize, run_checks, get_limits, connectTCP):
-        authorize.return_value = defer.succeed(
-            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
+    @patch.object(throttling, 'get_upstream')
+    @patch.object(httpserver.auth, 'authorize')
+    def test_success(self, authorize, get_upstream, connectTCP):
+        authorize.return_value = defer.succeed(_auth_response)
+        get_upstream.return_value = defer.succeed(_auth_response.upstreams[0])
 
-        get_limits.return_value = defer.succeed([_limit()])
-        run_checks.return_value = defer.succeed(None)
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
-        self.assertEquals("10.241.0.25", connectTCP.call_args[0][0])
+        self.assertEquals(_auth_response.upstreams[0].host,
+                          connectTCP.call_args[0][0])
         self.assertIsInstance(connectTCP.call_args[0][0], str,
                               "Host should be an encoded bytestring")
-        self.assertEquals(3000, connectTCP.call_args[0][1])
-        self.assertEquals([_limit()], run_checks.call_args[0][1])
-
-    def test_errorToHTTPResponse(self):
-        request = Mock()
-        request_params = {
-            "method": "HTTP",
-            "uri": "http:localhost"
-            }
-        limit = {
-            "threshold": 10,
-            "period": 60
-            }
-        rc = RestrictedChannel()
-
-        # RateLimitReached
-        f = Failure(RateLimitReached(request_params, limit))
-        rc.errorToHTTPResponse(request, f)
-        request.setResponseCode.assert_called_once_with(
-            TOO_MANY_REQUESTS,
-            RESPONSES[TOO_MANY_REQUESTS])
-        request.write.assert_called_once_with(f.getErrorMessage())
-        self.assertEquals(1, request.finishUnreceived.call_count)
-        request.reset_mock()
-
-        # AuthorizationFailed
-        f = Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
-                                        "Wrong API key"))
-        rc.errorToHTTPResponse(request, f)
-        request.setResponseCode.assert_called_once_with(
-            UNAUTHORIZED,
-            RESPONSES[UNAUTHORIZED])
-        request.write.assert_called_once_with(f.value.response)
-        self.assertEquals(1, request.finishUnreceived.call_count)
-
-        request.reset_mock()
-
-        # AuthorizationFailed with no response body
-        f = Failure(AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
-                                        response=None))
-        rc.errorToHTTPResponse(request, f)
-        request.setResponseCode.assert_called_once_with(
-            UNAUTHORIZED,
-            RESPONSES[UNAUTHORIZED])
-        request.write.assert_called_once_with("")
-        self.assertEquals(1, request.finishUnreceived.call_count)
-
-        request.reset_mock()
-
-        # CommunicationFailed
-        f = Failure(CommunicationFailed(Exception("Bam!")))
-        rc.errorToHTTPResponse(request, f)
-        request.setResponseCode.assert_called_once_with(
-            SERVICE_UNAVAILABLE,
-            RESPONSES[SERVICE_UNAVAILABLE])
-        request.write.assert_called_once_with("")
-        self.assertEquals(1, request.finishUnreceived.call_count)
-
-        request.reset_mock()
-
-        # unexpected error
-        f = Failure(Exception("Bam!"))
-        with patch.object(log, "err") as log_err:
-            rc.errorToHTTPResponse(request, f)
-        request.setResponseCode.assert_called_once_with(
-            SERVICE_UNAVAILABLE,
-            RESPONSES[SERVICE_UNAVAILABLE])
-        request.write.assert_called_once_with("")
-        log_err.assert_called_once_with(f)
-        self.assertEquals(1, request.finishUnreceived.call_count)
+        self.assertEquals(_auth_response.upstreams[0].port,
+                          connectTCP.call_args[0][1])
 
     @patch.object(reactor, 'connectTCP')
-    @patch.object(httpserver, 'check_and_update_rates')
+    @patch.object(throttling, 'get_upstream')
     def test_request_received_before_checks(self,
-                                            check_and_update_rates,
+                                            get_upstream,
                                             connectTCP):
         self.clock = task.Clock()
-        data = {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"}
 
         def delayed_auth(*args, **kwargs):
             d = defer.Deferred()
-            self.clock.callLater(2, d.callback, data)
+            self.clock.callLater(2, d.callback, _auth_response)
             return d
 
-        with patch.object(hs.auth, 'authorize', delayed_auth):
-            check_and_update_rates.return_value = defer.succeed(None)
+        with patch.object(httpserver.auth, 'authorize', delayed_auth):
+            get_upstream.return_value = defer.succeed(
+                _auth_response.upstreams[0])
+
             self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
             self.protocol.dataReceived(
                 "Authorization: Basic YXBpOmFwaWtleQ==\r\n")
             self.protocol.dataReceived("\r\n")
+
             self.clock.advance(5)
-            self.assertEquals("10.241.0.25", connectTCP.call_args[0][0])
+
+            self.assertEquals(_auth_response.upstreams[0].host,
+                              connectTCP.call_args[0][0])
             self.assertIsInstance(connectTCP.call_args[0][0], str,
                                   "Host should be an encoded bytestring")
-            self.assertEquals(3000, connectTCP.call_args[0][1])
+            self.assertEquals(_auth_response.upstreams[0].port,
+                              connectTCP.call_args[0][1])
 
-    @patch.object(hs, 'check_and_update_rates')
-    @patch.object(hs.auth, 'authorize')
-    def test_clientConnectionFailed(self, authorize, check_and_update_rates):
-        # assume there is nobody listening on this port
-        data = {"auth_token": u"abc", "upstream": u"127.0.0.1:69"}
-        d = defer.succeed(data)
-        authorize.return_value = d
+    @patch.object(throttling, 'get_upstream')
+    @patch.object(httpserver.auth, 'authorize')
+    def test_clientConnectionFailed(self, authorize, get_upstream):
+        authorize.return_value = defer.succeed(_auth_response)
 
-        check_and_update_rates.return_value = defer.succeed(None)
+        get_upstream.return_value = defer.succeed(_bad_upstream)
 
         # had to overwrite factories/protocols for testing purposes
         # mocks set before reactor.callLater() won't work afterwords
@@ -189,7 +124,7 @@ class HTTPServerTest(TestCase):
                     hs.ReportingProxyClientFactory.clientConnectionFailed(
                         self_, connector, reason)
 
-        class DynamicallyRoutedRequest(httpserver.DynamicallyRoutedRequest):
+        class DynamicallyRoutedRequest(hs.DynamicallyRoutedRequest):
             proxyClientFactoryClass = ReportingProxyClientFactory
 
             def finish(self_, *args, **kwargs):
@@ -224,38 +159,28 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived("\r\n")
 
     @patch.object(reactor, 'connectTCP')
-    @patch.object(hs, 'check_and_update_rates')
-    @patch.object(hs.auth, 'authorize')
+    @patch.object(httpserver.auth, 'authorize')
     @patch.object(log, 'err')
-    def test_throttling_crashes(self, log_err, authorize,
-                                check_and_update_rates, connectTCP):
-        authorize.return_value = defer.succeed(
-            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
-
+    def test_exception_when_processing(self, log_err, authorize,
+                                       connectTCP):
         e = Exception("Bam!")
-
-        check_and_update_rates.side_effect = lambda *args: defer.fail(e)
+        authorize.side_effect = lambda *args: defer.fail(e)
 
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
 
-        log_err.assert_called_once_with(e)
-        self.assertEquals("10.241.0.25", connectTCP.call_args[0][0])
-        self.assertIsInstance(connectTCP.call_args[0][0], str,
-                              "Host should be an encoded bytestring")
-        self.assertEquals(3000, connectTCP.call_args[0][1])
+        log_err.assert_called_once_with(e, "Exception when processing request")
 
-    @patch.object(RestrictedChannel, 'proxyPass')
-    @patch.object(hs, 'check_and_update_rates')
-    @patch.object(hs.auth, 'authorize')
+    @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
+    @patch.object(throttling, 'get_upstream')
+    @patch.object(httpserver.auth, 'authorize')
     def test_rate_limit_reached(self, authorize,
-                                check_and_update_rates, proxyPass):
-        authorize.return_value = defer.succeed(
-            {"auth_token": u"abc", "upstream": u"10.241.0.25:3000"})
+                                get_upstream, processWhenReady):
+        authorize.return_value = defer.succeed(_auth_response)
 
-        check_and_update_rates.side_effect = lambda *args: defer.fail(
-            RateLimitReached(_request_params(), _limit()))
+        get_upstream.side_effect = lambda *args: defer.fail(
+            RateLimitReached(retry_seconds=10))
 
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
@@ -268,32 +193,20 @@ class HTTPServerTest(TestCase):
                 message=RESPONSES[TOO_MANY_REQUESTS]),
             status_line)
 
-        self.assertFalse(proxyPass.called)
+        self.assertEquals(0, processWhenReady.call_count)
 
 
-def _limit(**kwargs):
-    d = {
-        "auth_token": "abc",
-        "period": 30,
-        "protocol": "http",
-        "method": "get",
-        "uri": "/foo/bar",
-        "data_size": 0,
-        "threshold": 2,
-        "ip": ".*"
-        }
-    d.update(kwargs)
-    return d
+_auth_response = AuthResponse.from_json(
+    {"tokens": [{"id": "abc",
+                 "rates": [{"value": 400, "period": "minute"}]
+                 }],
+     "upstreams": [{"url": "http://127.0.0.1:5000",
+                    "rates": [{"value": 1800, "period": "hour"}]
+                    }],
+     "headers": {"X-Real-Ip": "1.2.3.4"}})
 
 
-def _request_params(**kwargs):
-    d = {
-        "auth_token": "abc",
-        "protocol": "http",
-        "method": "get",
-        "uri": "http://localhost/test",
-        "length": 0,
-        "ip": "127.0.0.1"
-        }
-    d.update(kwargs)
-    return d
+_bad_upstream = Upstream.from_json(
+    {"url": "http://127.0.0.1:69",
+     "rates": [{"value": 1800, "period": "hour"}]
+     })
