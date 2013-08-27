@@ -14,32 +14,43 @@ $ python setup.py develop
 
 You'll also need:
 
-* cassandra (I used version 1.2.5)
-* create keyspace "Keyspace1" in cassandra (probably it should be changed to "Development" or smth) and `hits`
-and `limits` tables (bellow are queries in cql3):
- * ```create table hits (hit text, ts int, counter counter, primary key (hit, ts));```
- * ```create table limits (id uuid, auth_token text, protocol text, method text, path text, data_size int, period int, threshold int, primary key (id));```
+* cassandra (Tested on versions >= 1.2.5)
+* create keyspaces "dev" and "test" in cassandra, with the following tables:
 
+```sql
+USE dev;
+
+CREATE TABLE hits (
+      hit text PRIMARY KEY,
+      counter counter
+    ) WITH COMPACT STORAGE;
+```
 
 Usage
 -----
-
-
-To run server:
+To run server in devmode
 
 ```
-$ cd vulcan
-$ python vulcandaemon.py -f development.ini
+make rundev
+```
+
+To run tests
+
+```
+make test
 ```
 
 To run tests with coverage:
 
 ```
-$ cd vulcan
-$ coverage run --sosurce=vulcan `which trial` vulcan
-$ coverage report --show-missing
+make coverage
 ```
 
+To cleanup temp folders
+
+```
+make clean
+```
 
 General request workflow
 ------------------------
@@ -51,29 +62,88 @@ Request parameters are extracted from the request and sent to authorization serv
 * URI
 * protocol (SMTP/HTTP)
 * method (POST/GET/DELETE/PUT)
-* length 
+* request length 
+* ip
 
-Authorization server responds with JSON that has authorization token which uniquely identifies the requester and
-upstream string i.e. list of servers the request could be forwarded to:
-
-```
-{"auth_token": "qwerty123", "upstream": "10.241.0.25:3001,10.241.0.26:3002"}
+Authorization server responds with JSON that has authorization tokens that tellsvulcan how it should throttle and upstreams:
 
 ```
-For implementation details see auth.py
+        tokens=[
+            {
+                'id': 'hello',
+                'rates': [
+                    {'value': 10, 'period': 'minute'}
+                ]
+            }
+       ],
+       upstreams=[
+            {
+                'url': 'http://localhost:5000/upstream',
+                'rates': [
+                    {'value': 2, 'period': 'minute'}
+                 ]
+            },
+            {
+                'url': 'http://localhost:5000/upstream2',
+                'rates': [
+                    {'value': 4, 'period': 'minute'}
+                 ]
+            }
+       ])
 
-**NOTE:** Probably we'll need to change that. With such implementation the authorization server needs to know about all
-possible services and which request should go to which service/upstream. It seems more reasonable if the reverse proxy
-has an interface to register/unregister services/upstreams. Services/upstreams should be cached and upstreams
-should be updated  both in cache and in the database for all reverse proxies. This way services that turn off/on
-upstreams during deployment could be deployed without waiting for the change to propagate from the database to the
-caches.
+```
 
-The request is checked against the rate limiting database (see throttling.py).
-The request is proxied to the corresponding upstream and response is returned to the requester.
+* In this example all requests regardless of parameters and auth will be throttled by the same token hello, with maximum 10 hits per minute total.
+* The request can be routed to one of the two upstreams, the first upstream allows max 2 requests per minute, the second one allows 4 requests per minute.
 
-What if some upstream down? This information should be cached in upstream.py cache and the request shouldn't be sent
-to the server. upstream.py is responsible for picking up the server from upstream to send request to.
+Auth server example
+-------------------
+
+```python
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/auth')
+def auth():
+    print request.args
+    return jsonify(
+        tokens=[
+            {
+                'id': 'hello',
+                'rates': [
+                    {'value': 10, 'period': 'minute'}
+                ]
+            }
+       ],
+       upstreams=[
+            {
+                'url': 'http://localhost:5000/upstream',
+                'rates': [
+                    {'value': 2, 'period': 'minute'}
+                 ]
+            },
+            {
+                'url': 'http://localhost:5000/upstream2',
+                'rates': [
+                    {'value': 4, 'period': 'minute'}
+                 ]
+            }
+       ])
+
+@app.route('/upstream')
+def upstream():
+    print request.args
+    return 'Upstream: Hello World!'
+
+@app.route('/upstream2')
+def upstream2():
+    print request.args
+    return 'Upstream2: Hello World!'
+
+if __name__ == '__main__':
+    app.run()
+```
 
 Status
 -----------------------------
