@@ -1,6 +1,9 @@
 # -*- test-case-name: vulcan.test.test_timeout -*-
 
+import functools
+
 from twisted.internet import defer, reactor
+
 from vulcan.errors import TimeoutError
 
 
@@ -10,33 +13,39 @@ def timeout(secs):
 
     Credit to theduderog https://gist.github.com/735556
     """
+
     def wrap(func):
-        @defer.inlineCallbacks
-        def _timeout(*args, **kwargs):
-            rawD = func(*args, **kwargs)
-            if not isinstance(rawD, defer.Deferred):
-                defer.returnValue(rawD)
+        @functools.wraps(func)
+        def func_with_timeout(*args, **kwargs):
+            d = defer.maybeDeferred(func, *args, **kwargs)
 
-            timeoutD = defer.Deferred()
-            timesUp = reactor.callLater(secs, timeoutD.callback, None)
+            timedOut = [False]
 
-            try:
-                rawResult, timeoutResult = yield defer.DeferredList(
-                    [rawD, timeoutD], fireOnOneCallback=True,
-                    fireOnOneErrback=True, consumeErrors=True)
-            except defer.FirstError, e:
-                #Only rawD should raise an exception
-                assert e.index == 0
-                timesUp.cancel()
-                e.subFailure.raiseException()
-            else:
-                #Timeout
-                if timeoutD.called:
-                    rawD.cancel()
+            def onTimeout():
+                # We set this to true so we can distinguish between
+                # someone calling cancel on the deferred we return
+                # and our timeout.
+                timedOut[0] = True
+                d.cancel()
+
+            timesUp = reactor.callLater(secs, onTimeout)
+
+            def onResult(result):
+                if timesUp.active():
+                    timesUp.cancel()
+
+                return result
+
+            d.addBoth(onResult)
+
+            def onCancelled(failure):
+                if failure.check(defer.CancelledError) and timedOut[0]:
                     raise TimeoutError("%s secs have expired" % secs)
 
-            #No timeout
-            timesUp.cancel()
-            defer.returnValue(rawResult)
-        return _timeout
+                return failure
+
+            d.addErrback(onCancelled)
+            return d
+
+        return func_with_timeout
     return wrap
