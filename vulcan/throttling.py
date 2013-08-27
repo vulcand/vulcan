@@ -25,7 +25,7 @@ def get_upstream(request):
         retries = []
         for u in shuffled(request.upstreams):
             throttled = yield _get_rates(u.url, u.rates)
-            log.msg("Upstream counters: %s" %(u, throttled))
+            log.msg("Upstream counters: %s %s" % (u, throttled))
             if any(throttled):
                 retries.append(_retry_seconds(max(throttled)))
             else:
@@ -40,8 +40,8 @@ def get_upstream(request):
     except RateLimitReached:
         raise
 
-    except Exception:
-        log.err("Failed to throttle: %s" %(request, ))
+    except Exception, e:
+        log.err(e, "Failed to throttle: %s" % (request, ))
         defer.returnValue(request.upstreams[0])
 
 
@@ -65,9 +65,8 @@ def _is_throttled(key, rate):
         safe_format(
             "select counter from hits where hit='{}'",
             _hit(key, rate)))
-
     tr = ThrottledRate(rate, _result_to_int(result))
-    log.msg("Got throttled rate: key: %s rate: %s" %(key, tr,))
+    log.msg("Got throttled rate: key: %s rate: %s" % (key, tr,))
     defer.returnValue(tr)
 
 
@@ -89,16 +88,20 @@ def _result_to_int(result):
         val += struct.unpack('>Q', row.columns[0].value)[0]
     return val
 
+
 def _retry_seconds(throttled):
     now = _now()
     return _rounded(now, throttled.rate)\
         + throttled.rate.period_as_seconds - now
 
+
 def _rounded(time, rate):
     return time/rate.period_as_seconds * rate.period_as_seconds
 
+
 def _now():
     return int(time.time())
+
 
 class ThrottledRate(object):
     def __init__(self, rate, count):
@@ -120,7 +123,7 @@ class ThrottledRate(object):
             return 1
 
     def __str__(self):
-        return "ThrottledRate(rate={}, hits={}".format(
+        return "ThrottledRate(rate={}, hits={})".format(
             self.rate, self.count)
 
     def __repr__(self):

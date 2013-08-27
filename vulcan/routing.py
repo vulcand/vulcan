@@ -1,6 +1,7 @@
 import json
 from urlparse import urlparse
 
+
 class Token(object):
     def __init__(self, id, rates):
         self.id = id
@@ -15,6 +16,10 @@ class Token(object):
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
+
+    def __str__(self):
+        return "Token(id={}, rates={})".format(
+            self.id, [str(r) for r in self.rates])
 
 
 class Rate(object):
@@ -70,6 +75,9 @@ class Upstream(object):
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
 
+    def __str__(self):
+        return "Upstream(url={}, rates={})".format(
+            self.url, [str(r) for r in self.rates])
 
 
 class AuthResponse(object):
@@ -88,6 +96,11 @@ class AuthResponse(object):
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
+
+    def __str__(self):
+        return "AuthResponse(tokens={}, upstreams={}, headers={})".format(
+            [str(t) for t in self.tokens], [str(u) for u in self.upstreams],
+            self.headers)
 
 
 class AuthRequest(object):

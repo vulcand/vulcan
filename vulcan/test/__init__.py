@@ -1,6 +1,6 @@
 from os import path
 
-from mock import patch, Mock
+from mock import patch, Mock, call
 from twisted.internet import epollreactor
 import yaml
 import twisted
