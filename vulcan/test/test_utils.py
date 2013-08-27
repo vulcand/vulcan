@@ -2,12 +2,7 @@
 
 from . import *
 
-import os
-from ConfigParser import ConfigParser
-
 from twisted.trial.unittest import TestCase
-from twisted.python import log
-
 from vulcan.utils import safe_format, is_valid_ip
 
 
