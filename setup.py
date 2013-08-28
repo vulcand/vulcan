@@ -33,7 +33,6 @@ setup(name='vulcan',
           'Twisted==13.1.0',
           # required by telephus
           'pure-sasl==0.1.4',
-          'expiringdict==1.0',
           'regex==0.1.20110315',
           'thrift==0.9.1',
           'telephus==1.0.0-beta1',
@@ -43,12 +42,9 @@ setup(name='vulcan',
           'pyyaml==3.10'
           ],
       dependency_links=[
-          ('https://github.com/mailgun/expiringdict/tarball/'
-           'master#egg=expiringdict-1.0'),
           ('https://github.com/driftx/Telephus/tarball/'
            'master#egg=telephus-1.0.0-beta1')
           ]
-
       )
 
 
