@@ -14,12 +14,13 @@ class RateLimitReached(Exception):
 
         Exception.__init__(self, description)
 
-
-class AuthorizationFailed(Error):
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.__dict__ == other.__dict__
 
+
+class AuthorizationFailed(Error):
+    pass
 
 class TimeoutError(Exception):
     """Raised when time expires in timeout decorator"""

@@ -22,6 +22,7 @@ from vulcan.routing import AuthRequest
 
 RETRY_IN_SECONDS = "X-Retry-In-Seconds"
 
+
 class RestrictedChannel(HTTPChannel):
     # authorization module
     auth = auth
@@ -41,15 +42,16 @@ class RestrictedChannel(HTTPChannel):
             request.setResponseCode(
                 UNAUTHORIZED, RESPONSES[UNAUTHORIZED])
             request.setHeader(
-                'WWW-Authenticate', 'basic realm="%s"' % config['auth']['realm'])
+                'WWW-Authenticate',
+                'basic realm="%s"' % config['auth']['realm'])
 
             request.write("")
             request.finishUnreceived()
             return
 
         try:
-            r = yield self.auth.authorize(
-                AuthRequest.from_http_request(request))
+            _request = AuthRequest.from_http_request(request)
+            r = yield self.auth.authorize(_request)
 
             upstream = yield throttling.get_upstream(r)
 
@@ -63,7 +65,7 @@ class RestrictedChannel(HTTPChannel):
             request.finishUnreceived()
 
         except RateLimitReached, e:
-            log.msg("Rate limiting: %s" %(request,))
+            log.msg("Rate limiting: %s" % (_request,))
             request.setResponseCode(
                 TOO_MANY_REQUESTS,
                 RESPONSES[TOO_MANY_REQUESTS])
@@ -72,13 +74,12 @@ class RestrictedChannel(HTTPChannel):
             request.finishUnreceived()
 
         except Exception, e:
-            log.err(e, "Exception when processing request")
+            log.err(e, "Exception when processing request: %s" % (_request,))
             request.setResponseCode(
                 SERVICE_UNAVAILABLE,
                 RESPONSES[SERVICE_UNAVAILABLE])
             request.write("")
             request.finishUnreceived()
-
 
 
 class ReportingProxyClientFactory(ProxyClientFactory):

@@ -43,10 +43,6 @@ class Rate(object):
     def __str__(self):
         return "Rate(value={}, period={})".format(self.value, self.period)
 
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.__dict__ == other.__dict__
-
 
 class Upstream(object):
     def __init__(self, url, rates):
@@ -139,4 +135,3 @@ class AuthRequest(object):
             ip=request.getHeader(IP_HEADER))
 
 IP_HEADER = "X-Real-IP"
-

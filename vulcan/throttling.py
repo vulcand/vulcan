@@ -20,14 +20,15 @@ def get_upstream(request):
 
             if any(throttled):
                 raise RateLimitReached(
-                    _retry_seconds(max(throttled)))
+                    _retry_seconds(max([t for t in throttled if t])))
 
         retries = []
         for u in shuffled(request.upstreams):
             throttled = yield _get_rates(u.url, u.rates)
             log.msg("Upstream counters: %s %s" % (u, throttled))
             if any(throttled):
-                retries.append(_retry_seconds(max(throttled)))
+                retries.append(
+                    _retry_seconds(max([t for t in throttled if t])))
             else:
                 _update_rates(u.url, u.rates)
                 for token in request.tokens:

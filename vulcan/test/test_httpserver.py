@@ -170,7 +170,8 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
 
-        log_err.assert_called_once_with(e, "Exception when processing request")
+        self.assertEquals(1, log_err.call_count)
+        self.assertEquals(e, log_err.call_args[0][0])
 
     @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
     @patch.object(throttling, 'get_upstream')
