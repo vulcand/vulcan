@@ -3,7 +3,7 @@ from urlparse import urlparse
 
 
 class Token(object):
-    def __init__(self, id, rates):
+    def __init__(self, id, rates=[]):
         self.id = id
         self.rates = rates
 
@@ -12,6 +12,12 @@ class Token(object):
         return cls(
             id=obj['id'],
             rates=[Rate.from_json(r) for r in obj.get('rates') or []])
+
+    def to_json(self):
+        return {
+            "id": self.id,
+            "rates": [r.to_json() for r in self.rates]
+            }
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -40,12 +46,18 @@ class Rate(object):
     def from_json(cls, obj):
         return cls(obj['value'], obj['period'])
 
+    def to_json(self):
+        return {
+            "value": self.value,
+            "period": self.period
+        }
+
     def __str__(self):
         return "Rate(value={}, period={})".format(self.value, self.period)
 
 
 class Upstream(object):
-    def __init__(self, url, rates):
+    def __init__(self, url, rates=[]):
         self.url = str(url)
         self.rates = rates
 
@@ -61,11 +73,26 @@ class Upstream(object):
     def path(self):
         return urlparse(self.url).path
 
+    @property
+    def query(self):
+        return urlparse(self.url).query
+
+    @property
+    def uri(self):
+        """Return path with query string"""
+        return "%s?%s" % (self.path, self.query)
+
     @classmethod
     def from_json(cls, obj):
         return cls(
             url=obj['url'],
             rates=[Rate.from_json(r) for r in obj.get('rates') or []])
+
+    def to_json(self):
+        return {
+            "url": self.url,
+            "rates": [r.to_json() for r in self.rates]
+        }
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -77,7 +104,7 @@ class Upstream(object):
 
 
 class AuthResponse(object):
-    def __init__(self, tokens, upstreams, headers):
+    def __init__(self, tokens, upstreams, headers={}):
         self.tokens = tokens
         self.upstreams = upstreams
         self.headers = headers
@@ -88,6 +115,13 @@ class AuthResponse(object):
         upstreams = [Upstream.from_json(u) for u in obj['upstreams']]
         headers = obj.get('headers') or []
         return cls(tokens, upstreams, headers)
+
+    def to_json(self):
+        return {
+            "tokens": [t.to_json() for t in self.tokens],
+            "upstreams": [u.to_json() for u in self.upstreams],
+            "headers": self.headers
+        }
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -120,6 +154,17 @@ class AuthRequest(object):
             'ip': self.ip
             }
 
+    @classmethod
+    def from_json(cls, obj):
+        return cls(
+            username=obj["username"],
+            password=obj["password"],
+            protocol=obj["protocol"],
+            method=obj["method"],
+            url=obj["url"],
+            length=obj["length"],
+            ip=obj["ip"])
+
     def __str__(self):
         return json.dumps(self.to_json())
 
@@ -133,5 +178,9 @@ class AuthRequest(object):
             url=request.uri,
             length=request.getHeader("Content-Length") or 0,
             ip=request.getHeader(IP_HEADER))
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == self.__dict__
 
 IP_HEADER = "X-Real-IP"

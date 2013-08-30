@@ -1,8 +1,9 @@
 # -*- test-case-name: vulcan.test.test_httpserver -*-
 
+from urlparse import urlparse
+
 from twisted.web.http import (HTTPChannel, HTTPFactory as StandardHTTPFactory,
                               UNAUTHORIZED, SERVICE_UNAVAILABLE)
-
 from twisted.web.proxy import (ReverseProxyRequest, ProxyClientFactory,
                                ProxyClient)
 from twisted.internet import defer
@@ -139,7 +140,7 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         """
 
         clientFactory = self.proxyClientFactoryClass(
-            self.method, self.factory.path, self.clientproto,
+            self.method, self.factory.uri, self.clientproto,
             self.getAllHeaders(), self.content.read(), self)
 
         self.reactor.connectTCP(self.factory.host, self.factory.port,
@@ -153,8 +154,6 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         we need to call loseConnection() explicitly
         """
         self.transport.loseConnection()
-
-
 
 
 class RestrictedReverseProxy(RestrictedChannel):

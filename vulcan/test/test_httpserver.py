@@ -69,12 +69,18 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
+
         self.assertEquals(_auth_response.upstreams[0].host,
                           connectTCP.call_args[0][0])
         self.assertIsInstance(connectTCP.call_args[0][0], str,
                               "Host should be an encoded bytestring")
         self.assertEquals(_auth_response.upstreams[0].port,
                           connectTCP.call_args[0][1])
+        # for GET requests with params auth server should return
+        # upstream(s) URL(s) with possibly rewritten network location, path
+        # and query string, the query string should be passed on
+        # to the proxied server
+        self.assertEquals("/path?key=val", connectTCP.call_args[0][2].rest)
 
     @patch.object(reactor, 'connectTCP')
     @patch.object(throttling, 'get_upstream')
@@ -201,7 +207,7 @@ _auth_response = AuthResponse.from_json(
     {"tokens": [{"id": "abc",
                  "rates": [{"value": 400, "period": "minute"}]
                  }],
-     "upstreams": [{"url": "http://127.0.0.1:5000",
+     "upstreams": [{"url": "http://127.0.0.1:5000/path?key=val",
                     "rates": [{"value": 1800, "period": "hour"}]
                     }],
      "headers": {"X-Real-Ip": "1.2.3.4"}})
