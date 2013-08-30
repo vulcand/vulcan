@@ -1,7 +1,15 @@
 from twisted.web.error import Error
 from twisted.web import http
+from twisted.web.http import UNAUTHORIZED
 
 from vulcan.utils import safe_format
+
+
+# http://tools.ietf.org/html/rfc6585
+TOO_MANY_REQUESTS = 429
+
+RESPONSES = {TOO_MANY_REQUESTS: "Too Many Requests"}
+RESPONSES.update(http.RESPONSES)
 
 
 class RateLimitReached(Exception):
@@ -20,14 +28,12 @@ class RateLimitReached(Exception):
 
 
 class AuthorizationFailed(Error):
-    pass
+    def __init__(self,
+                 code=http.UNAUTHORIZED,
+                 message=RESPONSES[UNAUTHORIZED],
+                 response=None):
+        Error.__init__(self, code, message, response)
+
 
 class TimeoutError(Exception):
     """Raised when time expires in timeout decorator"""
-
-
-# http://tools.ietf.org/html/rfc6585
-TOO_MANY_REQUESTS = 429
-
-RESPONSES = {TOO_MANY_REQUESTS: "Too Many Requests"}
-RESPONSES.update(http.RESPONSES)
