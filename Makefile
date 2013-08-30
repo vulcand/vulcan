@@ -6,6 +6,6 @@ coverage:
 rundev:
 	python vulcandaemon.py -c development.yml
 clean:
-	find -name *pyc -delete
-	find -name *py~ -delete
+	find -name "*pyc" -delete
+	find -name "*py~" -delete
 	rm -rf _trial_temp
