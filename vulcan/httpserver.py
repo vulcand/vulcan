@@ -140,9 +140,16 @@ class DynamicallyRoutedRequest(ReverseProxyRequest):
         it doesn't set Host header to proxied server hostname.
         """
 
+        for header, values in self.factory.headers.encoded.iteritems():
+            self.requestHeaders.setRawHeaders(header, values)
+
         clientFactory = self.proxyClientFactoryClass(
-            self.method, self.factory.uri, self.clientproto,
-            self.getAllHeaders(), self.content.read(), self)
+            self.method,
+            self.factory.uri,
+            self.clientproto,
+            dict(self.requestHeaders.getAllRawHeaders()),
+            self.content.read(),
+            self)
 
         self.reactor.connectTCP(self.factory.host, self.factory.port,
                                 clientFactory)

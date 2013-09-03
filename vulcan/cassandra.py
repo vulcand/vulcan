@@ -18,5 +18,5 @@ def initialize(servers, keyspace):
         [(h, p) for h, p in servers],
         keyspace,
         conn_timeout=0.5)
-
     client = ResponsiveCassandraClient(pool)
+

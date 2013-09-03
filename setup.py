@@ -31,9 +31,7 @@ setup(name='vulcan',
       install_requires=[
           'setproctitle==1.1.7',
           'Twisted==13.1.0',
-          # required by telephus
-          'pure-sasl==0.1.4',
-          'regex==0.1.20110315',
+          'pure-sasl==0.1.4', # required by telephus
           'thrift==0.9.1',
           'telephus==1.0.0-beta1',
           'nose==1.3.0',

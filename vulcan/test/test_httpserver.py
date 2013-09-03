@@ -1,3 +1,5 @@
+# coding: utf-8
+
 from . import *
 
 import json
@@ -15,6 +17,7 @@ from vulcan.errors import (AuthorizationFailed, RateLimitReached, RESPONSES,
                            TOO_MANY_REQUESTS)
 from vulcan.httpserver import (HTTPFactory, RestrictedChannel,
                                DynamicallyRoutedRequest)
+from vulcan.utils import to_utf8
 from vulcan import httpserver
 from vulcan import httpserver as hs
 from vulcan import throttling
@@ -81,6 +84,38 @@ class HTTPServerTest(TestCase):
         # and query string, the query string should be passed on
         # to the proxied server
         self.assertEquals("/path?key=val", connectTCP.call_args[0][2].rest)
+
+
+    @patch.object(reactor, 'connectTCP')
+    @patch.object(throttling, 'get_upstream')
+    @patch.object(httpserver.auth, 'authorize')
+    def test_success_with_headers(self, authorize, get_upstream, connectTCP):
+        """Makes sure headers from upstream are set when request
+        is successfully proxied.
+        """
+        authorize.return_value = defer.succeed(_auth_response_with_headers)
+        get_upstream.return_value = defer.succeed(
+            _auth_response_with_headers.upstreams[0])
+
+        self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
+        self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
+        self.protocol.dataReceived("\r\n")
+
+        self.assertEquals(_auth_response.upstreams[0].host,
+                          connectTCP.call_args[0][0])
+        self.assertIsInstance(connectTCP.call_args[0][0], str,
+                              "Host should be an encoded bytestring")
+        self.assertEquals(_auth_response.upstreams[0].port,
+                          connectTCP.call_args[0][1])
+        # for GET requests with params auth server should return
+        # upstream(s) URL(s) with possibly rewritten network location, path
+        # and query string, the query string should be passed on
+        # to the proxied server
+        factory = connectTCP.call_args[0][2]
+        self.assertEquals("/path?key=val", factory.rest)
+        self.assertEquals({
+                'Authorization': ['Basic YXBpOmFwaWtleQ=='],
+                'X-My-Header': ['Value', to_utf8(u'Юникод')]}, factory.headers)
 
     @patch.object(reactor, 'connectTCP')
     @patch.object(throttling, 'get_upstream')
@@ -207,9 +242,25 @@ _auth_response = AuthResponse.from_json(
                  "rates": [{"value": 400, "period": "minute"}]
                  }],
      "upstreams": [{"url": "http://127.0.0.1:5000/path?key=val",
-                    "rates": [{"value": 1800, "period": "hour"}]
+                    "rates": [{"value": 1800, "period": "hour"}],
                     }],
      "headers": {"X-Real-Ip": "1.2.3.4"}})
+
+
+_auth_response_with_headers = AuthResponse.from_json({
+    "tokens": [{
+        "id": "abc",
+        "rates": [{"value": 400, "period": "minute"}]
+    }],
+    "upstreams": [{
+         "url": "http://127.0.0.1:5000/path?key=val",
+         "rates": [{"value": 1800, "period": "hour"}],
+         "headers": {
+             "X-My-Header": ['Value', u'Юникод']
+          }
+    }],
+    "headers": {
+        "X-Real-Ip": "1.2.3.4"}})
 
 
 _bad_upstream = Upstream.from_json(
