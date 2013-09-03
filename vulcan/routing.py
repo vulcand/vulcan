@@ -1,5 +1,6 @@
 import json
 from urlparse import urlparse
+from .utils import to_utf8
 
 
 class Token(object):
@@ -57,9 +58,12 @@ class Rate(object):
 
 
 class Upstream(object):
-    def __init__(self, url, rates=[]):
+    def __init__(self, url, rates=[], headers=None):
         self.url = str(url)
         self.rates = rates
+        self.headers = headers or ProxyHeaders()
+        if not isinstance(self.headers, ProxyHeaders):
+            raise ValueError("use ProxyHeaders type for headers")
 
     @property
     def host(self):
@@ -86,12 +90,14 @@ class Upstream(object):
     def from_json(cls, obj):
         return cls(
             url=obj['url'],
-            rates=[Rate.from_json(r) for r in obj.get('rates') or []])
+            rates=[Rate.from_json(r) for r in obj.get('rates') or []],
+            headers=ProxyHeaders.from_json(obj.get('headers') or {}))
 
     def to_json(self):
         return {
             "url": self.url,
-            "rates": [r.to_json() for r in self.rates]
+            "rates": [r.to_json() for r in self.rates],
+            "headers": self.headers.values
         }
 
     def __eq__(self, other):
@@ -101,6 +107,35 @@ class Upstream(object):
     def __str__(self):
         return "Upstream(url={}, rates={})".format(
             self.url, [str(r) for r in self.rates])
+
+
+
+class ProxyHeaders(object):
+    def __init__(self, values=None):
+        values = values or {}
+        if not isinstance(values, dict):
+            raise ValueError("Headers property should be a dict")
+        for key, val in values.iteritems():
+            if not isinstance(val, list):
+                print val
+                raise ValueError("Header value should be a list")
+        self.values = values
+
+    @property
+    def encoded(self):
+        headers = {}
+        for key, val in self.values.iteritems():
+            for item in val:
+                headers.setdefault(to_utf8(key), []).append(to_utf8(item))
+        return headers
+
+    @classmethod
+    def from_json(cls, values):
+        return cls(values)
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.values == other.values
 
 
 class AuthResponse(object):
