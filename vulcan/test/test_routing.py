@@ -1,10 +1,11 @@
+# coding: utf-8
+
 from . import *
-
-import json
-
 from twisted.trial.unittest import TestCase
 
-from vulcan.routing import AuthRequest, AuthResponse, Upstream, Token, Rate
+from vulcan.routing import (AuthRequest, AuthResponse,\
+    Upstream, Token, Rate, ProxyHeaders)
+from vulcan.utils import to_utf8
 
 
 class RoutingTest(TestCase):
@@ -22,21 +23,41 @@ class RoutingTest(TestCase):
                           Rate(1, "second").to_json())
 
     def test_upstream(self):
-        self.assertEquals({"url": "http://1.2.3.4:80", "rates": []},
-                          Upstream("http://1.2.3.4:80").to_json())
+        self.assertEquals({
+                "url": "http://1.2.3.4:80",
+                "rates": [],
+                "headers": {}
+                },
+         Upstream("http://1.2.3.4:80").to_json())
+
         self.assertEquals(
             {"url": "http://1.2.3.4:80",
              "rates": [{"value": 1, "period": "minute"},
-                       {"value": 2, "period": "hour"}]},
-            Upstream("http://1.2.3.4:80", [Rate(1, "minute"),
-                                           Rate(2, "hour")]).to_json())
+                       {"value": 2, "period": "hour"}],
+             "headers": {'X-Mailgun': ['yes', '2']}
+             },
+            Upstream("http://1.2.3.4:80",
+                     [Rate(1, "minute"),
+                      Rate(2, "hour")],
+                     headers=ProxyHeaders({'X-Mailgun': ['yes', '2']})
+                     ).to_json())
+
+    def test_upstream_unicode_headers_from_json(self):
+        u = Upstream(
+            "http://1.2.3.4:80",
+            [Rate(1, "minute"), Rate(2, "hour")],
+            headers=ProxyHeaders({'X-Mailgun': [u'Юникод', '2']}))
+
+        self.assertEquals({
+                'X-Mailgun': [to_utf8(u'Юникод'), '2']}, u.headers.encoded)
+
 
     def test_authresponse(self):
         self.assertEquals(
             {"tokens": [{"id": "abc", "rates": []},
                         {"id": "def", "rates": []}],
-             "upstreams": [{"url": "http://1.2.3.4:80", "rates": []},
-                           {"url": "http://1.2.3.4:90", "rates": []}],
+             "upstreams": [{"url": "http://1.2.3.4:80", "rates": [], "headers": {}},
+                           {"url": "http://1.2.3.4:90", "rates": [], "headers": {}}],
              "headers": {}},
             AuthResponse(
                 tokens=[Token("abc"), Token("def")],

@@ -3,20 +3,6 @@
 import random
 from copy import copy
 
-from os.path import exists
-from ConfigParser import ConfigParser
-
-import regex as re
-
-
-RE_IP_ADDRESS = re.compile("^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-
-
-def is_valid_ip(str_ip):
-    """Determines if a given IP address is good"""
-    return RE_IP_ADDRESS.match(str_ip or '') is not None
-
-
 def to_utf8(str_or_unicode):
     """
     Safely returns a UTF-8 version of a given string
