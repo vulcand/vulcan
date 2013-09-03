@@ -60,7 +60,7 @@ class RestrictedChannel(HTTPChannel):
             request.processWhenReady()
 
         except AuthorizationFailed, e:
-            log.err(e)
+            log.msg("Authorization failed: %s" % (_request,))
             request.setResponseCode(e.status, e.message)
             request.write(e.response or "")
             request.finishUnreceived()
@@ -74,8 +74,9 @@ class RestrictedChannel(HTTPChannel):
             request.write(str(e))
             request.finishUnreceived()
 
-        except Exception, e:
-            log.err(e, "Exception when processing request: %s" % (_request,))
+        except Exception:
+            log.err("Exception when processing request: %s" % (_request,))
+            log.err()
             request.setResponseCode(
                 SERVICE_UNAVAILABLE,
                 RESPONSES[SERVICE_UNAVAILABLE])

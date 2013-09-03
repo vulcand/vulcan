@@ -109,8 +109,7 @@ class ThrottlingTest(TestCase):
         _get_rates.side_effect = lambda *args, **kw: defer.fail(e)
         self.successResultOf(get_upstream(_auth_response),
                              _auth_response.upstreams[0])
-        log.err.assert_called_once_with(
-            e, "Failed to throttle: %s" % (_auth_response,))
+        self.assertTrue(log.err.called)
 
     @patch.object(log, 'err')
     def test_update_rates_crash(self, log_err):

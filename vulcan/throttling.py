@@ -41,8 +41,9 @@ def get_upstream(request):
     except RateLimitReached:
         raise
 
-    except Exception, e:
-        log.err(e, "Failed to throttle: %s" % (request, ))
+    except Exception:
+        log.err("Failed to throttle: %s" % (request, ))
+        log.err()
         defer.returnValue(request.upstreams[0])
 
 

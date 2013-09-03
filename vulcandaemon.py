@@ -6,8 +6,8 @@ import yaml
 
 import setproctitle
 
-from twisted.internet import epollreactor
 from twisted.python import log
+from twisted.python.log import NullFile
 
 import vulcan
 from vulcan.logging import CustomizableFileLogObserver
@@ -40,13 +40,14 @@ def initialize(args, process_name="vulcan"):
     # Change the name of the process to "vulcan"
     setproctitle.setproctitle(process_name)
 
-    log.addObserver(CustomizableFileLogObserver(sys.stdout).emit)
+    # initialize logging
+    CustomizableFileLogObserver(
+        sys.stdout,
+        fmt="[vulcan][%(system)s] [%(logLevel)s] %(text)s\n").start()
+    log.startLogging(NullFile())
 
 
 def main():
-    # pick epoll()-based twisted reactor. this needs to appear before
-    # any other Twisted imports
-    epollreactor.install()
     args = parse_args()
     initialize(args)
 
@@ -57,7 +58,7 @@ def main():
 
     cassandra.pool.startService()
     reactor.listenTCP(args.http_port, HTTPFactory())
-    reactor.suggestThreadPoolSize(vulcan.config.get("numthreads", 10))
+    reactor.suggestThreadPoolSize(10)
     reactor.run()
 
 

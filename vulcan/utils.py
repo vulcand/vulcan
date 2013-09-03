@@ -29,8 +29,10 @@ def to_utf8(str_or_unicode):
 
 
 def safe_format(format_string, *args, **kwargs):
-    """Helper: logs any combination of bytestrings/unicode strings without
-    raising exceptions"""
+    """
+    Helper: formats string with any combination of bytestrings/unicode
+    strings without raising exceptions
+    """
     try:
         if not args and not kwargs:
             return format_string
