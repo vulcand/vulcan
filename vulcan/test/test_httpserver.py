@@ -114,8 +114,8 @@ class HTTPServerTest(TestCase):
         factory = connectTCP.call_args[0][2]
         self.assertEquals("/path?key=val", factory.rest)
         self.assertEquals({
-                'Authorization': ['Basic YXBpOmFwaWtleQ=='],
-                'X-My-Header': ['Value', to_utf8(u'Юникод')]}, factory.headers)
+                'authorization': 'Basic YXBpOmFwaWtleQ==',
+                'x-my-header': to_utf8(u'Юникод')}, factory.headers)
 
     @patch.object(reactor, 'connectTCP')
     @patch.object(throttling, 'get_upstream')
@@ -256,7 +256,7 @@ _auth_response_with_headers = AuthResponse.from_json({
          "url": "http://127.0.0.1:5000/path?key=val",
          "rates": [{"value": 1800, "period": "hour"}],
          "headers": {
-             "X-My-Header": ['Value', u'Юникод']
+             "X-My-Header": u'Юникод'
           }
     }],
     "headers": {

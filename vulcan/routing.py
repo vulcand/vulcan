@@ -116,17 +116,16 @@ class ProxyHeaders(object):
         if not isinstance(values, dict):
             raise ValueError("Headers property should be a dict")
         for key, val in values.iteritems():
-            if not isinstance(val, list):
-                print val
-                raise ValueError("Header value should be a list")
+            if not isinstance(val, (unicode, str)):
+                raise ValueError(
+                    "Header value should be a byte string or unicode")
         self.values = values
 
     @property
     def encoded(self):
         headers = {}
-        for key, val in self.values.iteritems():
-            for item in val:
-                headers.setdefault(to_utf8(key), []).append(to_utf8(item))
+        for key, value in self.values.iteritems():
+            headers[to_utf8(key)] = to_utf8(value)
         return headers
 
     @classmethod
