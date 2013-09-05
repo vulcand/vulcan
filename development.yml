@@ -3,7 +3,7 @@ auth:
   urls:
     - 'http://localhost:5000/auth'
 cassandra:
-  keyspace: 'dev'
+  keyspace: 'vulcan_dev'
   servers:
     - - 'localhost'
       - 9160

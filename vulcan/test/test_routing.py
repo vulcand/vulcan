@@ -34,22 +34,22 @@ class RoutingTest(TestCase):
             {"url": "http://1.2.3.4:80",
              "rates": [{"value": 1, "period": "minute"},
                        {"value": 2, "period": "hour"}],
-             "headers": {'X-Mailgun': ['yes', '2']}
+             "headers": {'X-Mailgun': 'yes'}
              },
             Upstream("http://1.2.3.4:80",
                      [Rate(1, "minute"),
                       Rate(2, "hour")],
-                     headers=ProxyHeaders({'X-Mailgun': ['yes', '2']})
+                     headers=ProxyHeaders({'X-Mailgun': 'yes'})
                      ).to_json())
 
     def test_upstream_unicode_headers_from_json(self):
         u = Upstream(
             "http://1.2.3.4:80",
             [Rate(1, "minute"), Rate(2, "hour")],
-            headers=ProxyHeaders({'X-Mailgun': [u'Юникод', '2']}))
+            headers=ProxyHeaders({'X-Mailgun': u'Юникод'}))
 
         self.assertEquals({
-                'X-Mailgun': [to_utf8(u'Юникод'), '2']}, u.headers.encoded)
+                'X-Mailgun': to_utf8(u'Юникод')}, u.headers.encoded)
 
 
     def test_authresponse(self):
