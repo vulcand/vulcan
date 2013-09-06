@@ -8,9 +8,9 @@ import setproctitle
 
 from twisted.python import log
 from twisted.python.log import NullFile
+from twisted.python import syslog
 
 import vulcan
-from vulcan.logging import CustomizableFileLogObserver
 
 
 def parse_args():
@@ -22,8 +22,11 @@ def parse_args():
     p.add_argument("--config", "-c", metavar='<FILENAME>', required=True,
                    help="config file name")
     p.add_argument('--pid-file', help="pid file path")
+    p.add_argument('--syslog', nargs='?', const=True, default=False, type=bool,
+                   help="Log to syslog, not to stdout")
 
     return p.parse_args()
+
 
 def initialize(args, process_name="vulcan"):
 
@@ -41,10 +44,10 @@ def initialize(args, process_name="vulcan"):
     setproctitle.setproctitle(process_name)
 
     # initialize logging
-    CustomizableFileLogObserver(
-        sys.stdout,
-        fmt="[vulcan][%(system)s] [%(logLevel)s] %(text)s\n").start()
-    log.startLogging(NullFile())
+    if args.syslog:
+        syslog.startLogging(prefix=process_name)
+    else:
+        log.startLogging(sys.stdout)
 
 
 def main():
