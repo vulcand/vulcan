@@ -3,25 +3,27 @@
 from . import *
 
 import json
+from StringIO import StringIO
 
 from twisted.trial.unittest import TestCase
 
 from twisted.internet import defer, task
-from twisted.python.failure import Failure
 from twisted.web.http import SERVICE_UNAVAILABLE, UNAUTHORIZED
 from twisted.web.proxy import reactor
 from twisted.test import proto_helpers
 from twisted.python import log
+from twisted.web.http_headers import Headers
+from twisted.web._newclient import Request, HTTPClientParser
 
 from vulcan.errors import (AuthorizationFailed, RateLimitReached, RESPONSES,
                            TOO_MANY_REQUESTS)
-from vulcan.httpserver import (HTTPFactory, RestrictedChannel,
-                               DynamicallyRoutedRequest)
+from vulcan.httpserver import (HTTPFactory, DynamicallyRoutedRequest)
 from vulcan.utils import to_utf8
 from vulcan import httpserver
 from vulcan import httpserver as hs
 from vulcan import throttling
 from vulcan.routing import AuthResponse, Upstream
+
 
 
 class HTTPServerTest(TestCase):
@@ -31,21 +33,41 @@ class HTTPServerTest(TestCase):
         self.transport = proto_helpers.StringTransport()
         self.protocol.makeConnection(self.transport)
 
+
+    def parseResponse(self, value):
+        """Utility function that parses responses using
+        Twisted HTTPClientParser.
+        """
+        _boringHeaders = Headers({'host': ['example.com']})
+        request = Request('GET', '/', _boringHeaders, None)
+        protocol = HTTPClientParser(request, None)
+
+        protocol.makeConnection(proto_helpers.StringTransport())
+        protocol.dataReceived(value)
+
+        collect = proto_helpers.AccumulatingProtocol()
+        protocol.response.deliverBody(collect)
+        return protocol.response, collect.data
+
+
     @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
-    def test_no_auth_header(self, processWhenReady):
+    def test_noAuthHeader(self, processWhenReady):
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
         self.protocol.dataReceived("\r\n")
-        status_line = self.transport.value().splitlines()[0]
-        self.assertEquals("HTTP/1.1 401 Unauthorized", status_line)
+
+        response, body = self.parseResponse(self.transport.value())
+        self.assertEquals(401, response.code)
+        self.assertEquals('Unauthorized', response.phrase)
+
         self.assertEquals(0, processWhenReady.call_count)
+
 
     @patch.object(httpserver.auth, 'authorize')
     @patch.object(DynamicallyRoutedRequest, 'processWhenReady')
     @patch.object(log, 'msg')
-    def test_wrong_credentials(self, log_msg, processWhenReady, authorize):
-        data = {"message": "Wrong API key"}
-        e = AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED],
-                                json.dumps(data))
+    def test_wrongCredentials(self, log_msg, processWhenReady, authorize):
+        data = "Wrong API key"
+        e = AuthorizationFailed(UNAUTHORIZED, RESPONSES[UNAUTHORIZED], data)
         authorize.return_value = defer.fail(e)
 
         self.protocol.dataReceived("GET /foo/bar HTTP/1.1\r\n")
@@ -53,13 +75,12 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived("\r\n")
 
         self.assertEquals(1, log_msg.call_count)
-        status_line = self.transport.value().splitlines()[0]
-        self.assertEquals(
-            "HTTP/1.1 {code} {message}".format(
-                code=UNAUTHORIZED,
-                message=RESPONSES[UNAUTHORIZED]),
-            status_line)
-        self.assertIn(json.dumps(data), self.transport.value())
+        response, body = self.parseResponse(self.transport.value())
+
+        self.assertEquals(UNAUTHORIZED, response.code)
+        self.assertEquals(RESPONSES[UNAUTHORIZED], response.phrase)
+        self.assertEquals(json.loads(body), {'error': data})
+
         self.assertEquals(0, processWhenReady.call_count)
 
     @patch.object(reactor, 'connectTCP')
@@ -89,7 +110,7 @@ class HTTPServerTest(TestCase):
     @patch.object(reactor, 'connectTCP')
     @patch.object(throttling, 'get_upstream')
     @patch.object(httpserver.auth, 'authorize')
-    def test_success_with_headers(self, authorize, get_upstream, connectTCP):
+    def test_successWithHeaders(self, authorize, get_upstream, connectTCP):
         """Makes sure headers from upstream are set when request
         is successfully proxied.
         """
@@ -117,9 +138,10 @@ class HTTPServerTest(TestCase):
                 'authorization': 'Basic YXBpOmFwaWtleQ==',
                 'x-my-header': to_utf8(u'Юникод')}, factory.headers)
 
+
     @patch.object(reactor, 'connectTCP')
     @patch.object(throttling, 'get_upstream')
-    def test_request_received_before_checks(self,
+    def test_requestReceivedBeforeChecks(self,
                                             get_upstream,
                                             connectTCP):
         self.clock = task.Clock()
@@ -146,6 +168,7 @@ class HTTPServerTest(TestCase):
                                   "Host should be an encoded bytestring")
             self.assertEquals(_auth_response.upstreams[0].port,
                               connectTCP.call_args[0][1])
+
 
     @patch.object(throttling, 'get_upstream')
     @patch.object(httpserver.auth, 'authorize')
@@ -174,12 +197,11 @@ class HTTPServerTest(TestCase):
                 # we log that vulcan couldn't connect to the proxied server
                 # e.g. if vulcan tries to connect on the wrong port
                 self.assertTrue(self_.log_err.called)
-                status_line = self.transport.value().splitlines()[0]
+                response, body = self.parseResponse(self.transport.value())
+                self.assertEquals(SERVICE_UNAVAILABLE, response.code)
                 self.assertEquals(
-                    "HTTP/1.1 {code} {message}".format(
-                        code=SERVICE_UNAVAILABLE,
-                        message=RESPONSES[SERVICE_UNAVAILABLE]),
-                    status_line)
+                    RESPONSES[SERVICE_UNAVAILABLE], response.phrase)
+
                 hs.DynamicallyRoutedRequest.finish(self_, *args, **kwargs)
 
         class RestrictedReverseProxy(hs.RestrictedChannel):
@@ -198,6 +220,7 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived(
             "Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
+
 
     @patch.object(reactor, 'connectTCP')
     @patch.object(httpserver.auth, 'authorize')
@@ -227,12 +250,13 @@ class HTTPServerTest(TestCase):
         self.protocol.dataReceived("Authorization: Basic YXBpOmFwaWtleQ==\r\n")
         self.protocol.dataReceived("\r\n")
 
-        status_line = self.transport.value().splitlines()[0]
+        response, body = self.parseResponse(self.transport.value())
+        self.assertEquals(TOO_MANY_REQUESTS, response.code)
+        self.assertEquals('Rate limit reached. Retry in 10 seconds', response.phrase)
         self.assertEquals(
-            "HTTP/1.1 {code} {message}".format(
-                code=TOO_MANY_REQUESTS,
-                message=RESPONSES[TOO_MANY_REQUESTS]),
-            status_line)
+            {
+                'error': 'Rate limit reached. Retry in 10 seconds',
+                'retry-seconds': 10}, json.loads(body))
 
         self.assertEquals(0, processWhenReady.call_count)
 

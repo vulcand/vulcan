@@ -15,10 +15,8 @@ from twisted.python.failure import Failure
 
 from vulcan import throttling
 from vulcan.throttling import get_upstream, ThrottledRate
-from vulcan.cassandra import ResponsiveCassandraClient
 from vulcan import cassandra
 from vulcan.errors import RateLimitReached
-import vulcan
 from vulcan.routing import AuthResponse, Rate
 
 
