@@ -1,8 +1,8 @@
+import json
+
 from twisted.web.error import Error
 from twisted.web import http
 from twisted.web.http import UNAUTHORIZED
-
-from vulcan.utils import safe_format
 
 
 # http://tools.ietf.org/html/rfc6585
@@ -12,15 +12,22 @@ RESPONSES = {TOO_MANY_REQUESTS: "Too Many Requests"}
 RESPONSES.update(http.RESPONSES)
 
 
-class RateLimitReached(Exception):
+class RateLimitReached(Error):
     def __init__(self, retry_seconds):
         self.retry_seconds = retry_seconds
-        description = safe_format(
-            "Rate limit reached. Retry in {} second{}",
-            str(retry_seconds),
-            's' if retry_seconds > 1 else '')
+        suffix = 's' if self.retry_seconds > 1 else ''
+        message = "Rate limit reached. Retry in %s second%s" % (
+            self.retry_seconds, suffix)
 
-        Exception.__init__(self, description)
+        Error.__init__(
+            self,
+            TOO_MANY_REQUESTS,
+            message,
+            json.dumps({
+                    "error": message,
+                    "retry-seconds": self.retry_seconds
+                    }))
+
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -32,7 +39,12 @@ class AuthorizationFailed(Error):
                  code=http.UNAUTHORIZED,
                  message=RESPONSES[UNAUTHORIZED],
                  response=None):
-        Error.__init__(self, code, message, response)
+        Error.__init__(
+            self,
+            code,
+            message,
+            json.dumps({"error": response or "Auth failed"}))
+
 
 
 class TimeoutError(Exception):
