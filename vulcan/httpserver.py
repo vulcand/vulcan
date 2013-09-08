@@ -1,6 +1,5 @@
 # -*- test-case-name: vulcan.test.test_httpserver -*-
-
-from urlparse import urlparse
+import json
 
 from twisted.web.http import (HTTPChannel, HTTPFactory as StandardHTTPFactory,
                               UNAUTHORIZED, SERVICE_UNAVAILABLE)
@@ -12,16 +11,13 @@ from twisted.python import log
 from vulcan import auth
 from vulcan import config
 from vulcan import throttling
-from vulcan.errors import (TOO_MANY_REQUESTS,
-                           RESPONSES,
+from vulcan.errors import (RESPONSES,
                            RateLimitReached,
                            AuthorizationFailed)
 
 from vulcan.utils import safe_format
 from vulcan.routing import AuthRequest
 
-
-RETRY_IN_SECONDS = "X-Retry-In-Seconds"
 
 
 class RestrictedChannel(HTTPChannel):
@@ -61,17 +57,15 @@ class RestrictedChannel(HTTPChannel):
 
         except AuthorizationFailed, e:
             log.msg("Authorization failed: %s" % (_request,))
+            request.setHeader('Content-Type', 'application/json')
             request.setResponseCode(e.status, e.message)
-            request.write(e.response or "")
+            request.write(e.response)
             request.finishUnreceived()
 
         except RateLimitReached, e:
             log.msg("Rate limiting: %s" % (_request,))
-            request.setResponseCode(
-                TOO_MANY_REQUESTS,
-                RESPONSES[TOO_MANY_REQUESTS])
-            request.setHeader(RETRY_IN_SECONDS, str(e.retry_seconds))
-            request.write(str(e))
+            request.setResponseCode(e.status, e.message)
+            request.write(e.response)
             request.finishUnreceived()
 
         except Exception:
@@ -97,9 +91,11 @@ class ReportingProxyClientFactory(ProxyClientFactory):
                             connector.getDestination(),
                             reason.getErrorMessage(),
                             reason.getTraceback()))
+        self.father.setHeader('Content-Type', 'application/json')
         self.father.setResponseCode(SERVICE_UNAVAILABLE,
                                     RESPONSES[SERVICE_UNAVAILABLE])
-        self.father.write("")
+        self.father.write(
+            json.dumps({"error": RESPONSES[SERVICE_UNAVAILABLE]}))
         self.father.finish()
 
 
