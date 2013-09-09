@@ -1,7 +1,6 @@
 from os import path
 
 from mock import patch, Mock, call
-from twisted.internet import epollreactor
 import yaml
 import twisted
 
@@ -9,7 +8,6 @@ import vulcan
 
 
 # twisted.internet.base.DelayedCall.debug = True
-epollreactor.install()
 
 from telephus.pool import CassandraClusterPool
 
