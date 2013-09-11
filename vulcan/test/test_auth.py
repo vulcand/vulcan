@@ -1,4 +1,4 @@
-from . import *
+from mock import patch, Mock
 
 import json
 
@@ -8,12 +8,12 @@ from treq.test.util import TestCase
 from twisted.internet.error import ConnectionRefusedError
 from twisted.internet import defer
 from twisted.python.failure import Failure
-from twisted.web.client import ResponseDone, ResponseFailed
-from twisted.web.http import FORBIDDEN, SERVICE_UNAVAILABLE, BAD_GATEWAY, OK
+from twisted.web.client import ResponseDone
+from twisted.web.http import FORBIDDEN, OK
 from twisted.python import log
 
 from vulcan import auth
-from vulcan.errors import AuthorizationFailed, RESPONSES
+from vulcan.errors import AuthorizationFailed
 from vulcan.routing import AuthRequest, AuthResponse
 
 
@@ -33,6 +33,7 @@ class AuthTest(TestCase):
         treq_get.return_value = defer.fail(ConnectionRefusedError())
         d = auth.authorize(_request)
         self.assertFailure(d, ConnectionRefusedError)
+        self.flushLoggedErrors()
 
     @patch.object(treq, 'get')
     def test_4xx(self, treq_get):
@@ -41,6 +42,7 @@ class AuthTest(TestCase):
         d = auth.authorize(_request)
         self.protocol.connectionLost(Failure(ResponseDone()))
         self.assertFailure(d, AuthorizationFailed)
+        self.flushLoggedErrors()
 
     @patch.object(treq, 'get')
     def test_auth_pass(self, treq_get):
@@ -53,6 +55,7 @@ class AuthTest(TestCase):
         self.protocol.dataReceived(json.dumps(data))
         self.protocol.connectionLost(Failure(ResponseDone()))
         self.successResultOf(d, AuthResponse.from_json(data))
+        self.flushLoggedErrors()
 
 
 _request = AuthRequest(

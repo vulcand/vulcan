@@ -1,16 +1,13 @@
 from os import getpid
 
-import sys
 import argparse
 import yaml
 
 import setproctitle
 
-from twisted.python import log
-from twisted.python.log import NullFile
+from twisted.internet import reactor
 
 import vulcan
-from vulcan.logging import CustomizableFileLogObserver
 
 
 def parse_args():
@@ -25,10 +22,15 @@ def parse_args():
 
     return p.parse_args()
 
+
+def load_config(path):
+    with open(path) as f:
+        return yaml.load(f)
+
+
 def initialize(args, process_name="vulcan"):
 
-    with open(args.config) as f:
-        params = yaml.load(f)
+    params = load_config(args.config)
 
     vulcan.initialize(params)
 
@@ -40,25 +42,18 @@ def initialize(args, process_name="vulcan"):
     # Change the name of the process to "vulcan"
     setproctitle.setproctitle(process_name)
 
-    # initialize logging
-    CustomizableFileLogObserver(
-        sys.stdout,
-        fmt="[vulcan][%(system)s] [%(logLevel)s] %(text)s\n").start()
-    log.startLogging(NullFile())
+    from vulcan.proxy import HTTPFactory
+    from vulcan import cassandra
+
+    cassandra.pool.startService()
+    reactor.listenTCP(args.http_port, HTTPFactory())
+    reactor.suggestThreadPoolSize(params['twisted']['thread_pool_size'])
+
 
 
 def main():
     args = parse_args()
     initialize(args)
-
-    from twisted.internet import reactor
-
-    from vulcan.httpserver import HTTPFactory
-    from vulcan import cassandra
-
-    cassandra.pool.startService()
-    reactor.listenTCP(args.http_port, HTTPFactory())
-    reactor.suggestThreadPoolSize(10)
     reactor.run()
 
 

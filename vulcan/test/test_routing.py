@@ -1,10 +1,9 @@
 # coding: utf-8
 
-from . import *
 from twisted.trial.unittest import TestCase
 
-from vulcan.routing import (AuthRequest, AuthResponse,\
-    Upstream, Token, Rate, ProxyHeaders)
+from vulcan.routing import (AuthRequest, AuthResponse, Upstream,
+                            Token, Rate, ProxyHeaders)
 from vulcan.utils import to_utf8
 
 
@@ -24,11 +23,10 @@ class RoutingTest(TestCase):
 
     def test_upstream(self):
         self.assertEquals({
-                "url": "http://1.2.3.4:80",
-                "rates": [],
-                "headers": {}
-                },
-         Upstream("http://1.2.3.4:80").to_json())
+            "url": "http://1.2.3.4:80",
+            "rates": [],
+            "headers": {}
+        }, Upstream("http://1.2.3.4:80").to_json())
 
         self.assertEquals(
             {"url": "http://1.2.3.4:80",
@@ -49,16 +47,17 @@ class RoutingTest(TestCase):
             headers=ProxyHeaders({'X-Mailgun': u'Юникод'}))
 
         self.assertEquals({
-                'X-Mailgun': to_utf8(u'Юникод')}, u.headers.encoded)
-
+            'X-Mailgun': to_utf8(u'Юникод')}, u.headers.encoded)
 
     def test_authresponse(self):
-        self.assertEquals(
-            {"tokens": [{"id": "abc", "rates": []},
-                        {"id": "def", "rates": []}],
-             "upstreams": [{"url": "http://1.2.3.4:80", "rates": [], "headers": {}},
-                           {"url": "http://1.2.3.4:90", "rates": [], "headers": {}}],
-             "headers": {}},
+        self.assertEquals({
+            "tokens": [
+                {"id": "abc", "rates": []},
+                {"id": "def", "rates": []}],
+            "upstreams": [
+                {"url": "http://1.2.3.4:80", "rates": [], "headers": {}},
+                {"url": "http://1.2.3.4:90", "rates": [], "headers": {}}],
+            "headers": {}},
             AuthResponse(
                 tokens=[Token("abc"), Token("def")],
                 upstreams=[Upstream("http://1.2.3.4:80"),

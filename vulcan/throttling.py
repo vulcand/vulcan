@@ -98,7 +98,7 @@ def _retry_seconds(throttled):
 
 
 def _rounded(time, rate):
-    return time/rate.period_as_seconds * rate.period_as_seconds
+    return time / rate.period_as_seconds * rate.period_as_seconds
 
 
 def _now():

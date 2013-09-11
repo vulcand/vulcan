@@ -18,7 +18,7 @@ class Token(object):
         return {
             "id": self.id,
             "rates": [r.to_json() for r in self.rates]
-            }
+        }
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -109,7 +109,6 @@ class Upstream(object):
             self.url, [str(r) for r in self.rates])
 
 
-
 class ProxyHeaders(object):
     def __init__(self, values=None):
         values = values or {}
@@ -186,7 +185,7 @@ class AuthRequest(object):
             'url': self.url,
             'length': self.length,
             'ip': self.ip
-            }
+        }
 
     @classmethod
     def from_json(cls, obj):

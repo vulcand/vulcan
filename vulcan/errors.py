@@ -1,9 +1,6 @@
-import json
-
 from twisted.web.error import Error
 from twisted.web import http
 from twisted.web.http import UNAUTHORIZED
-
 
 # http://tools.ietf.org/html/rfc6585
 TOO_MANY_REQUESTS = 429
@@ -22,12 +19,7 @@ class RateLimitReached(Error):
         Error.__init__(
             self,
             TOO_MANY_REQUESTS,
-            message,
-            json.dumps({
-                    "error": message,
-                    "retry-seconds": self.retry_seconds
-                    }))
-
+            message)
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -43,8 +35,7 @@ class AuthorizationFailed(Error):
             self,
             code,
             message,
-            json.dumps({"error": response or "Auth failed"}))
-
+            response)
 
 
 class TimeoutError(Exception):
