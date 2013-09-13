@@ -3,9 +3,9 @@
 import random
 from copy import copy
 
+
 def to_utf8(str_or_unicode):
-    """
-    Safely returns a UTF-8 version of a given string
+    """Safely returns a UTF-8 version of a given string
     >>> utils.to_utf8(u'hi')
         'hi'
     """
@@ -15,8 +15,7 @@ def to_utf8(str_or_unicode):
 
 
 def safe_format(format_string, *args, **kwargs):
-    """
-    Helper: formats string with any combination of bytestrings/unicode
+    """Formats string with any combination of bytestrings/unicode
     strings without raising exceptions
     """
     try:

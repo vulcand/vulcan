@@ -1,7 +1,4 @@
-from . import *
-
-import time
-import struct
+from mock import patch, Mock, call
 
 from treq.test.util import TestCase
 
@@ -21,13 +18,18 @@ from vulcan.routing import AuthResponse, Rate
 
 
 class ThrottlingTest(TestCase):
-    def test_no_rates(self):
+    def test_noRates(self):
+        """Use case when no rates are defined. So it's a simple load-balancing.
+        """
         r = AuthResponse.from_json(
             {"tokens": [{"id": "abc"}],
              "upstreams": [{"url": "http://1.2.3.4:80"}]})
         self.successResultOf(get_upstream(r), r.upstreams[0])
 
-    def test_throttled_rate_comparison(self):
+    def test_throttledRateComparison(self):
+        """Make sure tha ThrottledRate class has proper
+        comparison operators set up.
+        """
         self.assertEquals(ThrottledRate(rate=Rate(1, "second"), count=1),
                           ThrottledRate(rate=Rate(1, "second"), count=2))
         self.assertGreater(ThrottledRate(rate=Rate(1, "hour"), count=1),
@@ -37,7 +39,9 @@ class ThrottlingTest(TestCase):
 
     @patch.object(throttling, '_now', Mock(return_value=1))
     @patch.object(CassandraClient, 'execute_cql3_query')
-    def test_tokens_rate_limit_reached(self, query):
+    def test_tokensRateLimitReached(self, query):
+        """Rate limiting by auth token scenario.
+        """
         r = AuthResponse.from_json(
             {"tokens": [{"id": "abc",
                          "rates": [{"value": 1, "period": "minute"},
@@ -60,7 +64,9 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, '_now', Mock(return_value=1))
     @patch.object(CassandraClient, 'execute_cql3_query')
     @patch.object(throttling, '_update_rates')
-    def test_upstreams_rate_limit_reached(self, _update_rates, query):
+    def test_upstreamsRateLimitReached(self, _update_rates, query):
+        """Rate limiting by upstream scenario.
+        """
         r = AuthResponse.from_json(
             {"tokens": [{"id": "abc"}],
              "upstreams": [{"url": "http://1.2.3.4:80",
@@ -89,7 +95,9 @@ class ThrottlingTest(TestCase):
 
     @patch.object(CassandraClient, 'execute_cql3_query')
     @patch.object(throttling, '_update_rates')
-    def test_rate_limit_not_reached(self, _update_rates, query):
+    def test_rateLimitNotReached(self, _update_rates, query):
+        """Make sure we return the proper upstream if no rate limits were hit.
+        """
         query.side_effect = lambda *args, **kwargs: defer.succeed(_2_hits)
         self.successResultOf(get_upstream(_auth_response),
                              _auth_response.upstreams[0])
@@ -103,19 +111,19 @@ class ThrottlingTest(TestCase):
     @patch.object(throttling, 'log')
     @patch.object(throttling, '_get_rates')
     def test_exception(self, _get_rates, log):
+        """Making sure logging was called in case of error
+        """
         e = Exception("Bam!")
         _get_rates.side_effect = lambda *args, **kw: defer.fail(e)
         self.successResultOf(get_upstream(_auth_response),
                              _auth_response.upstreams[0])
         self.assertTrue(log.err.called)
 
-    @patch.object(log, 'err')
-    def test_update_rates_crash(self, log_err):
-        """
-        Test that if updating rates crashes rate limit check still passes.
+    def test_updateRatesCrash(self):
+        """Test that if updating rates crashes rate limit check still passes.
         """
         with patch.object(throttling.client, 'execute_cql3_query') as query:
-            f = Failure(Exception("Bam!"))
+            f = Failure(RuntimeError("Bam!"))
             query.return_value = defer.fail(f)
             _crashing_update_rates = throttling._update_rates
 
@@ -127,16 +135,16 @@ class ThrottlingTest(TestCase):
                 _update_rates.side_effect = _crashing_update_rates
                 self.successResultOf(get_upstream(_auth_response),
                                      _auth_response.upstreams[0])
-                log_err.assert_called_once_with(f)
+
+        self.flushLoggedErrors(RuntimeError)
 
     @patch.object(cassandra, 'CONN_TIMEOUT', 10)
     @patch.object(log, 'err')
     @patch.object(throttling.time, 'time', Mock(return_value=40.5))
     @patch.object(throttling.client, 'execute_cql3_query')
     @patch.object(throttling, '_get_rates')
-    def test_update_rates_slow(self, _get_rates, update_rate_query, log_err):
-        """
-        Test that updating rates doesn't affect the time we require
+    def test_updateRatesSlow(self, _get_rates, update_rate_query, log_err):
+        """Test that updating rates doesn't affect the time we require
         to check them.
         """
         self.clock = task.Clock()
@@ -181,6 +189,7 @@ class ThrottlingTest(TestCase):
             # usage stats will be updated only in 5 seconds
             self.clock.advance(5)
             self.assertTrue(all([ur.called for ur in updated_rates]))
+        self.flushLoggedErrors(RuntimeError)
 
 
 _2_hits = CqlResult(
@@ -188,10 +197,8 @@ _2_hits = CqlResult(
         CqlRow(
             columns=[
                 Column(timestamp=None, name='counter',
-                       value='\x00\x00\x00\x00\x00\x00\x00\x02', ttl=None)
-                ],
-            key=''),
-        ],
+                       value='\x00\x00\x00\x00\x00\x00\x00\x02', ttl=None)],
+            key=''), ],
     type=1, num=None, schema=CqlMetadata(
         default_value_type='UTF8Type',
         value_types={

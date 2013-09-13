@@ -51,5 +51,4 @@ if __name__ == '__main__':
         # adding github repo to dependency_links and requiring treq version
         # higher than on PyPi won't work for packages that require vulcan
         # so we explicitly install it from github here
-        pip("install https://github.com/klizhentas/treq/tarball/"
-            "b7e40c23108c810d81641d38a12e900bf4f2e599/master#egg=treq-0.2.0")
+        pip("install https://github.com/dreid/treq/tarball/23ad4afdda2eb94009b90442bcf7bdd040e0729f/master#egg=treq-0.2.0")
