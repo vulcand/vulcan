@@ -1,9 +1,8 @@
-from mock import patch, Mock
+from mock import patch
 
 from treq.test.util import TestCase
 
 from twisted.internet import defer, task
-from twisted import internet as i
 
 from vulcan.timeout import timeout
 from vulcan import timeout as t

@@ -1,9 +1,20 @@
+twisted:
+  thread_pool_size: 10
+
 auth:
+  timeout_seconds: 1
   realm: 'localhost.localdomain'
   urls:
     - 'http://localhost:5000/auth'
+
 cassandra:
   keyspace: 'vulcan_dev'
+  pool_size: 10
+  max_connections_per_node: 10
   servers:
     - - 'localhost'
       - 9160
+log:
+  - type: 'syslog'
+    redirect_stdout: True
+    facility: 'LOG_MAIL'
