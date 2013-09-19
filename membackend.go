@@ -22,7 +22,7 @@ func (b *MemoryBackend) getStats(key string, rate *Rate) (int, error) {
 }
 
 func (b *MemoryBackend) updateStats(key string, rate *Rate, increment int) error {
-	b.hits[getHit(b.timeProvider.utcNow(), key, rate)] += 1
+	b.hits[getHit(b.timeProvider.utcNow(), key, rate)] += increment
 	return nil
 }
 

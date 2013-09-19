@@ -84,7 +84,7 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 
 		upstreamRetry := t.statsRetrySeconds(upstreamStats.stats)
 		if upstreamRetry > 0 {
-			LogMessage("Upstream %s is out of capacity %s", upstream, upstreamStats.stats)
+			LogMessage("Upstream %s is out of capacity.", upstream)
 			if upstreamRetry < retrySeconds {
 				retrySeconds = upstreamRetry
 			}
@@ -172,7 +172,7 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 	retry := 0
 	for _, stat := range stats {
 		//requests in a given period exceeded rate value
-		if stat.requests > stat.rate.Value {
+		if stat.requests >= stat.rate.Value {
 			retrySeconds := stat.rate.retrySeconds(t.backend.utcNow())
 			if retrySeconds > retry {
 				retry = retrySeconds

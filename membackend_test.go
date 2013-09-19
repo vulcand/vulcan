@@ -29,10 +29,10 @@ func (s *MemoryBackendSuite) TestMemoryBackendGetSet(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, 0)
 
-	err = s.backend.updateStats("key1", &Rate{1, time.Second}, 1)
+	err = s.backend.updateStats("key1", &Rate{1, time.Second}, 2)
 	c.Assert(err, IsNil)
 
 	counter, err = s.backend.getStats("key1", &Rate{1, time.Second})
 	c.Assert(err, IsNil)
-	c.Assert(counter, Equals, 1)
+	c.Assert(counter, Equals, 2)
 }
