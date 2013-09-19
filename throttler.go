@@ -61,7 +61,7 @@ func (t *Throttler) throttleTokens(tokens []*Token) (retrySeconds int, err error
 		}
 		tokenRetry := t.statsRetrySeconds(tokenStats.stats)
 		if tokenRetry > 0 {
-			LogMessage("Token %s is out of capacity %s", token, tokenStats.stats)
+			LogMessage("Token %s is out of capacity, next retry: %d seconds", token, tokenRetry)
 			// we are interested in max retry seconds
 			// because no request will succeed if there's at least
 			// one token in tokens not allowing the request
@@ -84,7 +84,7 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 
 		upstreamRetry := t.statsRetrySeconds(upstreamStats.stats)
 		if upstreamRetry > 0 {
-			LogMessage("Upstream %s is out of capacity.", upstream)
+			LogMessage("Upstream %s is out of capacity, next retry: %d seconds", upstream, upstreamRetry)
 			if upstreamRetry < retrySeconds {
 				retrySeconds = upstreamRetry
 			}
@@ -99,12 +99,12 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 // Updates usage stats after the request is being made to the upstream
 func (t *Throttler) updateStats(tokens []*Token, upstream *Upstream) error {
 	for _, token := range tokens {
-		err := t.updateTokenStats(token)
+		err := t.updateTokenStats(token, 1)
 		if err != nil {
 			return err
 		}
 	}
-	return t.updateUpstreamStats(upstream)
+	return t.updateUpstreamStats(upstream, 1)
 }
 
 func (t *Throttler) getTokenStats(token *Token) (*TokenStats, error) {
@@ -144,9 +144,9 @@ func (t *Throttler) getRatesStats(id string, rates []*Rate) ([]*RateStats, error
 	return stats, nil
 }
 
-func (t *Throttler) updateTokenStats(token *Token) error {
+func (t *Throttler) updateTokenStats(token *Token, increment int) error {
 	for _, rate := range token.Rates {
-		err := t.backend.updateStats(token.Id, rate, 1)
+		err := t.backend.updateStats(token.Id, rate, increment)
 		if err != nil {
 			return err
 		}
@@ -154,9 +154,9 @@ func (t *Throttler) updateTokenStats(token *Token) error {
 	return nil
 }
 
-func (t *Throttler) updateUpstreamStats(upstream *Upstream) error {
+func (t *Throttler) updateUpstreamStats(upstream *Upstream, increment int) error {
 	for _, rate := range upstream.Rates {
-		err := t.backend.updateStats(upstream.Id(), rate, 1)
+		err := t.backend.updateStats(upstream.Id(), rate, increment)
 		if err != nil {
 			return err
 		}
@@ -174,6 +174,7 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 		//requests in a given period exceeded rate value
 		if stat.requests >= stat.rate.Value {
 			retrySeconds := stat.rate.retrySeconds(t.backend.utcNow())
+			LogMessage("Retry seconds: %d", retrySeconds)
 			if retrySeconds > retry {
 				retry = retrySeconds
 			}

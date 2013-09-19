@@ -4,6 +4,7 @@ Declares gocheck's test suites
 package vulcan
 
 import (
+	"fmt"
 	. "launchpad.net/gocheck"
 	"testing"
 	"time"
@@ -23,3 +24,21 @@ func (s *MainSuite) SetUpTest(c *C) {
 }
 
 var _ = Suite(&MainSuite{})
+
+/*
+All operation on this backend always fail
+*/
+type FailingBackend struct {
+}
+
+func (b *FailingBackend) getStats(key string, rate *Rate) (int, error) {
+	return -1, fmt.Errorf("Something went wrong")
+}
+
+func (b *FailingBackend) updateStats(key string, rate *Rate, increment int) error {
+	return fmt.Errorf("Something went wrong")
+}
+
+func (b *FailingBackend) utcNow() time.Time {
+	return time.Now().UTC()
+}

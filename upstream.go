@@ -24,14 +24,6 @@ func NewUpstream(inUrl string, rates []*Rate, headers map[string][]string) (*Ups
 	}, nil
 }
 
-func ExpectUpstream(inUrl string, rates []*Rate, headers map[string][]string) *Upstream {
-	u, err := NewUpstream(inUrl, rates, headers)
-	if err != nil {
-		panic(err)
-	}
-	return u
-}
-
 func (upstream *Upstream) Id() string {
 	url := &url.URL{
 		Scheme: upstream.Url.Scheme,

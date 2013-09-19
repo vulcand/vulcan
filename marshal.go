@@ -119,8 +119,6 @@ func periodFromString(period string) (time.Duration, error) {
 		return time.Minute, nil
 	case "hour":
 		return time.Hour, nil
-	case "day":
-		return 24 * time.Hour, nil
 	}
 	return -1, fmt.Errorf("Unsupported period: %s", period)
 }

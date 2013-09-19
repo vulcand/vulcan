@@ -123,15 +123,12 @@ func (s *MainSuite) TestPeriodSecondsAndDuration(c *C) {
 
 	for _, u := range rates {
 		c.Assert(u.Rate.periodSeconds(), Equals, u.Seconds)
-		c.Assert(u.Rate.duration(), Equals, u.Duration)
 	}
 }
 
 func (s *MainSuite) TestBuckets(c *C) {
 	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
 	startMinutes := time.Date(2012, 3, 4, 5, 6, 0, 0, time.UTC)
-	currentDay := time.Date(2012, 3, 4, 0, 0, 0, 0, time.UTC)
-	nextDay := time.Date(2012, 3, 5, 0, 0, 0, 0, time.UTC)
 
 	rates := []struct {
 		Rate          Rate
@@ -160,15 +157,7 @@ func (s *MainSuite) TestBuckets(c *C) {
 				Period: time.Minute,
 			},
 			CurrentBucket: startMinutes,
-			NextBucket:    startMinutes.Add(time.Duration(10) * time.Minute),
-		},
-		{
-			Rate: Rate{
-				Value:  1,
-				Period: time.Hour * 24,
-			},
-			CurrentBucket: currentDay,
-			NextBucket:    nextDay,
+			NextBucket:    startMinutes.Add(time.Minute),
 		},
 	}
 
@@ -204,7 +193,7 @@ func (s *MainSuite) TestRetrySeconds(c *C) {
 				Value:  10,
 				Period: time.Minute,
 			},
-			RetrySeconds: 593,
+			RetrySeconds: 53,
 		},
 		{
 			Rate: Rate{

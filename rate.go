@@ -41,14 +41,10 @@ func (r *Rate) currentBucket(t time.Time) time.Time {
 
 // Returns the epoch seconds of the begining of the next time bucket
 func (r *Rate) nextBucket(t time.Time) time.Time {
-	return r.currentBucket(t.Add(r.duration()))
+	return r.currentBucket(t.Add(r.Period))
 }
 
 // Returns the equivalent of the rate period in seconds
 func (r *Rate) periodSeconds() int {
 	return r.Value * int(r.Period/time.Second)
-}
-
-func (r *Rate) duration() time.Duration {
-	return time.Duration(r.Value) * r.Period
 }

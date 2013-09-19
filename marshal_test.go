@@ -51,7 +51,7 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
 						},
 						Rates: []*Rate{
 							&Rate{Value: 4, Period: time.Second},
-							&Rate{Value: 40000, Period: time.Hour * 24},
+							&Rate{Value: 40000, Period: time.Minute},
 						},
 					},
 				},
@@ -101,7 +101,7 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
                     "value": 4
                 },
                 {
-                    "period": "day",
+                    "period": "minute",
                     "value": 40000
                 }
             ],
