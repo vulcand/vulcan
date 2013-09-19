@@ -12,13 +12,25 @@ import (
 func main() {
 	vulcan.LogMessage("Vulcan starting")
 	rand.Seed(time.Now().UTC().UnixNano())
-	authServers := []string{"http://localhost:5000/auth"}
-	throttlerConfig := vulcan.ThrottlerConfig{
+	controlServers := []string{"http://localhost:5000/auth"}
+	throttlerConfig := vulcan.CassandraConfig{
 		Servers:     []string{"localhost"},
 		Keyspace:    "vulcan_dev",
 		Consistency: gocql.One,
 	}
-	handler, err := vulcan.NewReverseProxy(authServers, throttlerConfig)
+	backend, err := vulcan.NewCassandraBackend(
+		throttlerConfig,
+		&vulcan.RealTime{})
+	if err != nil {
+		log.Fatalf("Failed to init proxy, error: %s", err)
+	}
+
+	loadBalancer := vulcan.NewRandomLoadBalancer()
+	if err != nil {
+		log.Fatalf("Failed to init proxy, error: %s", err)
+	}
+
+	handler, err := vulcan.NewReverseProxy(controlServers, backend, loadBalancer)
 	s := &http.Server{
 		Addr:           ":8080",
 		Handler:        handler,

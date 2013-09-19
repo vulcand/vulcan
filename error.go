@@ -1,6 +1,7 @@
 package vulcan
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -16,16 +17,26 @@ func (r *HttpError) Error() string {
 		"HttpError(code=%d, %s, %s)", r.StatusCode, r.Status, r.Body)
 }
 
-func NewInternalError() *HttpError {
+func NewHttpError(statusCode int) *HttpError {
 	return &HttpError{
-		StatusCode: http.StatusInternalServerError,
-		Status:     http.StatusText(http.StatusInternalServerError),
-		Body:       []byte(http.StatusText(http.StatusInternalServerError))}
+		StatusCode: statusCode,
+		Status:     http.StatusText(statusCode),
+		Body:       []byte(http.StatusText(statusCode))}
 }
 
-func NewUpstreamError() *HttpError {
+func TooManyRequestsError(retrySeconds int) (*HttpError, error) {
+
+	encodedError, err := json.Marshal(map[string]interface{}{
+		"error":         "Too Many Requests",
+		"retry-seconds": retrySeconds,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &HttpError{
-		StatusCode: http.StatusServiceUnavailable,
-		Status:     http.StatusText(http.StatusServiceUnavailable),
-		Body:       []byte(http.StatusText(http.StatusServiceUnavailable))}
+		StatusCode: 429, //RFC 6585
+		Status:     "Too Many Requests",
+		Body:       encodedError}, nil
 }

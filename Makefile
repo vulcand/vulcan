@@ -1,13 +1,17 @@
-test:
+test: clean
 	go test
-coverage:
+coverage: clean
 	gocov test | gocov report
-annotate:
+annotate: clean
 	FILENAME=$(shell uuidgen)
 	gocov test  > /tmp/--go-test-server-coverage.json
 	gocov annotate /tmp/--go-test-server-coverage.json $(fn)
 all:
 	go install github.com/mailgun/vulcan
 	go install github.com/mailgun/vulcan/vulcan
-run:all
+clean:
+	find -name flymake_* -delete
+run: all
 	GOMAXPROCS=4 vulcan
+sloccount:
+	 find . -name "*.go" -print0 | xargs -0 wc -l

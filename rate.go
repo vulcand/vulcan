@@ -1,7 +1,6 @@
 package vulcan
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -13,52 +12,43 @@ type Rate struct {
 	Period time.Duration
 }
 
-// This object is used for unmarshalling
-// from json
-type RateObj struct {
-	value  int
-	period string
+func NewRate(value int, period time.Duration) (*Rate, error) {
+	if value <= 0 {
+		return nil, fmt.Errorf("Value should be > 0")
+	}
+	if period < time.Second || period > 24*time.Hour {
+		return nil, fmt.Errorf("Period should be within [1 second, 24 hours]")
+	}
+	return &Rate{Value: value, Period: period}, nil
 }
 
-func NewRate(value int, period string) (*Rate, error) {
-	duration, err := periodDuration(period)
-	if err != nil {
-		return nil, err
-	}
-	return &Rate{Value: value, Period: duration}, nil
+func (r *Rate) String() string {
+	return (time.Duration(r.Value) * r.Period).String()
 }
 
-func rateFromJson(bytes []byte) (*Rate, error) {
-	var r RateObj
-	err := json.Unmarshal(bytes, &r)
-	if err != nil {
-		return nil, err
-	}
-	return NewRate(r.value, r.period)
+// Calculates when this rate can be hit the next time from
+// the given time t, assuming all the requests in the given
+func (r *Rate) retrySeconds(now time.Time) int {
+	return int(r.nextBucket(now).Unix() - now.Unix())
 }
 
-func ratesFromJsonList(inRates []RateObj) ([]Rate, error) {
-	rates := make([]Rate, len(inRates))
-	for i, rateObj := range inRates {
-		rate, err := NewRate(rateObj.value, rateObj.period)
-		if err != nil {
-			return nil, err
-		}
-		rates[i] = *rate
-	}
-	return rates, nil
+//Returns epochSeconds rounded to the rate period
+//e.g. minutes rate would return epoch seconds with seconds set to zero
+//hourly rate would return epoch seconds with minutes and seconds set to zero
+func (r *Rate) currentBucket(t time.Time) time.Time {
+	return t.Truncate(r.Period)
 }
 
-func periodDuration(period string) (time.Duration, error) {
-	switch period {
-	case "second":
-		return time.Second, nil
-	case "minute":
-		return time.Minute, nil
-	case "hour":
-		return time.Hour, nil
-	case "day":
-		return 24 * time.Hour, nil
-	}
-	return -1, fmt.Errorf("Unsupported period: %s", period)
+// Returns the epoch seconds of the begining of the next time bucket
+func (r *Rate) nextBucket(t time.Time) time.Time {
+	return r.currentBucket(t.Add(r.duration()))
+}
+
+// Returns the equivalent of the rate period in seconds
+func (r *Rate) periodSeconds() int {
+	return r.Value * int(r.Period/time.Second)
+}
+
+func (r *Rate) duration() time.Duration {
+	return time.Duration(r.Value) * r.Period
 }

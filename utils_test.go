@@ -1,12 +1,15 @@
 package vulcan
 
 import (
-	"testing"
+	"fmt"
+	. "launchpad.net/gocheck"
+	"net/url"
+	"time"
 )
 
 //Just to make sure we don't panic, return err and not
 //username and pass and cover the function
-func TestParseBadHeaders(t *testing.T) {
+func (s *MainSuite) TestParseBadHeaders(c *C) {
 	headers := []string{
 		//just empty string
 		"",
@@ -20,16 +23,14 @@ func TestParseBadHeaders(t *testing.T) {
 		"Basic YW55IGNhcm5hbCBwbGVhcw==",
 	}
 	for _, h := range headers {
-		_, err := ParseAuthHeader(h)
-		if err == nil {
-			t.Fatalf("Expected error for header [%s]", h)
-		}
+		_, err := parseAuthHeader(h)
+		c.Assert(err, NotNil)
 	}
 }
 
 //Just to make sure we don't panic, return err and not
 //username and pass and cover the function
-func TestParseSuccess(t *testing.T) {
+func (s *MainSuite) TestParseSuccess(c *C) {
 	headers := []struct {
 		Header   string
 		Expected BasicAuth
@@ -45,44 +46,81 @@ func TestParseSuccess(t *testing.T) {
 		},
 	}
 	for _, h := range headers {
-		request, err := ParseAuthHeader(h.Header)
-		if err != nil {
-			t.Fatalf("Unexpected error for header [%s], [%s]", h, err)
-		}
+		request, err := parseAuthHeader(h.Header)
+		c.Assert(err, IsNil)
+		c.Assert(request.Username, Equals, h.Expected.Username)
+		c.Assert(request.Password, Equals, h.Expected.Password)
 
-		if request.Username != h.Expected.Username {
-			t.Fatalf("Username [%s] does not match expected [%s]",
-				request.Username,
-				h.Expected.Username)
-		}
-
-		if request.Password != h.Expected.Password {
-			t.Fatalf("Password [%s] not match expected [%s]",
-				request.Password,
-				h.Expected.Password)
-		}
 	}
 }
 
 // We should panic with wrong args
-func TestRandomRangeFail(t *testing.T) {
-	panicked := false
-	defer func() {
-		if !panicked {
-			t.Fatalf("Expected panic")
-		}
-	}()
-	defer func() {
-		r := recover()
-		if r != nil {
-			panicked = true
-		}
-	}()
-	RandomRange(0, 0)
+func (s *MainSuite) TestRandomRangeFail(c *C) {
+	c.Assert(func() { randomRange(0, 0) }, PanicMatches, `Invalid range .*`)
 }
 
 // Just make sure we don't panic on good args
-func TestRandomSuccess(t *testing.T) {
-	RandomRange(0, 1)
-	RandomRange(2, 4)
+func (s *MainSuite) TestRandomSuccess(c *C) {
+	randomRange(0, 1)
+	randomRange(2, 4)
+}
+
+// Make sure copy does it right, so the copied url
+// is safe to alter without modifying the other
+func (s *MainSuite) TestCopyUrl(c *C) {
+	urlA := &url.URL{
+		Scheme:   "http",
+		Host:     "localhost:5000",
+		Path:     "/upstream",
+		Opaque:   "opaque",
+		RawQuery: "a=1&b=2",
+		Fragment: "#hello",
+		User:     &url.Userinfo{},
+	}
+	urlB := copyUrl(urlA)
+	c.Assert(urlB, DeepEquals, urlB)
+	urlB.Scheme = "https"
+	c.Assert(urlB, Not(DeepEquals), urlA)
+}
+
+// Make sure parseUrl is strict enough not to accept total garbage
+func (s *MainSuite) TestParseBadUrl(c *C) {
+	badUrls := []string{
+		"",
+		" some random text ",
+		"http---{}{\\bad bad url",
+	}
+	for _, badUrl := range badUrls {
+		_, err := parseUrl(badUrl)
+		c.Assert(err, NotNil)
+	}
+}
+
+func (s *MainSuite) TestGetHit(c *C) {
+	hits := []struct {
+		Key      string
+		Rate     *Rate
+		Expected string
+	}{
+		{
+			Key:      "key1",
+			Rate:     &Rate{Value: 1, Period: time.Second},
+			Expected: "key1_1s_%d",
+		},
+		{
+			Key:      "key2",
+			Rate:     &Rate{Value: 10, Period: time.Minute},
+			Expected: "key2_10m0s_%d",
+		},
+		{
+			Key:      "key1",
+			Rate:     &Rate{Value: 1, Period: time.Hour * 24},
+			Expected: "key1_24h0m0s_%d",
+		},
+	}
+	for _, u := range hits {
+		expected := fmt.Sprintf(u.Expected, u.Rate.currentBucket(s.timeProvider.utcNow()).Unix())
+		hit := getHit(s.timeProvider.utcNow(), u.Key, u.Rate)
+		c.Assert(expected, Equals, hit)
+	}
 }

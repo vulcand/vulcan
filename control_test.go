@@ -1,14 +1,14 @@
 package vulcan
 
 import (
+	. "launchpad.net/gocheck"
 	"net/http"
-	"testing"
 )
 
-func TestFromHttpSuccess(t *testing.T) {
+func (s *MainSuite) TestFromHttpSuccess(c *C) {
 	requests := []struct {
 		In  http.Request
-		Out AuthRequest
+		Out ControlRequest
 	}{
 		{
 			http.Request{
@@ -16,18 +16,16 @@ func TestFromHttpSuccess(t *testing.T) {
 				Header: map[string][]string{
 					"Authorization": []string{"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="},
 				}},
-			AuthRequest{Method: "GET"},
+			ControlRequest{Method: "GET"},
 		},
 	}
 	for _, r := range requests {
-		_, err := FromHttpRequest(&r.In)
-		if err != nil {
-			t.Fatalf("Unexpected error for request [%s], [%s]", r.In, err)
-		}
+		_, err := controlRequestFromHttp(&r.In)
+		c.Assert(err, IsNil)
 	}
 }
 
-func TestFromHttpFail(t *testing.T) {
+func (s *MainSuite) TestFromHttpFail(c *C) {
 	requests := []http.Request{
 		http.Request{
 			Method: "GET",
@@ -36,9 +34,7 @@ func TestFromHttpFail(t *testing.T) {
 			}},
 	}
 	for _, r := range requests {
-		_, err := FromHttpRequest(&r)
-		if err == nil {
-			t.Fatalf("Expected error for request [%s]", r)
-		}
+		_, err := controlRequestFromHttp(&r)
+		c.Assert(err, NotNil)
 	}
 }

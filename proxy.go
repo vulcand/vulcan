@@ -1,78 +1,149 @@
 package vulcan
 
 import (
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 )
 
-type ReverseProxy struct {
-	AuthServers []*url.URL
-	throttler   *Throttler
+// This tells proxy what to do with request
+type ProxyInstructions struct {
+	Tokens    []*Token    // Tokens uniquely identify the requester. Token can be account id or combination of ip and account id
+	Upstreams []*Upstream // List of upstreams that can accept this reuqest
+	Headers   http.Header // Headers will be apllied to the proxied request
 }
 
-func NewReverseProxy(authServers []string, throttlerConfig ThrottlerConfig) (*ReverseProxy, error) {
-	throttler, err := NewThrottler(throttlerConfig)
-	if err != nil {
-		return nil, err
+type ReverseProxy struct {
+	controlServers []*url.URL   // control servers that decide what to do with the request
+	throttler      *Throttler   // filters upstreams based on the throtting data
+	loadBalancer   LoadBalancer // chooses upstreams using whatever algo
+}
+
+func NewProxyInstructions(
+	tokens []*Token,
+	upstreams []*Upstream,
+	headers http.Header) (*ProxyInstructions, error) {
+
+	if len(upstreams) <= 0 {
+		return nil, fmt.Errorf("At least one upstream is required")
 	}
 
+	return &ProxyInstructions{
+		Tokens:    tokens,
+		Upstreams: upstreams,
+		Headers:   headers}, nil
+}
+
+func NewReverseProxy(controlServers []string, backend Backend, loadBalancer LoadBalancer) (*ReverseProxy, error) {
+
 	p := &ReverseProxy{
-		AuthServers: make([]*url.URL, len(authServers)),
-		throttler:   throttler,
+		controlServers: make([]*url.URL, len(controlServers)),
+		throttler:      NewThrottler(backend),
+		loadBalancer:   loadBalancer,
 	}
-	for i, str := range authServers {
+	for i, str := range controlServers {
 		u, err := url.Parse(str)
 		if err != nil {
 			return nil, err
 		}
-		p.AuthServers[i] = u
+		p.controlServers[i] = u
 	}
 	return p, nil
 }
 
 func (r *ReverseProxy) getServer() *url.URL {
-	index := RandomRange(0, len(r.AuthServers))
-	return r.AuthServers[index]
+	index := randomRange(0, len(r.controlServers))
+	return r.controlServers[index]
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	LogMessage("Serving Request %s", req.RequestURI)
+	LogMessage("Serving Request %s %s", req.Method, req.RequestURI)
 
-	//create auth request from the incoming request
-	authRequest, err := FromHttpRequest(req)
+	// Ask control server for instructions
+	instructions, httpError, err := getInstructions(p.getServer(), req)
 	if err != nil {
-		LogError("Failed to create auth request, got error: %s", err)
-		p.WriteError(w, NewInternalError())
-		return
+		p.replyError(NewHttpError(http.StatusInternalServerError), w, req)
 	}
 
-	//Ask auth server for directions
-	authResponse, httpError := authRequest.authorize(p.getServer())
+	// Control server denied the request
 	if httpError != nil {
-		//Auth server has rejected the request
-		LogError("Failed to execute auth request, got error: %s", httpError)
-		p.WriteError(w, httpError)
+		//Control server has rejected the request
+		LogError("Control server denied request: %s", httpError)
+		p.replyError(httpError, w, req)
 		return
 	}
 
-	// choosing an upstream
-	p.throttler.getUpstream(authResponse)
+	// Select an upstream
+	upstream, httpError, err := p.chooseUpstream(instructions)
+	if err != nil {
+		p.replyError(NewHttpError(http.StatusInternalServerError), w, req)
+		return
+	}
+	if httpError != nil {
+		p.replyError(httpError, w, req)
+		return
+	}
 
-	// Now choose an upstream (temporarily choose one)
-	outReq := rewriteRequest(&authResponse.Upstreams[0], req)
+	// Proxy request to the selected upstream
+	err = p.proxyRequest(w, req, upstream)
+	if err != nil {
+		LogError("Upstream error: %v", err)
+		p.replyError(NewHttpError(http.StatusBadGateway), w, req)
+		return
+	}
+
+	// Update usage stats
+	err = p.throttler.updateStats(instructions.Tokens, upstream)
+	if err != nil {
+		LogError("Failed to update stats: %s", err)
+	}
+}
+
+func (p *ReverseProxy) chooseUpstream(instructions *ProxyInstructions) (*Upstream, *HttpError, error) {
+	// Throttle the requests to find available upstreams
+	// We may fall back to all upstreams if throttler is down
+	// If there are no available upstreams, we reject the request
+	upstreamStats, retrySeconds, err := p.throttler.throttle(instructions)
+	if err != nil {
+		// throtller is down, we are falling back
+		// so we won't loose the request
+		index := randomRange(0, len(instructions.Upstreams))
+		upstream := instructions.Upstreams[index]
+		LogError("Throtter down, falling back to upstream %s", upstream.Url)
+		return upstream, nil, nil
+	} else if len(upstreamStats) == 0 {
+		// No available upstreams
+		httpError, err := TooManyRequestsError(retrySeconds)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, httpError, nil
+	} else {
+		// Choose an upstream based on the stats
+		upstream, err := p.loadBalancer.chooseUpstream(upstreamStats)
+		if err != nil {
+			return nil, nil, err
+		}
+		return upstream, nil, nil
+	}
+}
+
+func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, upstream *Upstream) error {
+	// Now proxy the request
+	outReq := rewriteRequest(upstream, req)
 
 	// Now forward the reuest and mirror the response
 	res, err := http.DefaultTransport.RoundTrip(outReq)
 	if err != nil {
-		LogError("Upstream error: %v", err)
-		p.WriteError(w, NewUpstreamError())
-		return
+		return err
 	}
 	defer res.Body.Close()
 	copyHeaders(w.Header(), res.Header)
 	w.WriteHeader(res.StatusCode)
 	io.Copy(w, res.Body)
+	return nil
 }
 
 func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
@@ -91,15 +162,11 @@ func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
 	return outReq
 }
 
-func copyHeaders(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
-func (p *ReverseProxy) WriteError(w http.ResponseWriter, err *HttpError) {
+func (p *ReverseProxy) replyError(err *HttpError, w http.ResponseWriter, req *http.Request) {
+	// Discard the request body, so that clients can actually receive the response
+	// Otherwise they can only see lost connection
+	// TODO: actually check this
+	io.Copy(ioutil.Discard, req.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(err.StatusCode)
 	w.Write(err.Body)
