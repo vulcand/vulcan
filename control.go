@@ -30,6 +30,10 @@ type ControlRequest struct {
 func getInstructions(controlServer *url.URL, req *http.Request) (*ProxyInstructions, *HttpError, error) {
 	r, err := controlRequestFromHttp(req)
 	if err != nil {
+		if _, ok := err.(AuthError); ok {
+			LogMessage("Failed to create control request: %s", err)
+			return nil, NewHttpError(http.StatusProxyAuthRequired), nil
+		}
 		return nil, nil, err
 	}
 
@@ -59,10 +63,10 @@ func getInstructions(controlServer *url.URL, req *http.Request) (*ProxyInstructi
 
 	// Control server denied the request, stream this request
 	if response.StatusCode >= 300 || response.StatusCode < 200 {
-		return nil, nil, &HttpError{
+		return nil, &HttpError{
 			StatusCode: response.StatusCode,
 			Status:     response.Status,
-			Body:       responseBody}
+			Body:       responseBody}, nil
 	}
 
 	LogMessage("Control server granted request")
@@ -80,7 +84,7 @@ func getInstructions(controlServer *url.URL, req *http.Request) (*ProxyInstructi
 func controlRequestFromHttp(r *http.Request) (*ControlRequest, error) {
 	auth, err := parseAuthHeader(r.Header.Get("Authorization"))
 	if err != nil {
-		return nil, err
+		return nil, AuthError(err.Error())
 	}
 
 	request := &ControlRequest{
@@ -108,9 +112,9 @@ func (r *ControlRequest) controlQuery(controlServer *url.URL) (*url.URL, error) 
 	parameters.Add("username", r.Username)
 	parameters.Add("password", r.Password)
 	parameters.Add("protocol", r.Protocol)
-	parameters.Add("method", r.Protocol)
+	parameters.Add("method", r.Method)
 	parameters.Add("url", r.Url)
-	parameters.Add("length", fmt.Sprintf("%s", r.Length))
+	parameters.Add("length", fmt.Sprintf("%d", r.Length))
 	parameters.Add("headers", string(encodedHeaders))
 
 	u.RawQuery = parameters.Encode()

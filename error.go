@@ -40,3 +40,10 @@ func TooManyRequestsError(retrySeconds int) (*HttpError, error) {
 		Status:     "Too Many Requests",
 		Body:       encodedError}, nil
 }
+
+// We somehow failed to authenticate the request
+type AuthError string
+
+func (f AuthError) Error() string {
+	return string(f)
+}

@@ -124,3 +124,8 @@ func (s *MainSuite) TestGetHit(c *C) {
 		c.Assert(expected, Equals, hit)
 	}
 }
+
+func (s *MainSuite) TestTimes(c *C) {
+	tm := &RealTime{}
+	c.Assert(tm.utcNow(), NotNil)
+}

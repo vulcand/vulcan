@@ -64,6 +64,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Ask control server for instructions
 	instructions, httpError, err := getInstructions(p.getServer(), req)
 	if err != nil {
+		LogError("Failed to get instructions %s", err)
 		p.replyError(NewHttpError(http.StatusInternalServerError), w, req)
 		return
 	}
