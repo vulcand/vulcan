@@ -65,6 +65,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	instructions, httpError, err := getInstructions(p.getServer(), req)
 	if err != nil {
 		p.replyError(NewHttpError(http.StatusInternalServerError), w, req)
+		return
 	}
 
 	// Control server denied the request
