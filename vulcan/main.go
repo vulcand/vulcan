@@ -2,22 +2,22 @@ package main
 
 import (
 	"github.com/golang/glog"
+	"github.com/mailgun/gocql"
 	"github.com/mailgun/vulcan"
 	"net/http"
 	"time"
-	"tux21b.org/v1/gocql"
 )
 
 func main() {
 	glog.Info("Vulcan starting")
 	controlServers := []string{"http://localhost:5000/auth"}
-	throttlerConfig := vulcan.CassandraConfig{
+	cassandraConfig := vulcan.CassandraConfig{
 		Servers:     []string{"localhost"},
 		Keyspace:    "vulcan_dev",
 		Consistency: gocql.One,
 	}
 	backend, err := vulcan.NewCassandraBackend(
-		throttlerConfig,
+		cassandraConfig,
 		&vulcan.RealTime{})
 	if err != nil {
 		glog.Fatalf("Failed to init proxy, error:", err)
