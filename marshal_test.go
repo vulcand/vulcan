@@ -18,8 +18,9 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
 						Id: "Hello",
 						Rates: []*Rate{
 							&Rate{
-								Period: time.Hour,
-								Value:  10000,
+								Increment: 1,
+								Period:    time.Hour,
+								Value:     10000,
 							},
 						},
 					},
@@ -36,7 +37,11 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
 							"X-Serega": []string{"a"},
 						},
 						Rates: []*Rate{
-							&Rate{Value: 10, Period: time.Minute},
+							&Rate{
+								Increment: 1,
+								Value:     10,
+								Period:    time.Minute,
+							},
 						},
 					},
 					&Upstream{
@@ -50,8 +55,16 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
 							"X-Serega": []string{"a2"},
 						},
 						Rates: []*Rate{
-							&Rate{Value: 4, Period: time.Second},
-							&Rate{Value: 40000, Period: time.Minute},
+							&Rate{
+								Increment: 1,
+								Value:     4,
+								Period:    time.Second,
+							},
+							&Rate{
+								Increment: 1,
+								Value:     40000,
+								Period:    time.Minute,
+							},
 						},
 					},
 				},
@@ -62,6 +75,7 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
             "id": "Hello",
             "rates": [
                 {
+                    "increment": 1,
                     "period": "hour",
                     "value": 10000
                 }
@@ -80,6 +94,7 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
             },
             "rates": [
                 {
+                    "increment": 1,
                     "period": "minute",
                     "value": 10
                 }
@@ -97,10 +112,12 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
             },
             "rates": [
                 {
+                    "increment": 1,
                     "period": "second",
                     "value": 4
                 },
                 {
+                    "increment": 1,
                     "period": "minute",
                     "value": 40000
                 }
@@ -148,6 +165,7 @@ func (s *MainSuite) TestUnmarshalFail(c *C) {
         {
             "rates": [
                 {
+                    "increment": 1,
                     "period": "year", 
                     "value": -1
                 }
@@ -162,6 +180,7 @@ func (s *MainSuite) TestUnmarshalFail(c *C) {
         {
             "rates": [
                 {
+                    "increment": 1,
                     "period": "super-minute",
                     "value": 10
                 }

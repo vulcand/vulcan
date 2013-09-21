@@ -25,8 +25,9 @@ type TokenObj struct {
 }
 
 type RateObj struct {
-	Value  int
-	Period string
+	Increment int64
+	Value     int64
+	Period    string
 }
 
 // This object is used for unmarshalling
@@ -107,7 +108,7 @@ func rateFromObj(obj RateObj) (*Rate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewRate(obj.Value, period)
+	return NewRate(obj.Increment, obj.Value, period)
 }
 
 //helper to unmarshal periods to golang time.Duration

@@ -3,6 +3,7 @@ package vulcan
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -33,7 +34,7 @@ func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.
 	r, err := controlRequestFromHttp(req)
 	if err != nil {
 		if _, ok := err.(AuthError); ok {
-			LogMessage("Failed to create control request: %s", err)
+			glog.Error("Failed to create control request:", err)
 			return nil, NewHttpError(http.StatusProxyAuthRequired), nil
 		}
 		return nil, nil, err
@@ -61,7 +62,7 @@ func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.
 			controlServer, err)
 	}
 
-	LogMessage("ControlServer replies: %s", responseBody)
+	glog.Info("ControlServer replies:", responseBody)
 
 	// Control server denied the request, stream this request
 	if response.StatusCode >= 300 || response.StatusCode < 200 {
@@ -70,8 +71,6 @@ func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.
 			Status:     response.Status,
 			Body:       responseBody}, nil
 	}
-
-	LogMessage("Control server granted request")
 
 	instructions, err := proxyInstructionsFromJson(responseBody)
 	if err != nil {

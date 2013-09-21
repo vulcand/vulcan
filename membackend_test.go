@@ -25,14 +25,14 @@ func (s *MemoryBackendSuite) TestUtcNow(c *C) {
 }
 
 func (s *MemoryBackendSuite) TestMemoryBackendGetSet(c *C) {
-	counter, err := s.backend.getStats("key1", &Rate{1, time.Second})
+	counter, err := s.backend.getStats("key1", &Rate{Increment: 1, Value: 1, Period: time.Second})
 	c.Assert(err, IsNil)
-	c.Assert(counter, Equals, 0)
+	c.Assert(counter, Equals, int64(0))
 
-	err = s.backend.updateStats("key1", &Rate{1, time.Second}, 2)
+	err = s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
 	c.Assert(err, IsNil)
 
-	counter, err = s.backend.getStats("key1", &Rate{1, time.Second})
+	counter, err = s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
 	c.Assert(err, IsNil)
-	c.Assert(counter, Equals, 2)
+	c.Assert(counter, Equals, int64(2))
 }

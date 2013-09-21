@@ -5,6 +5,7 @@ Based on cassandra counters.
 package vulcan
 
 import (
+	"github.com/golang/glog"
 	"time"
 	"tux21b.org/v1/gocql"
 )
@@ -31,8 +32,8 @@ func NewCassandraBackend(config CassandraConfig, timeProvider TimeProvider) (*Ca
 	}, nil
 }
 
-func (b *CassandraBackend) getStats(key string, rate *Rate) (int, error) {
-	var counter int
+func (b *CassandraBackend) getStats(key string, rate *Rate) (int64, error) {
+	var counter int64
 
 	query := b.session.Query(
 		"SELECT counter from hits WHERE hit = ? LIMIT 1",
@@ -40,25 +41,25 @@ func (b *CassandraBackend) getStats(key string, rate *Rate) (int, error) {
 
 	if err := query.Scan(&counter); err != nil {
 		if err == gocql.ErrNotFound {
-			LogMessage("Entry not found, it's ok")
+			glog.Info("Entry %s not found, it's ok", key)
 			return 0, nil
 		}
-		LogError("Error when executing query, err: %v", err)
+		glog.Error("Error when executing query, err:", err)
 		return -1, err
 	}
 
-	LogMessage("Got counter: %d", counter)
+	glog.Info("Got counter:", counter)
 	return counter, nil
 }
 
-func (b *CassandraBackend) updateStats(key string, rate *Rate, increment int) error {
+func (b *CassandraBackend) updateStats(key string, rate *Rate) error {
 	query := b.session.Query(
 		"UPDATE hits SET counter = counter + ? WHERE hit = ?",
-		increment,
+		rate.Increment,
 		getHit(b.timeProvider.utcNow(), key, rate))
 
 	if err := query.Exec(); err != nil {
-		LogError("Error when executing update query, err: %v", err)
+		glog.Error("Error when executing update query, err:", err)
 		return err
 	}
 	return nil

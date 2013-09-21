@@ -1,7 +1,10 @@
+// Proxy accepts the request, calls the control service for instructions
+// And takes actions according to instructions received.
 package vulcan
 
 import (
 	"fmt"
+	"github.com/golang/glog"
 	"io"
 	"io/ioutil"
 	"net"
@@ -58,11 +61,14 @@ type ReverseProxy struct {
 	httpClient *http.Client
 }
 
+// Standard dial and read timeouts, can be overriden when supplying
+// proxy settings
 const (
 	DefaultHttpReadTimeout = time.Duration(30) * time.Second
 	DefaultHttpDialTimeout = time.Duration(30) * time.Second
 )
 
+// Creates reverse proxy that acts like http server
 func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	s, err := validateProxySettings(s)
 	if err != nil {
@@ -97,12 +103,12 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	LogMessage("Serving Request %s %s", req.Method, req.RequestURI)
+	glog.Info("Serving Request", req.Method, req.RequestURI)
 
 	// Ask control server for instructions
 	instructions, httpError, err := getInstructions(p.httpClient, p.getServer(), req)
 	if err != nil {
-		LogError("Failed to get instructions: %s", err)
+		glog.Info("Failed to get instructions:", err)
 		p.replyError(NewHttpError(http.StatusInternalServerError), w, req)
 		return
 	}
@@ -110,7 +116,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Control server denied the request
 	if httpError != nil {
 		//Control server has rejected the request
-		LogError("Control server denied request: %s", httpError)
+		glog.Error("Control server denied request:", httpError)
 		p.replyError(httpError, w, req)
 		return
 	}
@@ -129,7 +135,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Proxy request to the selected upstream
 	err = p.proxyRequest(w, req, upstream)
 	if err != nil {
-		LogError("Upstream error: %v", err)
+		glog.Error("Upstream error:", err)
 		p.replyError(NewHttpError(http.StatusBadGateway), w, req)
 		return
 	}
@@ -137,7 +143,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Update usage stats
 	err = p.throttler.updateStats(instructions.Tokens, upstream)
 	if err != nil {
-		LogError("Failed to update stats: %s", err)
+		glog.Error("Failed to update stats:", err)
 	}
 }
 
@@ -171,7 +177,7 @@ func (p *ReverseProxy) chooseUpstream(instructions *ProxyInstructions) (*Upstrea
 		// so we won't loose the request
 		index := randomRange(0, len(instructions.Upstreams))
 		upstream := instructions.Upstreams[index]
-		LogError("Throtter down, falling back to upstream %s", upstream.Url)
+		glog.Error("Throtter down, falling back to upstream", upstream.Url)
 		return upstream, nil, nil
 	} else if len(upstreamStats) == 0 {
 		// No available upstreams
@@ -222,13 +228,14 @@ func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
 	outReq.Close = false
 
 	if upstream.Headers != nil {
-		LogMessage("Proxying Upstream headers: %s", upstream.Headers)
+		glog.Info("Proxying Upstream headers:", upstream.Headers)
 		copyHeaders(outReq.Header, upstream.Headers)
 	}
 
 	return outReq
 }
 
+// Helper function to reply with http errors
 func (p *ReverseProxy) replyError(err *HttpError, w http.ResponseWriter, req *http.Request) {
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection

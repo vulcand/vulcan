@@ -31,11 +31,11 @@ All operation on this backend always fail
 type FailingBackend struct {
 }
 
-func (b *FailingBackend) getStats(key string, rate *Rate) (int, error) {
+func (b *FailingBackend) getStats(key string, rate *Rate) (int64, error) {
 	return -1, fmt.Errorf("Something went wrong")
 }
 
-func (b *FailingBackend) updateStats(key string, rate *Rate, increment int) error {
+func (b *FailingBackend) updateStats(key string, rate *Rate) error {
 	return fmt.Errorf("Something went wrong")
 }
 

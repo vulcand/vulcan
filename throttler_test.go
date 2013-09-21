@@ -50,15 +50,15 @@ func (s *ThrottlerSuite) upstreamId(stats []*UpstreamStats, index int) string {
 	return stats[index].upstream.Id()
 }
 
-func (s *ThrottlerSuite) updateUpstreamStats(upstream *Upstream, increment int) {
-	err := s.throttler.updateUpstreamStats(upstream, increment)
+func (s *ThrottlerSuite) updateUpstreamStats(upstream *Upstream) {
+	err := s.throttler.updateUpstreamStats(upstream)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (s *ThrottlerSuite) updateTokenStats(token *Token, increment int) {
-	err := s.throttler.updateTokenStats(token, increment)
+func (s *ThrottlerSuite) updateTokenStats(token *Token) {
+	err := s.throttler.updateTokenStats(token)
 	if err != nil {
 		panic(err)
 	}
@@ -73,12 +73,12 @@ func (s *ThrottlerSuite) TestThrottlerUpdateStatsNoRates(c *C) {
 
 // Make sure stats are properly updated
 func (s *ThrottlerSuite) TestThrottlerUpdateStatsRates(c *C) {
-	up := s.newUpstream("http://yahoo.com", &Rate{Value: 1, Period: time.Second}, &Rate{Value: 1, Period: time.Minute})
-	tokens := []*Token{s.newToken("a", &Rate{Value: 1, Period: time.Minute}, &Rate{Value: 10, Period: time.Hour})}
+	up := s.newUpstream("http://yahoo.com", &Rate{Increment: 1, Value: 1, Period: time.Second}, &Rate{Increment: 1, Value: 1, Period: time.Minute})
+	tokens := []*Token{s.newToken("a", &Rate{Increment: 1, Value: 1, Period: time.Minute}, &Rate{Increment: 1, Value: 10, Period: time.Hour})}
 	s.throttler.updateStats(tokens, up)
 	token := tokens[0]
 
-	expected := map[string]int{
+	expected := map[string]int64{
 		s.rateBucket(up.Id(), up.Rates[0]):     1,
 		s.rateBucket(up.Id(), up.Rates[1]):     1,
 		s.rateBucket(token.Id, token.Rates[0]): 1,
@@ -93,8 +93,8 @@ func (s *ThrottlerSuite) TestThrottlerUpdateStatsRates(c *C) {
 
 // Make sure stats are properly updated
 func (s *ThrottlerSuite) TestThrottlerUpdateStatsFails(c *C) {
-	up := s.newUpstream("http://yahoo.com", &Rate{Value: 1, Period: time.Second}, &Rate{Value: 1, Period: time.Minute})
-	tokens := []*Token{s.newToken("a", &Rate{Value: 1, Period: time.Minute}, &Rate{Value: 10, Period: time.Hour})}
+	up := s.newUpstream("http://yahoo.com", &Rate{Increment: 1, Value: 1, Period: time.Second}, &Rate{Value: 1, Period: time.Minute})
+	tokens := []*Token{s.newToken("a", &Rate{Increment: 1, Value: 1, Period: time.Minute}, &Rate{Value: 10, Period: time.Hour})}
 	err := s.failingThrottler.updateStats(tokens, up)
 	c.Assert(err, NotNil)
 }
@@ -120,8 +120,8 @@ func (s *ThrottlerSuite) TestThrottlerUpstreamsNoRates(c *C) {
 func (s *ThrottlerSuite) TestThrottlerRatesClear(c *C) {
 	instructions := &ProxyInstructions{
 		Upstreams: []*Upstream{
-			s.newUpstream("http://google.com", &Rate{1, time.Second}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}),
+			s.newUpstream("http://google.com", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 1, Value: 10, Period: time.Minute}),
 		},
 	}
 
@@ -138,12 +138,12 @@ func (s *ThrottlerSuite) TestThrottlerRatesClear(c *C) {
 func (s *ThrottlerSuite) TestThrottlerRatesOneUpstreamOut(c *C) {
 	instructions := &ProxyInstructions{
 		Upstreams: []*Upstream{
-			s.newUpstream("http://google.com", &Rate{1, time.Second}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}),
+			s.newUpstream("http://google.com", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 1, Value: 10, Period: time.Minute}),
 		},
 	}
 
-	s.updateUpstreamStats(instructions.Upstreams[0], 1)
+	s.updateUpstreamStats(instructions.Upstreams[0])
 
 	upstreamStats, _, err := s.throttler.throttle(instructions)
 
@@ -156,13 +156,13 @@ func (s *ThrottlerSuite) TestThrottlerRatesOneUpstreamOut(c *C) {
 func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOut(c *C) {
 	instructions := &ProxyInstructions{
 		Upstreams: []*Upstream{
-			s.newUpstream("http://google.com", &Rate{1, time.Second}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}),
+			s.newUpstream("http://google.com", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 10, Value: 10, Period: time.Minute}),
 		},
 	}
 
-	s.updateUpstreamStats(instructions.Upstreams[0], 1)
-	s.updateUpstreamStats(instructions.Upstreams[1], 12)
+	s.updateUpstreamStats(instructions.Upstreams[0])
+	s.updateUpstreamStats(instructions.Upstreams[1])
 
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
@@ -178,13 +178,13 @@ func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOut(c *C) {
 func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOutSlowestRate(c *C) {
 	instructions := &ProxyInstructions{
 		Upstreams: []*Upstream{
-			s.newUpstream("http://google.com", &Rate{1, time.Second}, &Rate{1, time.Hour}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}, &Rate{1, time.Duration(10) * time.Hour}),
+			s.newUpstream("http://google.com", &Rate{Increment: 1, Value: 1, Period: time.Second}, &Rate{Increment: 1, Value: 1, Period: time.Hour}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 12, Value: 10, Period: time.Minute}, &Rate{Increment: 1, Value: 1, Period: time.Duration(10) * time.Hour}),
 		},
 	}
 
-	s.updateUpstreamStats(instructions.Upstreams[0], 1)
-	s.updateUpstreamStats(instructions.Upstreams[1], 12)
+	s.updateUpstreamStats(instructions.Upstreams[0])
+	s.updateUpstreamStats(instructions.Upstreams[1])
 
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
@@ -198,8 +198,8 @@ func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOutSlowestRate(c *C) {
 func (s *ThrottlerSuite) TestThrottlerBackendFails(c *C) {
 	instructions := &ProxyInstructions{
 		Upstreams: []*Upstream{
-			s.newUpstream("http://google.com", &Rate{1, time.Second}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}),
+			s.newUpstream("http://google.com", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 10, Value: 10, Period: time.Minute}),
 		},
 	}
 
@@ -238,7 +238,7 @@ func (s *ThrottlerSuite) TestTokensAndUpstreamsWithRates(c *C) {
 		},
 		Upstreams: []*Upstream{
 			s.newUpstream("http://google.com", &Rate{Value: 1, Period: time.Second}),
-			s.newUpstream("http://yahoo.com", &Rate{10, time.Minute}),
+			s.newUpstream("http://yahoo.com", &Rate{Increment: 1, Value: 10, Period: time.Minute}),
 		},
 	}
 
@@ -254,8 +254,8 @@ func (s *ThrottlerSuite) TestTokensAndUpstreamsWithRates(c *C) {
 func (s *ThrottlerSuite) TestTokensTokenIsOut(c *C) {
 	instructions := &ProxyInstructions{
 		Tokens: []*Token{
-			s.newToken("a", &Rate{Value: 1, Period: time.Second}),
-			s.newToken("b", &Rate{Value: 10, Period: time.Second}),
+			s.newToken("a", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newToken("b", &Rate{Increment: 1, Value: 10, Period: time.Second}),
 		},
 		Upstreams: []*Upstream{
 			s.newUpstream("http://google.com"),
@@ -263,7 +263,7 @@ func (s *ThrottlerSuite) TestTokensTokenIsOut(c *C) {
 		},
 	}
 
-	s.updateTokenStats(instructions.Tokens[0], 1)
+	s.updateTokenStats(instructions.Tokens[0])
 
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
@@ -277,8 +277,8 @@ func (s *ThrottlerSuite) TestTokensTokenIsOut(c *C) {
 func (s *ThrottlerSuite) TestTokensAllTokenAreOut(c *C) {
 	instructions := &ProxyInstructions{
 		Tokens: []*Token{
-			s.newToken("a", &Rate{Value: 1, Period: time.Second}, &Rate{Value: 2, Period: time.Minute}),
-			s.newToken("b", &Rate{Value: 10, Period: time.Second}, &Rate{Value: 1, Period: time.Hour}),
+			s.newToken("a", &Rate{Increment: 2, Value: 1, Period: time.Second}, &Rate{Increment: 2, Value: 2, Period: time.Minute}),
+			s.newToken("b", &Rate{Increment: 1, Value: 10, Period: time.Second}, &Rate{Increment: 1, Value: 1, Period: time.Hour}),
 		},
 		Upstreams: []*Upstream{
 			s.newUpstream("http://google.com"),
@@ -286,8 +286,8 @@ func (s *ThrottlerSuite) TestTokensAllTokenAreOut(c *C) {
 		},
 	}
 
-	s.updateTokenStats(instructions.Tokens[0], 2)
-	s.updateTokenStats(instructions.Tokens[1], 1)
+	s.updateTokenStats(instructions.Tokens[0])
+	s.updateTokenStats(instructions.Tokens[1])
 
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
@@ -299,8 +299,8 @@ func (s *ThrottlerSuite) TestTokensAllTokenAreOut(c *C) {
 func (s *ThrottlerSuite) TestTokensFailingBackend(c *C) {
 	instructions := &ProxyInstructions{
 		Tokens: []*Token{
-			s.newToken("a", &Rate{Value: 1, Period: time.Second}),
-			s.newToken("b", &Rate{Value: 10, Period: time.Second}),
+			s.newToken("a", &Rate{Increment: 1, Value: 1, Period: time.Second}),
+			s.newToken("b", &Rate{Increment: 1, Value: 10, Period: time.Second}),
 		},
 		Upstreams: []*Upstream{
 			s.newUpstream("http://google.com"),

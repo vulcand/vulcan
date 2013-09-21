@@ -1,17 +1,15 @@
 package main
 
 import (
+	"github.com/golang/glog"
 	"github.com/mailgun/vulcan"
-	"log"
-	"math/rand"
 	"net/http"
 	"time"
 	"tux21b.org/v1/gocql"
 )
 
 func main() {
-	vulcan.LogMessage("Vulcan starting")
-	rand.Seed(time.Now().UTC().UnixNano())
+	glog.Info("Vulcan starting")
 	controlServers := []string{"http://localhost:5000/auth"}
 	throttlerConfig := vulcan.CassandraConfig{
 		Servers:     []string{"localhost"},
@@ -22,12 +20,12 @@ func main() {
 		throttlerConfig,
 		&vulcan.RealTime{})
 	if err != nil {
-		log.Fatalf("Failed to init proxy, error: %s", err)
+		glog.Fatalf("Failed to init proxy, error:", err)
 	}
 
 	loadBalancer := vulcan.NewRandomLoadBalancer()
 	if err != nil {
-		log.Fatalf("Failed to init proxy, error: %s", err)
+		glog.Fatalf("Failed to init proxy, error:", err)
 	}
 
 	proxySettings := &vulcan.ProxySettings{
@@ -45,8 +43,8 @@ func main() {
 		MaxHeaderBytes: 1 << 20,
 	}
 	if err != nil {
-		log.Fatalf("Failed to init proxy, error: %s", err)
+		glog.Fatalf("Failed to init proxy, error:", err)
 	}
-	vulcan.LogMessage("Vulcan started: %q", handler)
-	log.Fatal(s.ListenAndServe())
+	glog.Info("Vulcan started:", handler)
+	glog.Fatal(s.ListenAndServe())
 }

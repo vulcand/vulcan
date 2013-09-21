@@ -8,18 +8,24 @@ import (
 // Rates stores the information on how many hits per
 // period of time any endpoint can accept
 type Rate struct {
-	Value  int
-	Period time.Duration
+	// The counter would be incremeted to this value,
+	// this can be used to count bytes for example
+	Increment int64
+	Value     int64
+	Period    time.Duration
 }
 
-func NewRate(value int, period time.Duration) (*Rate, error) {
+func NewRate(increment int64, value int64, period time.Duration) (*Rate, error) {
+	if increment <= 0 {
+		return nil, fmt.Errorf("increment should be > 0")
+	}
 	if value <= 0 {
 		return nil, fmt.Errorf("Value should be > 0")
 	}
 	if period < time.Second || period > 24*time.Hour {
 		return nil, fmt.Errorf("Period should be within [1 second, 24 hours]")
 	}
-	return &Rate{Value: value, Period: period}, nil
+	return &Rate{Increment: increment, Value: value, Period: period}, nil
 }
 
 func (r *Rate) String() string {
@@ -45,6 +51,6 @@ func (r *Rate) nextBucket(t time.Time) time.Time {
 }
 
 // Returns the equivalent of the rate period in seconds
-func (r *Rate) periodSeconds() int {
-	return r.Value * int(r.Period/time.Second)
+func (r *Rate) periodSeconds() int64 {
+	return int64(time.Duration(r.Value) * time.Duration(r.Period) / time.Second)
 }

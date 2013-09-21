@@ -12,6 +12,6 @@ all:
 clean:
 	find -name flymake_* -delete
 run: all
-	GOMAXPROCS=4 vulcan
+	GOMAXPROCS=4 vulcan -logtostderr=true
 sloccount:
 	 find . -name "*.go" -print0 | xargs -0 wc -l

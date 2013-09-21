@@ -202,10 +202,10 @@ func (s *ProxySuite) TestUpstreamThrottled(c *C) {
 	defer upstream.Close()
 
 	// Upstream is out of capacity, we should be told to be throttled
-	s.backend.updateStats(upstream.URL, &Rate{10, time.Minute}, 10)
+	s.backend.updateStats(upstream.URL, &Rate{Increment: 10, Value: 10, Period: time.Minute})
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "rates": [{"value": 10, "period": "minute"}]}]}`, upstream.URL)))
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "rates": [{"increment": 10, "value": 10, "period": "minute"}]}]}`, upstream.URL)))
 	})
 	defer control.Close()
 
@@ -226,7 +226,7 @@ func (s *ProxySuite) TestUpstreamThrottlerDown(c *C) {
 	defer upstream.Close()
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "rates": [{"value": 10, "period": "minute"}]}]}`, upstream.URL)))
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "rates": [{"increment": 10, "value": 10, "period": "minute"}]}]}`, upstream.URL)))
 	})
 	defer control.Close()
 
@@ -286,7 +286,7 @@ func (s *ProxySuite) TestProxyControlServerUnreachableControlServer(c *C) {
 
 func (s *ProxySuite) TestUpstreamUpstreamIsDown(c *C) {
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"upstreams": [{"url": "http://localhost:9999", "rates": [{"value": 10, "period": "minute"}]}]}`))
+		w.Write([]byte(`{"upstreams": [{"url": "http://localhost:9999", "rates": [{"increment": 10, "value": 10, "period": "minute"}]}]}`))
 	})
 	defer control.Close()
 
