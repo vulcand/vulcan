@@ -30,7 +30,13 @@ func main() {
 		log.Fatalf("Failed to init proxy, error: %s", err)
 	}
 
-	handler, err := vulcan.NewReverseProxy(controlServers, backend, loadBalancer)
+	proxySettings := &vulcan.ProxySettings{
+		ControlServers:   controlServers,
+		ThrottlerBackend: backend,
+		LoadBalancer:     loadBalancer,
+	}
+
+	handler, err := vulcan.NewReverseProxy(proxySettings)
 	s := &http.Server{
 		Addr:           ":8080",
 		Handler:        handler,

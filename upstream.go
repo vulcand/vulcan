@@ -4,9 +4,16 @@ import (
 	"net/url"
 )
 
+// Upstream is HTTP server that will actually serve
+// the request that would be proxied
 type Upstream struct {
-	Url     *url.URL
-	Rates   []*Rate
+	// URL of the upstream, would be used for throttling
+	Url *url.URL
+	// Upstreams can be rate controlled, if at least one rate
+	// does not allow upstream it won't be chosen by the load balancer
+	Rates []*Rate
+	// Every upstream can supply the headers to add to the request
+	// in case if the upsteam has been selected by the load balancer
 	Headers map[string][]string
 }
 

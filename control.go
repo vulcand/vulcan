@@ -23,11 +23,13 @@ type ControlRequest struct {
 	Headers  map[string][]string
 }
 
-// Issues a request to an routing server. Three cases are available after the execution:
+// Issues a request to an routing server. Three outcomes are possible:
+//
 // * Request failed. In this case general error is returned.
-// * Request has been denied by auth server, in this case HttpError has been returned
+// * Request has been denied by auth server, in this case HttpError is returned
 // * Requst has been granted and auth server replied with instructions
-func getInstructions(controlServer *url.URL, req *http.Request) (*ProxyInstructions, *HttpError, error) {
+//
+func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.Request) (*ProxyInstructions, *HttpError, error) {
 	r, err := controlRequestFromHttp(req)
 	if err != nil {
 		if _, ok := err.(AuthError); ok {
@@ -44,10 +46,10 @@ func getInstructions(controlServer *url.URL, req *http.Request) (*ProxyInstructi
 			controlServer, err)
 	}
 
-	response, err := http.Get(query.String())
+	response, err := httpClient.Get(query.String())
 	if err != nil {
 		return nil, nil, fmt.Errorf(
-			"Failed to execute auth request to server %s, err %s",
+			"Failed to execute contreol request to server %s, error: '%s'",
 			controlServer, err)
 	}
 

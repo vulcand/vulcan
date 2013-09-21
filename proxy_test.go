@@ -74,7 +74,14 @@ func (s *ProxySuite) newProxy(controlServers []*httptest.Server, b Backend, l Lo
 	for i, controlServer := range controlServers {
 		controlUrls[i] = controlServer.URL
 	}
-	proxyHandler, err := NewReverseProxy(controlUrls, b, l)
+
+	proxySettings := &ProxySettings{
+		ControlServers:   controlUrls,
+		ThrottlerBackend: b,
+		LoadBalancer:     l,
+	}
+
+	proxyHandler, err := NewReverseProxy(proxySettings)
 	if err != nil {
 		panic(err)
 	}
@@ -102,9 +109,31 @@ func (s *ProxySuite) TestProxyAuthRequired(c *C) {
 	c.Assert(string(bodyBytes), Equals, http.StatusText(http.StatusProxyAuthRequired))
 }
 
+// This proxy requires authentication, so Authenticate header is required
+func (s *ProxySuite) TestProxyAccessDenied(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Access denied, sorry"))
+	})
+	defer upstream.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
+	})
+	defer control.Close()
+
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, s.loadBalancer)
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
+	c.Assert(string(bodyBytes), Equals, "Access denied, sorry")
+}
+
 // Just success, make sure we've successfully proxied the response
 func (s *ProxySuite) TestSuccess(c *C) {
 	var queryValues map[string][]string
+
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi, I'm upstream"))
 	})
@@ -112,7 +141,6 @@ func (s *ProxySuite) TestSuccess(c *C) {
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
 		queryValues = r.URL.Query()
-		LogMessage("RAW query: %s", r.URL.RawQuery)
 		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
 	})
 	defer control.Close()
@@ -137,7 +165,33 @@ func (s *ProxySuite) TestSuccess(c *C) {
 
 	headers := s.loadJson([]byte(queryValues["headers"][0]))
 	value := headers["X-Custom-Header"]
-	LogMessage("Value: %q", value)
+	c.Assert(fmt.Sprintf("%s", value), Equals, "[Bla]")
+}
+
+// Make sure upstream headers were added to the request
+func (s *ProxySuite) TestUpstreamHeaders(c *C) {
+	var customHeaders http.Header
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		customHeaders = r.Header
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "headers": {"X-Header-A": ["val"], "X-Header-B": ["val2"]}}]}`, upstream.URL)))
+	})
+	defer control.Close()
+
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, s.loadBalancer)
+	defer proxy.Close()
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+
+	// make sure the headers are set
+	c.Assert(customHeaders["X-Header-A"][0], Equals, "val")
+	c.Assert(customHeaders["X-Header-B"][0], Equals, "val2")
 }
 
 // Make sure we've returned response with valid retry-seconds
@@ -181,4 +235,137 @@ func (s *ProxySuite) TestUpstreamThrottlerDown(c *C) {
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream!")
+}
+
+func (s *ProxySuite) TestProxyControlServerWrongUrl(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Access denied, sorry"))
+	})
+	defer upstream.Close()
+
+	proxySettings := &ProxySettings{
+		ControlServers:   []string{"whoa"},
+		ThrottlerBackend: s.backend,
+		LoadBalancer:     s.loadBalancer,
+	}
+	proxyHandler, err := NewReverseProxy(proxySettings)
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	proxy := httptest.NewServer(proxyHandler)
+	defer proxy.Close()
+
+	response, _ := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusInternalServerError)
+}
+
+func (s *ProxySuite) TestProxyControlServerUnreachableControlServer(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Access denied, sorry"))
+	})
+	defer upstream.Close()
+
+	proxySettings := &ProxySettings{
+		ControlServers:   []string{"http://localhost:9999"},
+		ThrottlerBackend: s.backend,
+		LoadBalancer:     s.loadBalancer,
+	}
+
+	proxyHandler, err := NewReverseProxy(proxySettings)
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	proxy := httptest.NewServer(proxyHandler)
+	defer proxy.Close()
+
+	response, _ := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusInternalServerError)
+}
+
+func (s *ProxySuite) TestUpstreamUpstreamIsDown(c *C) {
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"upstreams": [{"url": "http://localhost:9999", "rates": [{"value": 10, "period": "minute"}]}]}`))
+	})
+	defer control.Close()
+
+	proxySettings := &ProxySettings{
+		ControlServers:   []string{control.URL},
+		ThrottlerBackend: s.backend,
+		LoadBalancer:     s.loadBalancer,
+	}
+	proxyHandler, err := NewReverseProxy(proxySettings)
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	proxy := httptest.NewServer(proxyHandler)
+	defer proxy.Close()
+
+	response, _ := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
+}
+
+// Make sure proxy gives up when control server is too slow
+func (s *ProxySuite) TestControlServerTimeout(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second * time.Duration(100))
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
+	})
+	// Do not call Close as it will hang for 100 seconds
+	defer control.CloseClientConnections()
+
+	proxySettings := &ProxySettings{
+		ControlServers:   []string{control.URL},
+		ThrottlerBackend: s.backend,
+		LoadBalancer:     s.loadBalancer,
+		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
+		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
+	}
+	proxyHandler, err := NewReverseProxy(proxySettings)
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	proxy := httptest.NewServer(proxyHandler)
+	defer proxy.Close()
+
+	response, _ := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusInternalServerError)
+}
+
+// The same story with upstream, if upstream is too slow we should give up
+func (s *ProxySuite) TestUpstreamServerTimeout(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second * time.Duration(100))
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	// Do not call Close as it will hang for 100 seconds
+	defer upstream.CloseClientConnections()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
+	})
+	defer control.Close()
+
+	proxySettings := &ProxySettings{
+		ControlServers:   []string{control.URL},
+		ThrottlerBackend: s.backend,
+		LoadBalancer:     s.loadBalancer,
+		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
+		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
+	}
+	proxyHandler, err := NewReverseProxy(proxySettings)
+	if err != nil {
+		c.Assert(err, IsNil)
+	}
+	proxy := httptest.NewServer(proxyHandler)
+	defer proxy.Close()
+
+	response, _ := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
 }
