@@ -62,7 +62,7 @@ func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.
 			controlServer, err)
 	}
 
-	glog.Info("ControlServer replies:", responseBody)
+	glog.Infof("ControlServer replies: \n-->%s<--\n", responseBody)
 
 	// Control server denied the request, stream this request
 	if response.StatusCode >= 300 || response.StatusCode < 200 {

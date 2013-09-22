@@ -28,8 +28,10 @@ func NewRate(increment int64, value int64, period time.Duration) (*Rate, error) 
 	return &Rate{Increment: increment, Value: value, Period: period}, nil
 }
 
-func (r *Rate) String() string {
-	return (time.Duration(r.Value) * r.Period).String()
+// Defines the rate id as rate frequency, that means that rates
+// with the same frquencies have the same ids
+func (r *Rate) Id() string {
+	return fmt.Sprintf("%dp%s", r.Value, r.Period.String())
 }
 
 // Calculates when this rate can be hit the next time from

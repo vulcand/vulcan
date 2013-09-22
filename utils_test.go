@@ -105,17 +105,17 @@ func (s *MainSuite) TestGetHit(c *C) {
 		{
 			Key:      "key1",
 			Rate:     &Rate{Value: 1, Period: time.Second},
-			Expected: "key1_1s_%d",
+			Expected: "key1_1p1s_%d",
 		},
 		{
 			Key:      "key2",
 			Rate:     &Rate{Value: 10, Period: time.Minute},
-			Expected: "key2_10m0s_%d",
+			Expected: "key2_10p1m0s_%d",
 		},
 		{
 			Key:      "key1",
-			Rate:     &Rate{Value: 1, Period: time.Hour * 24},
-			Expected: "key1_24h0m0s_%d",
+			Rate:     &Rate{Value: 2, Period: time.Hour},
+			Expected: "key1_2p1h0m0s_%d",
 		},
 	}
 	for _, u := range hits {

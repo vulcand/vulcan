@@ -77,7 +77,7 @@ func (s *MainSuite) TestNewRateFail(c *C) {
 	}
 }
 
-func (s *MainSuite) TestRateToString(c *C) {
+func (s *MainSuite) TestRateId(c *C) {
 	rates := []struct {
 		Rate     Rate
 		Expected string
@@ -88,7 +88,7 @@ func (s *MainSuite) TestRateToString(c *C) {
 				Value:     1,
 				Period:    time.Second,
 			},
-			Expected: "1s",
+			Expected: "1p1s",
 		},
 		{
 			Rate: Rate{
@@ -96,12 +96,12 @@ func (s *MainSuite) TestRateToString(c *C) {
 				Value:     2,
 				Period:    time.Hour,
 			},
-			Expected: "2h0m0s",
+			Expected: "2p1h0m0s",
 		},
 	}
 
 	for _, u := range rates {
-		c.Assert(u.Rate.String(), Equals, u.Expected)
+		c.Assert(u.Rate.Id(), Equals, u.Expected)
 	}
 }
 

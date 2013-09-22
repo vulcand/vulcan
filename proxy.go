@@ -103,7 +103,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	glog.Info("Serving Request", req.Method, req.RequestURI)
+	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
 
 	// Ask control server for instructions
 	instructions, httpError, err := getInstructions(p.httpClient, p.getServer(), req)

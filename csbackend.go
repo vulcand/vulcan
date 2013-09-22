@@ -44,13 +44,15 @@ func NewCassandraBackend(config CassandraConfig, timeProvider TimeProvider) (*Ca
 func (b *CassandraBackend) getStats(key string, rate *Rate) (int64, error) {
 	var counter int64
 
+	glog.Infof("Get stats hit: %s", getHit(b.timeProvider.utcNow(), key, rate))
+
 	query := b.session.Query(
 		"SELECT value from hits WHERE hit = ? LIMIT 1",
 		getHit(b.timeProvider.utcNow(), key, rate))
 
 	if err := query.Scan(&counter); err != nil {
 		if err == gocql.ErrNotFound {
-			glog.Info("Entry %s not found, it's ok", key)
+			glog.Infof("Entry %s not found, it's ok", key)
 			return 0, nil
 		}
 		glog.Error("Error when executing query, err:", err)

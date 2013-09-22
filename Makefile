@@ -14,6 +14,6 @@ clean:
 run: all
 	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=memory -lb=random
 runcs: all
-	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=cassandra -lb=random -csnode=localhost -cskeyspace=vulcan_dev
+	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000/auth -b=cassandra -lb=random -csnode=localhost -cskeyspace=vulcan_dev
 sloccount:
 	 find . -name "*.go" -print0 | xargs -0 wc -l

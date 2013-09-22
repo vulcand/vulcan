@@ -92,7 +92,7 @@ func parseUrl(inUrl string) (*url.URL, error) {
 
 func getHit(now time.Time, key string, rate *Rate) string {
 	return fmt.Sprintf(
-		"%s_%s_%d", key, rate.String(), rate.currentBucket(now).Unix())
+		"%s_%s_%d", key, rate.Id(), rate.currentBucket(now).Unix())
 }
 
 // This is the interface we use to mock time in tests
