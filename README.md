@@ -138,13 +138,14 @@ CREATE TABLE hits (
 Usage
 -------
 ```bash
-GOMAXPROCS=4 vulcan -stderrthreshold=INFO \      # log info
-                    -logtostderr=true \          # log to stderror
-                    -c=http://localhost:5000 \   # control server urls
-                    -b=cassandra \               # use cassandra for throttling
-                    -lb=random \                 # use random load balancer
-                    -csnode=localhost  \         # cassandra node (can be multiple)
-                    -cskeyspace=vulcan_dev       # cassandra keyspace
+vulcan -stderrthreshold=INFO \      # log info, from glog
+       -logtostderr=true \          # log to stderror
+       -c=http://localhost:5000 \   # control server url#1
+       -c=http://localhost:5001 \   # control server url#2, for redundancy
+       -b=cassandra \               # use cassandra for throttling
+       -lb=random \                 # use random load balancer
+       -csnode=localhost  \         # cassandra node, can be multiple
+       -cskeyspace=vulcan_dev       # cassandra keyspace
 ```
 
 Development
