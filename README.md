@@ -122,10 +122,29 @@ if __name__ == '__main__':
 Installation
 ------------
 
-Download source files and install the egg:
-```
+*Install go*
+
+(http://golang.org/doc/install)
+
+*Get vulcan and deps*
+ 
+```bash 
 go get github.com/mailgun/vulcan
+
+go get -v github.com/axw/gocov # go test coverage
+go install github.com/axw/gocov/gocov # go test coverage 
+go get -v github.com/golang/glog # go logging system
+go get -v launchpad.net/gocheck # go advanced testing framework
+go get -v github.com/mailgun/gocql # go cassandra client
 ```
+
+*Run*
+ 
+```bash 
+make run
+```
+
+*Cassandra*
 
 If you want to use cassandra for throttling (which is a good idea), you'll need:
 
@@ -156,29 +175,28 @@ Development
 -----
 To run server in devmode
 
-```
+```bash
 make run
 ```
 
 To run tests
 
-```
+```bash
 make test
 ```
 
 To run tests with coverage:
 
-```
+```bash
 make coverage
 ```
 
 To cleanup temp folders
 
-```
+```bash
 make clean
 ```
 
 Status
 ------
-
-Undergoing development.
+Initial development done, loadtesting at the moment and fixing quirks. 
