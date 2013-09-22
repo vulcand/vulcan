@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
+
 Vulcan
 ------
 
