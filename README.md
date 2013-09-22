@@ -122,11 +122,11 @@ if __name__ == '__main__':
 Installation
 ------------
 
-*Install go*
+__Install go__
 
 (http://golang.org/doc/install)
 
-*Get vulcan and deps*
+__Get vulcan and install deps__
  
 ```bash 
 go get github.com/mailgun/vulcan
@@ -138,13 +138,13 @@ go get -v launchpad.net/gocheck # go advanced testing framework
 go get -v github.com/mailgun/gocql # go cassandra client
 ```
 
-*Run*
+__Run in devmode__
  
 ```bash 
 make run
 ```
 
-*Cassandra*
+__Cassandra__
 
 If you want to use cassandra for throttling (which is a good idea), you'll need:
 
@@ -172,8 +172,8 @@ vulcan -stderrthreshold=INFO \      # log info, from glog
 ```
 
 Development
------
-To run server in devmode
+-----------
+To run server in development mode:
 
 ```bash
 make run
