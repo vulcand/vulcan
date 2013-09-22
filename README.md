@@ -6,15 +6,17 @@ HTTP reverse proxy with authorization and rate limiting capabilities.
 Rationale
 ---------
 
-* We want to make routing and throttling to be fun and programmatic task.
-* We also want proxy to take the pain out of the services failover, so services behind it can be all dumb and relaxed letting
+* Request routing and throttling should be dynamic and programmatic task.
+* Proxy to take the pain out of the services failover, authentication, so services behind it can be all dumb and relaxed letting
 proxy to do the heavyliting.
 
-General request workflow
-------------------------
+Request flow
+------------
 
 * Request gets to the proxy
 * Request parameters are extracted from the request and sent to control server as GET request. 
+* Proxy analyzes parameters, throttles the request
+* If the request is good to go, forwarded to the upstream selected by the load balancer
 
 Authorization
 -------------
@@ -27,7 +29,7 @@ Parameters extracted:
 * method (POST/GET/DELETE/PUT)
 * request length 
 * ip
-* headers
+* headers (JSON encoded dictionary)
 
 Control server can deny the request, by responding with non 200 response code, in this case the response will be proxied to the client.
 Otherwise, control server replies with JSON understood by the proxy, see Routing section for details
@@ -35,7 +37,7 @@ Otherwise, control server replies with JSON understood by the proxy, see Routing
 Routing & Throttling
 --------------------
 
-If the request is good to go, control server replies with something like this:
+If the request is good to go, control server replies with json in the following format:
 
 ```javascript
 {
