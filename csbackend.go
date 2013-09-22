@@ -5,6 +5,7 @@ Based on cassandra counters.
 package vulcan
 
 import (
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/mailgun/gocql"
 	"time"
@@ -14,7 +15,6 @@ type CassandraConfig struct {
 	Keyspace    string
 	Consistency gocql.Consistency
 	Servers     []string
-	BucketSize  int
 }
 
 type CassandraBackend struct {
@@ -24,6 +24,13 @@ type CassandraBackend struct {
 }
 
 func NewCassandraBackend(config CassandraConfig, timeProvider TimeProvider) (*CassandraBackend, error) {
+	if len(config.Servers) == 0 {
+		return nil, fmt.Errorf("At least one node is required")
+	}
+	if len(config.Keyspace) == 0 {
+		return nil, fmt.Errorf("Keyspace is missing")
+	}
+
 	cluster := gocql.NewCluster(config.Servers...)
 	cluster.Consistency = config.Consistency
 	cluster.Keyspace = config.Keyspace

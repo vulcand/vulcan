@@ -1,43 +1,30 @@
 package main
 
 import (
+	"fmt"
 	"github.com/golang/glog"
-	"github.com/mailgun/gocql"
-	"github.com/mailgun/vulcan"
 	"net/http"
 	"time"
 )
 
 func main() {
-	glog.Info("Vulcan starting")
-	controlServers := []string{"http://localhost:5000/auth"}
-	cassandraConfig := vulcan.CassandraConfig{
-		Servers:     []string{"localhost"},
-		Keyspace:    "vulcan_dev",
-		Consistency: gocql.One,
-	}
-	backend, err := vulcan.NewCassandraBackend(
-		cassandraConfig,
-		&vulcan.RealTime{})
+	options, err := parseOptions()
 	if err != nil {
-		glog.Fatalf("Failed to init proxy, error:", err)
+		glog.Fatal("Wrong arguments: ", err)
+		return
 	}
 
-	loadBalancer := vulcan.NewRandomLoadBalancer()
+	glog.Infof("Vulcan is starting with arguments: %#v", options)
+	proxy, err := initProxy(options)
 	if err != nil {
-		glog.Fatalf("Failed to init proxy, error:", err)
+		glog.Fatal("Failed to init proxy: ", err)
+		return
 	}
+	addr := fmt.Sprintf("%s:%d", options.host, options.httpPort)
 
-	proxySettings := &vulcan.ProxySettings{
-		ControlServers:   controlServers,
-		ThrottlerBackend: backend,
-		LoadBalancer:     loadBalancer,
-	}
-
-	handler, err := vulcan.NewReverseProxy(proxySettings)
 	s := &http.Server{
-		Addr:           ":8080",
-		Handler:        handler,
+		Addr:           addr,
+		Handler:        proxy,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
@@ -45,6 +32,5 @@ func main() {
 	if err != nil {
 		glog.Fatalf("Failed to init proxy, error:", err)
 	}
-	glog.Info("Vulcan started:", handler)
 	glog.Fatal(s.ListenAndServe())
 }

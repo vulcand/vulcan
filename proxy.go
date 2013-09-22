@@ -64,8 +64,8 @@ type ReverseProxy struct {
 // Standard dial and read timeouts, can be overriden when supplying
 // proxy settings
 const (
-	DefaultHttpReadTimeout = time.Duration(30) * time.Second
-	DefaultHttpDialTimeout = time.Duration(30) * time.Second
+	DefaultHttpReadTimeout = time.Duration(10) * time.Second
+	DefaultHttpDialTimeout = time.Duration(10) * time.Second
 )
 
 // Creates reverse proxy that acts like http server
