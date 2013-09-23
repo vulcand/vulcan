@@ -10,6 +10,7 @@ install:
  - go get -v github.com/axw/gocov
  - go install github.com/axw/gocov/gocov
  - go get -v github.com/golang/glog
+ - go get -v launchpad.net/gocheck
  - go get -v github.com/mailgun/gocql
 
 script:
