@@ -169,7 +169,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 }
 
 // Make sure upstream headers were added to the request
-func (s *ProxySuite) TestUpstreamHeaders(c *C) {
+func (s *ProxySuite) TestUpstreamHeadersAdded(c *C) {
 	var customHeaders http.Header
 
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +192,45 @@ func (s *ProxySuite) TestUpstreamHeaders(c *C) {
 	// make sure the headers are set
 	c.Assert(customHeaders["X-Header-A"][0], Equals, "val")
 	c.Assert(customHeaders["X-Header-B"][0], Equals, "val2")
+}
+
+// Make sure hop headers were removed
+func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
+	var capturedHeaders http.Header
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
+	})
+	defer control.Close()
+
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, s.loadBalancer)
+	defer proxy.Close()
+
+	headers := make(http.Header)
+	headers.Add("Connection", "close")
+	headers.Add("Keep-Alive", "timeout=600")
+	headers.Add("Proxy-Authenticate", "Negotiate")
+	headers.Add("Proxy-Authorization", "Basic YW55IGNhcm5hbCBwbGVhcw==")
+	headers.Add("Authorization", "Basic YW55IGNhcm5hbCBwbGVhcw==")
+	headers.Add("Te", "deflate")
+	headers.Add("Trailer", "a")
+	headers.Add("Transfer-Encoding", "chunked")
+	headers.Add("Upgrade", "IRC/6.9")
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+
+	// make sure the headers are removed
+	for _, h := range hopHeaders {
+		c.Assert(capturedHeaders.Get(h), Equals, "")
+	}
 }
 
 // Make sure we've returned response with valid retry-seconds

@@ -68,6 +68,20 @@ const (
 	DefaultHttpDialTimeout = time.Duration(10) * time.Second
 )
 
+// Hop-by-hop headers. These are removed when sent to the backend.
+// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
+// Copied from reverseproxy.go, too bad
+var hopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te", // canonicalized version of "TE"
+	"Trailers",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
 // Creates reverse proxy that acts like http server
 func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	s, err := validateProxySettings(s)
@@ -215,7 +229,7 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, up
 
 func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
 	outReq := new(http.Request)
-	*outReq = *req // includes shallow copies of maps, but okay
+	*outReq = *req // includes shallow copies of maps, but we handle this below
 
 	outReq.URL.Scheme = upstream.Url.Scheme
 	outReq.URL.Host = upstream.Url.Host
@@ -227,10 +241,23 @@ func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
 	outReq.ProtoMinor = 1
 	outReq.Close = false
 
+	// We copy headers only if we alter the original request
+	// headers, otherwise we use the shallow copy
+	if upstream.Headers != nil || hasHeaders(hopHeaders, req.Header) {
+		outReq.Header = make(http.Header)
+		copyHeaders(outReq.Header, req.Header)
+	}
+
+	// Add upstream headers to the request
 	if upstream.Headers != nil {
 		glog.Info("Proxying Upstream headers:", upstream.Headers)
 		copyHeaders(outReq.Header, upstream.Headers)
 	}
+
+	// Remove hop-by-hop headers to the backend.  Especially
+	// important is "Connection" because we want a persistent
+	// connection, regardless of what the client sent to us.
+	removeHeaders(hopHeaders, outReq.Header)
 
 	return outReq
 }

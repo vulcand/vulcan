@@ -77,34 +77,6 @@ func (s *MainSuite) TestNewRateFail(c *C) {
 	}
 }
 
-func (s *MainSuite) TestRateId(c *C) {
-	rates := []struct {
-		Rate     Rate
-		Expected string
-	}{
-		{
-			Rate: Rate{
-				Increment: 1,
-				Value:     1,
-				Period:    time.Second,
-			},
-			Expected: "1p1s",
-		},
-		{
-			Rate: Rate{
-				Increment: 2,
-				Value:     2,
-				Period:    time.Hour,
-			},
-			Expected: "2p1h0m0s",
-		},
-	}
-
-	for _, u := range rates {
-		c.Assert(u.Rate.Id(), Equals, u.Expected)
-	}
-}
-
 func (s *MainSuite) TestPeriodSecondsAndDuration(c *C) {
 	rates := []struct {
 		Rate     Rate

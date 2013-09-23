@@ -3,6 +3,7 @@ package vulcan
 import (
 	"fmt"
 	. "launchpad.net/gocheck"
+	"net/http"
 	"net/url"
 	"time"
 )
@@ -105,17 +106,17 @@ func (s *MainSuite) TestGetHit(c *C) {
 		{
 			Key:      "key1",
 			Rate:     &Rate{Value: 1, Period: time.Second},
-			Expected: "key1_1p1s_%d",
+			Expected: "key1_1s_%d",
 		},
 		{
 			Key:      "key2",
 			Rate:     &Rate{Value: 10, Period: time.Minute},
-			Expected: "key2_10p1m0s_%d",
+			Expected: "key2_1m0s_%d",
 		},
 		{
 			Key:      "key1",
 			Rate:     &Rate{Value: 2, Period: time.Hour},
-			Expected: "key1_2p1h0m0s_%d",
+			Expected: "key1_1h0m0s_%d",
 		},
 	}
 	for _, u := range hits {
@@ -128,4 +129,39 @@ func (s *MainSuite) TestGetHit(c *C) {
 func (s *MainSuite) TestTimes(c *C) {
 	tm := &RealTime{}
 	c.Assert(tm.utcNow(), NotNil)
+}
+
+// Make sure copy headers is not shallow and copies all headers
+func (s *MainSuite) TestCopyHeaders(c *C) {
+	source, destination := make(http.Header), make(http.Header)
+	source.Add("a", "b")
+	source.Add("c", "d")
+
+	copyHeaders(destination, source)
+
+	c.Assert(destination.Get("a"), Equals, "b")
+	c.Assert(destination.Get("c"), Equals, "d")
+
+	// make sure that altering source does not affect the destination
+	source.Del("a")
+	c.Assert(source.Get("a"), Equals, "")
+	c.Assert(destination.Get("a"), Equals, "b")
+}
+
+func (s *MainSuite) TestHasHeaders(c *C) {
+	source := make(http.Header)
+	source.Add("a", "b")
+	source.Add("c", "d")
+	c.Assert(hasHeaders([]string{"a", "f"}, source), Equals, true)
+	c.Assert(hasHeaders([]string{"i", "j"}, source), Equals, false)
+}
+
+func (s *MainSuite) TestRemoveHeaders(c *C) {
+	source := make(http.Header)
+	source.Add("a", "b")
+	source.Add("a", "m")
+	source.Add("c", "d")
+	removeHeaders([]string{"a"}, source)
+	c.Assert(source.Get("a"), Equals, "")
+	c.Assert(source.Get("c"), Equals, "d")
 }

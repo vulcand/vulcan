@@ -75,6 +75,24 @@ func copyHeaders(dst, src http.Header) {
 	}
 }
 
+// Determines whether any of the header names is present
+// in the http headers
+func hasHeaders(names []string, headers http.Header) bool {
+	for _, h := range names {
+		if headers.Get(h) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// Removes the header with the given names from the headers map
+func removeHeaders(names []string, headers http.Header) {
+	for _, h := range names {
+		headers.Del(h)
+	}
+}
+
 // Standard parse url is very generous,
 // parseUrl wrapper makes it more strict
 // and demands scheme and host to be set
@@ -92,7 +110,7 @@ func parseUrl(inUrl string) (*url.URL, error) {
 
 func getHit(now time.Time, key string, rate *Rate) string {
 	return fmt.Sprintf(
-		"%s_%s_%d", key, rate.Id(), rate.currentBucket(now).Unix())
+		"%s_%s_%d", key, rate.Period.String(), rate.currentBucket(now).Unix())
 }
 
 // This is the interface we use to mock time in tests
