@@ -3,40 +3,38 @@
 Vulcan
 ------
 
-HTTP reverse proxy with authorization and rate limiting capabilities.
+HTTP reverse proxy that supports authorization, rate limiting, load balancing and failover.
 
 Rationale
 ---------
 
 * Request routing and throttling should be dynamic and programmatic task.
-* Proxy to take the pain out of the services failover, authentication, so services behind it can be all dumb and relaxed letting
-proxy to do the heavyliting.
+* Proxy should take the pain out of the services failover, authentication, letting services behind it to be simple.
 
 Request flow
 ------------
 
-* Request gets to the proxy
-* Request parameters are extracted from the request and sent to control server as GET request. 
-* Proxy analyzes parameters, throttles the request
-* If the request is good to go, forwarded to the upstream selected by the load balancer
-* If the upstream fails, vulcan can optionally replay the request to the next upstream,
-depending on the instructions.
+* Client request gets to the proxy.
+* Vulcan extracts request information and asks control server what to do with the request.
+* Vulcan denies or throttles and routes the request according to the instructions from the control server.
+* If the upstream fails, Culcan can optionally replay the request to the next upstream.
 
 Authorization
 -------------
 
-Parameters extracted:
+Vulcan sends the following request info to the control server:
 
-* authentication credentials i.e. username and password
+* HTTP auth username and password
 * URI
 * protocol (SMTP/HTTP)
 * method (POST/GET/DELETE/PUT)
-* request length 
+* request length
 * ip
 * headers (JSON encoded dictionary)
 
-Control server can deny the request, by responding with non 200 response code, in this case the response will be proxied to the client.
-Otherwise, control server replies with JSON understood by the proxy, see Routing section for details
+Control server can deny the request by responding with non 200 response code. 
+In this case the exact control server response will be proxied to the client.
+Otherwise, control server replies with JSON understood by the proxy. See Routing section for details.
 
 Routing & Throttling
 --------------------
@@ -74,13 +72,27 @@ If the request is good to go, control server replies with json in the following 
 * In this example all requests will be throttled by the same token 'hello', with maximum 10 hits per minute total.
 * The request can be routed to one of the two upstreams, the first upstream allows max 2 requests per minute, the second one allows 4 requests per minute.
 
+In case if all upstreams are busy or tokens rates are not allowing the request to proceed, Vulcan replies with json-encoded response:
+
+```javascript
+{
+        "retry-seconds": 20,
+        ...
+}
+
+```
+
+Vulcan tells client when the next request can succeed, so clients can embrace this data and reschedule the request in 20 seconds. Note that this
+is an estimate and does not guarantee that request will succeed, it guarantees that request would not succeed if executed before waiting given amount
+of seconds. It allows not to waste resources and keep trying.
 
 Failover
 --------
 
-* In case if control server fails, vulcan automatically retries the request on the next one
-* Vulcan can optionally replay the request to the next upstream, this option turned on by the failover flag in the
-control response:
+* In case if control server fails, vulcan automatically queries the next available server.
+* In case of upstream being slow or unresponsive, Vulcan can retry the request with the next upstream. 
+
+This option turned on by the failover flag in the control response:
 
 
 ```javascript
@@ -91,9 +103,16 @@ control response:
 
 ```
 
-* In this case Vulcan will replay request to the next server chosen by the load balancer. As such behavior may lead to the cascading failures,
-make sure you return limited amount of upstreams in the request.
+* In this case Vulcan will retry the request on the next upstream selected by the load balancer. 
 
+__Note__
+
+Failover allows fast deployments of the underlying applications, however it requires that the request would be idempotent, i.e. can be safely retried several times. Read more about the term here: http://stackoverflow.com/questions/1077412/what-is-an-idempotent-operation
+
+E.g. most of the GET requests are idempotent as they don't change the app state, however you should be more careful with POST requests,
+as they may do some damage if repeated.
+
+Failovers can also lead to the cascading failures. Imagine some bad request killing your service, in this case failover will kill all upstreams! That's why make sure you return limited amount of upstreams with the control response in case of failover to limit the potential damage.
 
 Control server example
 -------------------
