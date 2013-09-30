@@ -130,13 +130,13 @@ func (s *ProxySuite) TestProxyAuthRequired(c *C) {
 // Proxy denies request
 func (s *ProxySuite) TestProxyAccessDenied(c *C) {
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte("Access denied, sorry"))
+		w.Write([]byte("I am upstream!"))
 	})
 	defer upstream.Close()
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}]}`, upstream.URL)))
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Access denied, sorry"))
 	})
 	defer control.Close()
 
