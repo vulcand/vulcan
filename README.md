@@ -14,10 +14,10 @@ Rationale
 Request flow
 ------------
 
-* Client request gets to the proxy.
+* Client request arrives to the Vulcan.
 * Vulcan extracts request information and asks control server what to do with the request.
 * Vulcan denies or throttles and routes the request according to the instructions from the control server.
-* If the upstream fails, Culcan can optionally replay the request to the next upstream.
+* If the upstream fails, Vulcan can optionally forward the request to the next upstream.
 
 Authorization
 -------------
