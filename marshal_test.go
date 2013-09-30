@@ -6,13 +6,34 @@ import (
 	"time"
 )
 
-func (s *MainSuite) TestUnmarshalSuccess(c *C) {
+func (s *MainSuite) TestUnmarshalSuccessBig(c *C) {
 	objects := []struct {
 		Bytes    []byte
 		Expected ProxyInstructions
 	}{
 		{
 			Expected: ProxyInstructions{
+				Failover: true,
+				Upstreams: []*Upstream{
+					&Upstream{
+						Url: &url.URL{
+							Scheme: "http",
+							Host:   "localhost:5000",
+							Path:   "/upstream",
+						},
+						Rates: []*Rate{},
+					},
+				},
+			},
+			Bytes: []byte(`{
+    "failover": true,
+    "upstreams": [{
+            "url": "http://localhost:5000/upstream"
+        }]}`),
+		},
+		{
+			Expected: ProxyInstructions{
+				Failover: false,
 				Tokens: []*Token{
 					&Token{
 						Id: "Hello",
@@ -132,6 +153,9 @@ func (s *MainSuite) TestUnmarshalSuccess(c *C) {
 		c.Assert(err, IsNil)
 		//we will be checking individual elements here
 		//as if something fails would be impossible to debug
+
+		// Check failover
+		c.Assert(authResponse.Failover, Equals, u.Expected.Failover)
 
 		//Check tokens
 		c.Assert(len(authResponse.Tokens), Equals, len(u.Expected.Tokens))

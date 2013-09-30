@@ -39,3 +39,7 @@ func (upstream *Upstream) Id() string {
 	}
 	return url.String()
 }
+
+func (upstream *Upstream) String() string {
+	return upstream.Url.String()
+}

@@ -19,6 +19,8 @@ Request flow
 * Request parameters are extracted from the request and sent to control server as GET request. 
 * Proxy analyzes parameters, throttles the request
 * If the request is good to go, forwarded to the upstream selected by the load balancer
+* If the upstream fails, vulcan can optionally replay the request to the next upstream,
+depending on the instructions.
 
 Authorization
 -------------
@@ -71,6 +73,27 @@ If the request is good to go, control server replies with json in the following 
 
 * In this example all requests will be throttled by the same token 'hello', with maximum 10 hits per minute total.
 * The request can be routed to one of the two upstreams, the first upstream allows max 2 requests per minute, the second one allows 4 requests per minute.
+
+
+Failover
+--------
+
+* In case if control server fails, vulcan automatically retries the request on the next one
+* Vulcan can optionally replay the request to the next upstream, this option turned on by the failover flag in the
+control response:
+
+
+```javascript
+{
+        "failover": true,
+        ...
+}
+
+```
+
+* In this case Vulcan will replay request to the next server chosen by the load balancer. As such behavior may lead to the cascading failures,
+make sure you return limited amount of upstreams in the request.
+
 
 Control server example
 -------------------

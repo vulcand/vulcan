@@ -24,7 +24,7 @@ func NewHttpError(statusCode int) *HttpError {
 		Body:       []byte(http.StatusText(statusCode))}
 }
 
-func TooManyRequestsError(retrySeconds int) (*HttpError, error) {
+func TooManyRequestsError(retrySeconds int) *HttpError {
 
 	encodedError, err := json.Marshal(map[string]interface{}{
 		"error":         "Too Many Requests",
@@ -32,13 +32,15 @@ func TooManyRequestsError(retrySeconds int) (*HttpError, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		// something terrible just happened
+		// if json encoder fails, I don't know what to do :-/
+		panic(err)
 	}
 
 	return &HttpError{
 		StatusCode: 429, //RFC 6585
 		Status:     "Too Many Requests",
-		Body:       encodedError}, nil
+		Body:       encodedError}
 }
 
 // We somehow failed to authenticate the request

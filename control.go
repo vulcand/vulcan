@@ -30,38 +30,50 @@ type ControlRequest struct {
 // * Request has been denied by auth server, in this case HttpError is returned
 // * Requst has been granted and auth server replied with instructions
 //
-func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.Request) (*ProxyInstructions, *HttpError, error) {
-	r, err := controlRequestFromHttp(req)
+func getInstructions(httpClient *http.Client, controlServers []*url.URL, req *http.Request) (*ProxyInstructions, error) {
+	controlRequest, err := controlRequestFromHttp(req)
 	if err != nil {
 		if _, ok := err.(AuthError); ok {
-			glog.Error("Failed to create control request:", err)
-			return nil, NewHttpError(http.StatusProxyAuthRequired), nil
+			glog.Errorf("Failed to create control request: %s", err)
+			return nil, NewHttpError(http.StatusProxyAuthRequired)
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
-	query, err := r.controlQuery(controlServer)
+	for _, controlServer := range controlServers {
+		instructions, err := queryServer(httpClient, controlServer, controlRequest)
+		if err != nil {
+			glog.Errorf("Control server %s failed: %s, will try another", err)
+		} else {
+			return instructions, err
+		}
+	}
+	return nil, fmt.Errorf("All control servers failed.")
+}
+
+func queryServer(httpClient *http.Client, controlServer *url.URL, controlRequest *ControlRequest) (*ProxyInstructions, error) {
+
+	query, err := controlRequest.controlQuery(controlServer)
 	if err != nil {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Failed to create query for controlServer %s, err %s",
 			controlServer, err)
 	}
 
 	response, err := httpClient.Get(query.String())
 	if err != nil {
-		return nil, nil, fmt.Errorf(
-			"Failed to execute contreol request to server %s, error: '%s'",
+		return nil, fmt.Errorf(
+			"Control request failed. Server %s, error: '%s'",
 			controlServer, err)
 	}
 
 	defer response.Body.Close()
 	responseBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Failed to read response from auth server %s error: %s",
 			controlServer, err)
 	}
-
 	glog.Infof("ControlServer replies: \n-->%s<--\n", responseBody)
 
 	// Control server denied the request, stream this request
@@ -69,17 +81,17 @@ func getInstructions(httpClient *http.Client, controlServer *url.URL, req *http.
 		return nil, &HttpError{
 			StatusCode: response.StatusCode,
 			Status:     response.Status,
-			Body:       responseBody}, nil
+			Body:       responseBody}
 	}
 
 	instructions, err := proxyInstructionsFromJson(responseBody)
 	if err != nil {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"Failed to decode auth response %s error: %s",
 			responseBody, err)
 	}
 
-	return instructions, nil, nil
+	return instructions, nil
 }
 
 func controlRequestFromHttp(r *http.Request) (*ControlRequest, error) {

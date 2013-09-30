@@ -14,6 +14,7 @@ import (
 )
 
 type ProxyInstructionsObj struct {
+	Failover  bool
 	Tokens    []TokenObj
 	Upstreams []UpstreamObj
 	Headers   map[string][]string
@@ -55,7 +56,7 @@ func proxyInstructionsFromJson(bytes []byte) (*ProxyInstructions, error) {
 		return nil, err
 	}
 
-	return NewProxyInstructions(tokens, upstreams, r.Headers)
+	return NewProxyInstructions(r.Failover, tokens, upstreams, r.Headers)
 }
 
 func upstreamsFromJsonList(inUpstreams []UpstreamObj) ([]*Upstream, error) {
