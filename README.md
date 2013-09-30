@@ -24,13 +24,15 @@ Authorization
 
 Vulcan sends the following request info to the control server:
 
-* HTTP auth username and password
-* URI
-* protocol (SMTP/HTTP)
-* method (POST/GET/DELETE/PUT)
-* request length
-* ip
-* headers (JSON encoded dictionary)
+|Name    |Descripton                |
+|--------|--------------------------|
+|username| HTTP auth username       |
+|password| HTTP auth password       |
+|protocol| protocol (SMTP/HTTP)     |
+|url     | original request url     |
+|headers | (JSON encoded dictionary)|
+|length  | request size in bytes    |
+
 
 Control server can deny the request by responding with non 200 response code. 
 In this case the exact control server response will be proxied to the client.
