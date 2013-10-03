@@ -211,7 +211,14 @@ func (*Buffer) Close() error {
 func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, instructions *ProxyInstructions, upstreams []*Upstream) (*Upstream, error) {
 
 	if !instructions.Failover {
-		return upstreams[0], p.proxyToUpstream(w, req, instructions, upstreams[0])
+		upstream := upstreams[0]
+		glog.Infof("Without failover, proxy to upstream: %s", upstream)
+		err := p.proxyToUpstream(w, req, instructions, upstream)
+		if err != nil {
+			glog.Errorf("Upstream error: %s", err)
+			return nil, NewHttpError(http.StatusBadGateway)
+		}
+		return upstream, nil
 	}
 
 	// We are allowed to fallback in case of upstream failure,
@@ -230,7 +237,7 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, in
 		if err != nil {
 			return nil, err
 		}
-
+		glog.Infof("With failover, proxy to upstream: %s", upstream)
 		err = p.proxyToUpstream(w, req, instructions, upstream)
 		if err != nil {
 			glog.Errorf("Upstream %s error, falling back to another", upstream)
@@ -250,8 +257,7 @@ func (p *ReverseProxy) proxyToUpstream(w http.ResponseWriter, req *http.Request,
 	// Forward the reuest and mirror the response
 	res, err := p.httpTransport.RoundTrip(outReq)
 	if err != nil {
-		glog.Errorf("Upstream %s error: %s", upstream, err)
-		return NewHttpError(http.StatusBadGateway)
+		return err
 	}
 	defer res.Body.Close()
 	copyHeaders(w.Header(), res.Header)
