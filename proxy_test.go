@@ -331,6 +331,32 @@ func (s *ProxySuite) TestUpstreamHeadersAdded(c *C) {
 	c.Assert(customHeaders["X-Header-B"][0], Equals, "val2")
 }
 
+// Make sure instructions headers were added to the request
+func (s *ProxySuite) TestInstructionsHeadersAdded(c *C) {
+	var customHeaders http.Header
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		customHeaders = r.Header
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s"}], "headers": {"X-Header-A": ["val"], "X-Header-B": ["val2"]}}`, upstream.URL)))
+	})
+	defer control.Close()
+
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, s.loadBalancer)
+	defer proxy.Close()
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+
+	// make sure the headers are set
+	c.Assert(customHeaders["X-Header-A"][0], Equals, "val")
+	c.Assert(customHeaders["X-Header-B"][0], Equals, "val2")
+}
+
 // Make sure hop headers were removed
 func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
 	var capturedHeaders http.Header

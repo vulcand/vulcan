@@ -19,6 +19,8 @@ func (o *ListOptions) Set(value string) error {
 }
 
 type ServiceOptions struct {
+	// Pid path
+	pidPath string
 	// Control servers to bind to
 	controlServers ListOptions
 	backend        string
@@ -41,6 +43,8 @@ func parseOptions() (*ServiceOptions, error) {
 
 	flag.StringVar(&options.host, "h", "localhost", "Host to bind to")
 	flag.IntVar(&options.httpPort, "p", 8080, "HTTP port to bind to")
+
+	flag.StringVar(&options.pidPath, "pid", "", "pid file path")
 
 	flag.Var(&options.cassandraServers, "csnode", "Cassandra nodes to connect to")
 	flag.StringVar(&options.cassandraKeyspace, "cskeyspace", "", "Cassandra keyspace")

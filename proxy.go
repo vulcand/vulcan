@@ -146,7 +146,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Proxy request to the selected upstream
-	upstream, err := p.proxyRequest(instructions.Failover, w, req, upstreams)
+	upstream, err := p.proxyRequest(w, req, instructions, upstreams)
 	if err != nil {
 		glog.Error("Failed to proxy to the upstreams:", err)
 		p.replyError(err, w, req)
@@ -208,10 +208,10 @@ func (*Buffer) Close() error {
 	return nil
 }
 
-func (p *ReverseProxy) proxyRequest(failover bool, w http.ResponseWriter, req *http.Request, upstreams []*Upstream) (*Upstream, error) {
+func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, instructions *ProxyInstructions, upstreams []*Upstream) (*Upstream, error) {
 
-	if !failover {
-		return upstreams[0], p.proxyToUpstream(w, req, upstreams[0])
+	if !instructions.Failover {
+		return upstreams[0], p.proxyToUpstream(w, req, instructions, upstreams[0])
 	}
 
 	// We are allowed to fallback in case of upstream failure,
@@ -231,7 +231,7 @@ func (p *ReverseProxy) proxyRequest(failover bool, w http.ResponseWriter, req *h
 			return nil, err
 		}
 
-		err = p.proxyToUpstream(w, req, upstream)
+		err = p.proxyToUpstream(w, req, instructions, upstream)
 		if err != nil {
 			glog.Errorf("Upstream %s error, falling back to another", upstream)
 		} else {
@@ -243,9 +243,9 @@ func (p *ReverseProxy) proxyRequest(failover bool, w http.ResponseWriter, req *h
 	return nil, NewHttpError(http.StatusBadGateway)
 }
 
-func (p *ReverseProxy) proxyToUpstream(w http.ResponseWriter, req *http.Request, upstream *Upstream) error {
+func (p *ReverseProxy) proxyToUpstream(w http.ResponseWriter, req *http.Request, instructions *ProxyInstructions, upstream *Upstream) error {
 	// Rewrites the request: adds headers, changes urls etc.
-	outReq := rewriteRequest(upstream, req)
+	outReq := rewriteRequest(req, instructions, upstream)
 
 	// Forward the reuest and mirror the response
 	res, err := p.httpTransport.RoundTrip(outReq)
@@ -261,7 +261,7 @@ func (p *ReverseProxy) proxyToUpstream(w http.ResponseWriter, req *http.Request,
 	return nil
 }
 
-func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
+func rewriteRequest(req *http.Request, instructions *ProxyInstructions, upstream *Upstream) *http.Request {
 	outReq := new(http.Request)
 	*outReq = *req // includes shallow copies of maps, but we handle this below
 
@@ -277,15 +277,21 @@ func rewriteRequest(upstream *Upstream, req *http.Request) *http.Request {
 
 	// We copy headers only if we alter the original request
 	// headers, otherwise we use the shallow copy
-	if upstream.Headers != nil || hasHeaders(hopHeaders, req.Header) {
+	if len(instructions.Headers) != 0 || len(upstream.Headers) != 0 || hasHeaders(hopHeaders, req.Header) {
 		outReq.Header = make(http.Header)
 		copyHeaders(outReq.Header, req.Header)
 	}
 
 	// Add upstream headers to the request
-	if upstream.Headers != nil {
+	if len(upstream.Headers) != 0 {
 		glog.Info("Proxying Upstream headers:", upstream.Headers)
 		copyHeaders(outReq.Header, upstream.Headers)
+	}
+
+	// Add generic instructions headers to the request
+	if len(instructions.Headers) != 0 {
+		glog.Info("Proxying instructions headers:", instructions.Headers)
+		copyHeaders(outReq.Header, instructions.Headers)
 	}
 
 	// Remove hop-by-hop headers to the backend.  Especially
