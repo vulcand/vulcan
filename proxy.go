@@ -133,7 +133,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Ask control server for instructions
 	instructions, err := getInstructions(p.httpClient, controlServers, req)
 	if err != nil {
-		glog.Infof("Error from control server: %s", err)
 		p.replyError(err, w, req)
 		return
 	}

@@ -46,15 +46,16 @@ func getInstructions(httpClient *http.Client, controlServers []*url.URL, req *ht
 			// This is http error that we'd like to transfer to the client
 			_, isHttp := err.(*HttpError)
 			if isHttp {
-				glog.Errorf("Control server %s denied request %s", err)
+				glog.Errorf("Control server %s denied request %s", controlServer, err)
 				return nil, err
 			} else {
-				glog.Errorf("Control server %s failed: %s, try another", err)
+				glog.Errorf("Control server %s failed: %s, try another", controlServer, err)
 			}
 		} else {
 			return instructions, err
 		}
 	}
+	glog.Errorf("All control servers failed")
 	return nil, fmt.Errorf("All control servers failed.")
 }
 
