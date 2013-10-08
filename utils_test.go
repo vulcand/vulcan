@@ -165,3 +165,38 @@ func (s *MainSuite) TestRemoveHeaders(c *C) {
 	c.Assert(source.Get("a"), Equals, "")
 	c.Assert(source.Get("c"), Equals, "d")
 }
+
+func (s *MainSuite) TestEpochDay(c *C) {
+	dates := []struct {
+		Date time.Time
+		Day  int64
+	}{
+		{
+			Date: time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC),
+			Day:  15403,
+		},
+		{
+			Date: time.Date(2012, 3, 4, 5, 6, 7, 12, time.UTC),
+			Day:  15403,
+		},
+		{
+			Date: time.Date(2012, 3, 4, 5, 6, 59, 12, time.UTC),
+			Day:  15403,
+		},
+		{
+			Date: time.Date(2012, 3, 4, 5, 59, 59, 12, time.UTC),
+			Day:  15403,
+		},
+		{
+			Date: time.Date(2012, 3, 4, 9, 59, 59, 12, time.UTC),
+			Day:  15403,
+		},
+		{
+			Date: time.Date(2012, 3, 5, 9, 59, 59, 12, time.UTC),
+			Day:  15404,
+		},
+	}
+	for _, t := range dates {
+		c.Assert(epochDay(t.Date), Equals, t.Day)
+	}
+}

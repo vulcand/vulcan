@@ -1,5 +1,7 @@
 test: clean
 	go test
+cstest:clean
+	CASSANDRA=yes go test -gocheck.f "CassandraBackendSuite.*"
 coverage: clean
 	gocov test | gocov report
 annotate: clean

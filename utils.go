@@ -134,3 +134,8 @@ type FreezedTime struct {
 func (t *FreezedTime) utcNow() time.Time {
 	return t.CurrentTime
 }
+
+// Retuns the number of the day since epoch
+func epochDay(time time.Time) int64 {
+	return time.Unix() / 86400
+}
