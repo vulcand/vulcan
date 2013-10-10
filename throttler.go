@@ -75,7 +75,7 @@ func (t *Throttler) throttleTokens(tokens []*Token) (retrySeconds int, err error
 		}
 		tokenRetry := t.statsRetrySeconds(tokenStats.stats)
 		if tokenRetry > 0 {
-			glog.Info("Token is out of capacity, next retry:", token, tokenRetry)
+			glog.Infof("Token [%s] is out of capacity, next retry: %d seconds", token, tokenRetry)
 			// we are interested in max retry seconds
 			// because no request will succeed if there's at least
 			// one token in tokens not allowing the request
@@ -98,7 +98,7 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 
 		upstreamRetry := t.statsRetrySeconds(upstreamStats.stats)
 		if upstreamRetry > 0 {
-			glog.Info("Upstream is out of capacity, next retry:", upstream, upstreamRetry)
+			glog.Infof("Upstream [%s] is out of capacity, next retry: %d seconds", upstream, upstreamRetry)
 			if upstreamRetry < retrySeconds {
 				retrySeconds = upstreamRetry
 			}

@@ -12,6 +12,8 @@ type CassandraBackendSuite struct {
 	timeProvider *FreezedTime
 	backend      *CassandraBackend
 	shouldSkip   bool
+	currentDay   time.Time
+	previousDay  time.Time
 }
 
 var _ = Suite(&CassandraBackendSuite{})
@@ -41,8 +43,10 @@ func (s *CassandraBackendSuite) SetUpTest(c *C) {
 		s.shouldSkip = true
 		return
 	}
-	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
-	s.timeProvider = &FreezedTime{CurrentTime: start}
+	s.currentDay = time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
+	s.previousDay = time.Date(2012, 3, 3, 5, 6, 7, 0, time.UTC)
+
+	s.timeProvider = &FreezedTime{CurrentTime: s.currentDay}
 
 	config := s.GetConfig()
 	config.applyDefaults()
@@ -73,6 +77,7 @@ func (s *CassandraBackendSuite) TestReentrable(c *C) {
 	c.Assert(err, IsNil)
 }
 
+// Just make sure we can get and set stats
 func (s *CassandraBackendSuite) TestBackendGetSet(c *C) {
 	if s.shouldSkip {
 		c.Skip("Cassandra backend is not activated")
@@ -90,13 +95,31 @@ func (s *CassandraBackendSuite) TestBackendGetSet(c *C) {
 	c.Assert(counter, Equals, int64(2))
 }
 
+// Make sure cleanup procedure wipes out the data from last day and does not alter
+// data from the previous day
 func (s *CassandraBackendSuite) TestBackendCleanup(c *C) {
 
 	if s.shouldSkip {
 		c.Skip("Cassandra backend is not activated")
 	}
 
+	s.timeProvider.CurrentTime = s.previousDay
 	err := s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
 	c.Assert(err, IsNil)
+
+	s.timeProvider.CurrentTime = s.currentDay
+	err = s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	c.Assert(err, IsNil)
+
 	s.backend.cleanup()
+
+	s.timeProvider.CurrentTime = s.currentDay
+	counter, err := s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	c.Assert(err, IsNil)
+	c.Assert(counter, Equals, int64(2))
+
+	s.timeProvider.CurrentTime = s.previousDay
+	counter, err = s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	c.Assert(err, IsNil)
+	c.Assert(counter, Equals, int64(0))
 }

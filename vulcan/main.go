@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -24,6 +25,24 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	if vulcan.LogDir() != "" {
+		glog.Infof("Starting log cleanup go routine with period: %s", options.cleanupPeriod)
+		go func() {
+			t := time.Tick(options.cleanupPeriod)
+			for {
+				select {
+				case <-t:
+					glog.Infof("Start cleaning up the logs")
+					err := vulcan.CleanupLogs()
+					if err != nil {
+						glog.Errorf("Failed to clean up the logs: %s, shutting down goroutine", err)
+						return
+					}
+				}
+			}
+		}()
 	}
 
 	glog.Infof("Vulcan is starting with arguments: %#v", options)

@@ -82,14 +82,24 @@ func (b *CassandraBackend) tableNames() (string, string) {
 	}
 }
 
+func (b *CassandraBackend) nextCleanup() time.Time {
+	now := b.utcNow()
+	hour := b.config.CleanupTime.Hour
+	minute := b.config.CleanupTime.Minute
+	nextCleanup := time.Date(
+		now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, time.UTC)
+	return nextCleanup
+}
+
 // Simply loops forever and truncates the table that is not being used
 func (b *CassandraBackend) periodicCleanup() {
 	for {
-		now := b.utcNow()
-		hour, minute := b.config.CleanupTime.Hour, b.config.CleanupTime.Minute
-		nextCleanup := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, time.UTC)
-		waitTime := nextCleanup.Sub(now)
-		glog.Infof("Scheduling next cleanup to happen: %s in %s", nextCleanup, waitTime)
+		glog.Infof("Launching cleanup")
+		b.cleanup()
+		nextCleanup := b.nextCleanup()
+		waitTime := nextCleanup.Sub(b.utcNow())
+		glog.Infof("Now is %s, next cleanup will happen: %s in %s",
+			b.utcNow(), nextCleanup, waitTime)
 		timer := time.NewTimer(waitTime)
 		select {
 		case <-timer.C:
