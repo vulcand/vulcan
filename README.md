@@ -204,13 +204,22 @@ CREATE TABLE hits (
 
 Usage
 -------
+
 ```bash
-vulcan -stderrthreshold=INFO \      # log info, from glog
-       -logtostderr=true \          # log to stderror
+vulcan \
+       -h=0.0.0.0\                  # interface to bind to
+       -p=4000\                     # port to listen on
        -c=http://localhost:5000 \   # control server url#1
        -c=http://localhost:5001 \   # control server url#2, for redundancy
-       -b=cassandra \               # use cassandra for throttling
+       -stderrthreshold=INFO \      # log info, from glog
+       -logtostderr=true \          # log to stderror
+       -logcleanup=24h \            # clean up logs every 24 hours
+       -log_dir=/var/log/           # keep log files in this folder
+       -pid=/var/run/vulcan.pid     # create pid file
        -lb=random \                 # use random load balancer
+       -b=cassandra \               # use cassandra for throttling
+       -cscleanup=true \            # cleanup old counters
+       -cscleanuptime=19:05 \       # cleanup counters 19:05 UTC every day
        -csnode=localhost  \         # cassandra node, can be multiple
        -cskeyspace=vulcan_dev       # cassandra keyspace
 ```
