@@ -1,9 +1,9 @@
 test: clean
-	go test
+	go test -v ./...
 logtest:clean
-	CASSANDRA=yes go test -gocheck.f "LogUtilsSuite.*"
+	CASSANDRA=yes go test -v ./... -gocheck.f "LogUtilsSuite.*"
 cstest:clean
-	CASSANDRA=yes go test -gocheck.f "CassandraBackendSuite.*"
+	CASSANDRA=yes go test -v ./... -gocheck.f "CassandraBackendSuite.*"
 coverage: clean
 	gocov test | gocov report
 annotate: clean

@@ -108,7 +108,7 @@ func (s *CassandraBackendSuite) TestBackendCleanup(c *C) {
 	}
 
 	s.timeProvider.CurrentTime = s.previousDay
-	err := s.backend.UpdateCount("key1", time.Second)
+	err := s.backend.UpdateCount("key1", time.Second, 1)
 	c.Assert(err, IsNil)
 
 	s.timeProvider.CurrentTime = s.currentDay
@@ -118,7 +118,7 @@ func (s *CassandraBackendSuite) TestBackendCleanup(c *C) {
 	s.backend.cleanup()
 
 	s.timeProvider.CurrentTime = s.currentDay
-	counter, err := s.backend.GetCount("key1", time.Second, 2)
+	counter, err := s.backend.GetCount("key1", time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(2))
 

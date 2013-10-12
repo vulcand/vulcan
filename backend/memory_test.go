@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+func Test2(t *testing.T) { TestingT(t) }
 
 type MemoryBackendSuite struct {
 	timeProvider *timeutils.FreezedTime
@@ -33,7 +33,7 @@ func (s *MemoryBackendSuite) TestMemoryBackendGetSet(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(0))
 
-	err = s.backend.UpdateStats("key1", time.Second, 2)
+	err = s.backend.UpdateCount("key1", time.Second, 2)
 	c.Assert(err, IsNil)
 
 	counter, err = s.backend.GetCount("key1", time.Second)
