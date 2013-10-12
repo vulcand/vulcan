@@ -12,6 +12,7 @@ install:
  - go get -v github.com/golang/glog
  - go get -v launchpad.net/gocheck
  - go get -v github.com/mailgun/gocql
+ - go get -v github.com/mailgun/glogutils
 
 script:
  - go test -v ./...

@@ -1,14 +1,16 @@
 package vulcan
 
 import (
+	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/timeutils"
 	. "launchpad.net/gocheck"
 	"net/http"
 	"time"
 )
 
 type ThrottlerSuite struct {
-	timeProvider     *FreezedTime
-	backend          *MemoryBackend
+	timeProvider     *timeutils.FreezedTime
+	backend          *backend.MemoryBackend
 	throttler        *Throttler
 	failingThrottler *Throttler
 }
@@ -17,13 +19,13 @@ var _ = Suite(&ThrottlerSuite{})
 
 func (s *ThrottlerSuite) SetUpTest(c *C) {
 	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
-	s.timeProvider = &FreezedTime{CurrentTime: start}
-	backend, err := NewMemoryBackend(s.timeProvider)
+	s.timeProvider = &timeutils.FreezedTime{CurrentTime: start}
+	b, err := backend.NewMemoryBackend(s.timeProvider)
 	c.Assert(err, IsNil)
-	s.backend = backend
+	s.backend = b
 	s.throttler = NewThrottler(s.backend)
 
-	s.failingThrottler = NewThrottler(&FailingBackend{})
+	s.failingThrottler = NewThrottler(&backend.FailingBackend{})
 }
 
 func (s *ThrottlerSuite) newUpstream(upstreamUrl string, rates ...*Rate) *Upstream {
@@ -85,9 +87,9 @@ func (s *ThrottlerSuite) TestThrottlerUpdateStatsRates(c *C) {
 		s.rateBucket(token.Id, token.Rates[1]): 1,
 	}
 
-	c.Assert(len(s.backend.hits), Equals, len(expected))
+	c.Assert(len(s.backend.Hits), Equals, len(expected))
 	for key, val := range expected {
-		c.Assert(s.backend.hits[key], Equals, val)
+		c.Assert(s.backend.Hits[key], Equals, val)
 	}
 }
 

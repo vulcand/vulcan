@@ -126,7 +126,6 @@ app = Flask(__name__)
 
 @app.route('/auth')
 def auth():
-    print request.args
     return jsonify(
         tokens=[
             {
@@ -175,11 +174,12 @@ __Get vulcan and install deps__
 ```bash 
 go get github.com/mailgun/vulcan
 
-go get -v github.com/axw/gocov # go test coverage
-go install github.com/axw/gocov/gocov # go test coverage 
-go get -v github.com/golang/glog # go logging system
-go get -v launchpad.net/gocheck # go advanced testing framework
-go get -v github.com/mailgun/gocql # go cassandra client
+go get -v github.com/axw/gocov # test coverage
+go install github.com/axw/gocov/gocov # test coverage 
+go get -v github.com/golang/glog # logging system
+go get -v github.com/mailgun/glogutils # utils for google logging library
+go get -v launchpad.net/gocheck # advanced testing framework
+go get -v github.com/mailgun/gocql # cassandra client
 ```
 
 __Run in devmode__
@@ -190,27 +190,30 @@ make run
 
 __Cassandra__
 
-If you want to use cassandra for throttling (which is a good idea), you'll need:
+Cassandra-based throttling is a generally good idea, as it provides reliable distributed
+counters that can be shared between multiple instances of vulcan. Vulcan provides auto garbage collection
+and cleanup of the counters.
 
-* cassandra (Tested on versions >= 1.2.5)
-* create keyspace with the following table
-
-```sql
-CREATE TABLE hits (
-      hit text PRIMARY KEY,
-      value counter
-    ) WITH COMPACT STORAGE;
-```
+Tested on versions >= 1.2.5
 
 Usage
 -------
+
 ```bash
-vulcan -stderrthreshold=INFO \      # log info, from glog
-       -logtostderr=true \          # log to stderror
+vulcan \
+       -h=0.0.0.0\                  # interface to bind to
+       -p=4000\                     # port to listen on
        -c=http://localhost:5000 \   # control server url#1
        -c=http://localhost:5001 \   # control server url#2, for redundancy
-       -b=cassandra \               # use cassandra for throttling
+       -stderrthreshold=INFO \      # log info, from glog
+       -logtostderr=true \          # log to stderror
+       -logcleanup=24h \            # clean up logs every 24 hours
+       -log_dir=/var/log/           # keep log files in this folder
+       -pid=/var/run/vulcan.pid     # create pid file
        -lb=random \                 # use random load balancer
+       -b=cassandra \               # use cassandra for throttling
+       -cscleanup=true \            # cleanup old counters
+       -cscleanuptime=19:05 \       # cleanup counters 19:05 UTC every day
        -csnode=localhost  \         # cassandra node, can be multiple
        -cskeyspace=vulcan_dev       # cassandra keyspace
 ```

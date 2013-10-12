@@ -17,3 +17,7 @@ func NewToken(id string, rates []*Rate) (*Token, error) {
 		Rates: rates,
 	}, nil
 }
+
+func (t *Token) String() string {
+	return t.Id
+}

@@ -2,27 +2,12 @@ package vulcan
 
 import (
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/backend"
 	"math"
 )
 
-// Throttling backend interface, used by throttler
-// to request stats about upstreams and tokens
-type Backend interface {
-	// Used to retreive time for current stats.
-	// Creates mostly for test reasons so we can override
-	// time in tests
-	TimeProvider
-	// Get hitcount of the given key in the time period defined
-	// by rate.
-	getStats(key string, rate *Rate) (int64, error)
-	// Updates hitcount of the given key, notice that rate increment
-	// property will can be used to bump counter,
-	// e.g. to count request size
-	updateStats(key string, rate *Rate) error
-}
-
 type Throttler struct {
-	backend Backend
+	backend backend.Backend
 }
 
 type TokenStats struct {
@@ -41,7 +26,7 @@ type RateStats struct {
 	rate *Rate
 }
 
-func NewThrottler(b Backend) *Throttler {
+func NewThrottler(b backend.Backend) *Throttler {
 	return &Throttler{backend: b}
 }
 
@@ -75,7 +60,7 @@ func (t *Throttler) throttleTokens(tokens []*Token) (retrySeconds int, err error
 		}
 		tokenRetry := t.statsRetrySeconds(tokenStats.stats)
 		if tokenRetry > 0 {
-			glog.Info("Token is out of capacity, next retry:", token, tokenRetry)
+			glog.Infof("Token [%s] is out of capacity, next retry: %d seconds", token, tokenRetry)
 			// we are interested in max retry seconds
 			// because no request will succeed if there's at least
 			// one token in tokens not allowing the request
@@ -98,7 +83,7 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 
 		upstreamRetry := t.statsRetrySeconds(upstreamStats.stats)
 		if upstreamRetry > 0 {
-			glog.Info("Upstream is out of capacity, next retry:", upstream, upstreamRetry)
+			glog.Infof("Upstream [%s] is out of capacity, next retry: %d seconds", upstream, upstreamRetry)
 			if upstreamRetry < retrySeconds {
 				retrySeconds = upstreamRetry
 			}
@@ -149,7 +134,7 @@ func (t *Throttler) getRatesStats(id string, rates []*Rate) ([]*RateStats, error
 	stats := make([]*RateStats, len(rates))
 
 	for i, rate := range rates {
-		counter, err := t.backend.getStats(id, rate)
+		counter, err := t.backend.GetCount(id, rate.Period)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +145,7 @@ func (t *Throttler) getRatesStats(id string, rates []*Rate) ([]*RateStats, error
 
 func (t *Throttler) updateTokenStats(token *Token) error {
 	for _, rate := range token.Rates {
-		err := t.backend.updateStats(token.Id, rate)
+		err := t.backend.UpdateCount(token.Id, rate.Period, rate.Increment)
 		if err != nil {
 			return err
 		}
@@ -170,7 +155,7 @@ func (t *Throttler) updateTokenStats(token *Token) error {
 
 func (t *Throttler) updateUpstreamStats(upstream *Upstream) error {
 	for _, rate := range upstream.Rates {
-		err := t.backend.updateStats(upstream.Id(), rate)
+		err := t.backend.UpdateCount(upstream.Id(), rate.Period, rate.Increment)
 		if err != nil {
 			return err
 		}
@@ -187,7 +172,7 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 	for _, stat := range stats {
 		//requests in a given period exceeded rate value
 		if stat.counter >= stat.rate.Value {
-			retrySeconds := stat.rate.retrySeconds(t.backend.utcNow())
+			retrySeconds := stat.rate.retrySeconds(t.backend.UtcNow())
 			if retrySeconds > retry {
 				retry = retrySeconds
 			}
