@@ -1,13 +1,23 @@
 /*
-Cassandra backend.
-Based on cassandra counters.
+Cassandra backend based on counters. As long as counters in cassandra can not be TTLed,
+this backend performs periodic garbage collections.
+
+The implementation is pretty straightforward:
+
+* Every counter in every time period is represented as a separate row
+* There are two tables: hits_even and hits_odd
+* Every day is numbered as even or odd (day number since epoch)
+* Even day counters are stored in hits_even, odd in hits_odd
+* The table that is not currently updated gets truncated once a day
+
 */
-package vulcan
+package backend
 
 import (
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/mailgun/gocql"
+	"github.com/mailgun/vulcan/timeutils"
 	"strings"
 	"time"
 )
@@ -29,8 +39,47 @@ type CleanupTime struct {
 
 type CassandraBackend struct {
 	session      *gocql.Session // session
-	timeProvider TimeProvider
+	timeProvider timeutils.TimeProvider
 	config       *CassandraConfig
+}
+
+func (b *CassandraBackend) GetCount(key string, period time.Duration) (int64, error) {
+	var counter int64
+	hitKey := timeutils.GetHit(b.UtcNow(), key, period)
+	activeTable, _ := b.tableNames()
+	query := b.session.Query(
+		fmt.Sprintf(
+			"SELECT value from %s WHERE hit = ? LIMIT 1",
+			activeTable),
+		hitKey)
+
+	if err := query.Scan(&counter); err != nil {
+		if err == gocql.ErrNotFound {
+			glog.Infof("Entry %s for %s not found, it's ok", key, hitKey)
+			return 0, nil
+		}
+		glog.Errorf("Error when executing query, err: %s", err)
+		return -1, err
+	}
+	glog.Infof("Hitkey: %s counter: %d", hitKey, counter)
+	return counter, nil
+}
+
+func (b *CassandraBackend) UpdateCount(key string, period time.Duration, increment int64) error {
+	activeTable, _ := b.tableNames()
+	hitKey := timeutils.GetHit(b.UtcNow(), key, period)
+	query := b.session.Query(
+		fmt.Sprintf(
+			"UPDATE %s SET value = value + ? WHERE hit = ?",
+			activeTable),
+		increment,
+		hitKey)
+
+	if err := query.Exec(); err != nil {
+		glog.Errorf("Error when executing update query for %s, err: %s", hitKey, err)
+		return err
+	}
+	return nil
 }
 
 // Standard dial and read timeouts, can be overriden when supplying
@@ -42,7 +91,7 @@ const (
 	DefaultCleanupMinute     = 30
 )
 
-func NewCassandraBackend(config *CassandraConfig, timeProvider TimeProvider) (*CassandraBackend, error) {
+func NewCassandraBackend(config *CassandraConfig, timeProvider timeutils.TimeProvider) (*CassandraBackend, error) {
 	err := config.applyDefaults()
 	if err != nil {
 		return nil, err
@@ -73,7 +122,7 @@ func NewCassandraBackend(config *CassandraConfig, timeProvider TimeProvider) (*C
 // with another, and periodically truncate the one that is not used at the
 // moment. This function returns pair (active, inactive) of table names
 func (b *CassandraBackend) tableNames() (string, string) {
-	even := epochDay(b.utcNow())%2 == 0
+	even := timeutils.EpochDay(b.UtcNow())%2 == 0
 	if even {
 
 		return "hits_even", "hits_odd"
@@ -83,7 +132,7 @@ func (b *CassandraBackend) tableNames() (string, string) {
 }
 
 func (b *CassandraBackend) nextCleanup() time.Time {
-	now := b.utcNow()
+	now := b.UtcNow()
 	hour := b.config.CleanupTime.Hour
 	minute := b.config.CleanupTime.Minute
 	nextCleanup := time.Date(
@@ -97,9 +146,9 @@ func (b *CassandraBackend) periodicCleanup() {
 		glog.Infof("Launching cleanup")
 		b.cleanup()
 		nextCleanup := b.nextCleanup()
-		waitTime := nextCleanup.Sub(b.utcNow())
+		waitTime := nextCleanup.Sub(b.UtcNow())
 		glog.Infof("Now is %s, next cleanup will happen: %s in %s",
-			b.utcNow(), nextCleanup, waitTime)
+			b.UtcNow(), nextCleanup, waitTime)
 		timer := time.NewTimer(waitTime)
 		select {
 		case <-timer.C:
@@ -110,10 +159,10 @@ func (b *CassandraBackend) periodicCleanup() {
 
 func (b *CassandraBackend) cleanup() error {
 	_, inactiveTable := b.tableNames()
-	start := b.utcNow()
+	start := b.UtcNow()
 	glog.Infof("Starting cleanup of: %s, time: %s", inactiveTable, start)
 	err := b.session.Query(fmt.Sprintf("TRUNCATE %s", inactiveTable)).Exec()
-	diff := b.utcNow().Sub(start)
+	diff := b.UtcNow().Sub(start)
 	if err != nil {
 		glog.Errorf("Cleanup Failed %s", diff, err)
 	} else {
@@ -184,45 +233,8 @@ func (b *CassandraBackend) createTables(config *CassandraConfig) error {
 	return nil
 }
 
-func (b *CassandraBackend) getStats(key string, rate *Rate) (int64, error) {
-	var counter int64
-	glog.Infof("Get stats hit: %s", getHit(b.utcNow(), key, rate))
-	activeTable, _ := b.tableNames()
-	query := b.session.Query(
-		fmt.Sprintf(
-			"SELECT value from %s WHERE hit = ? LIMIT 1",
-			activeTable),
-		getHit(b.timeProvider.utcNow(), key, rate))
-
-	if err := query.Scan(&counter); err != nil {
-		if err == gocql.ErrNotFound {
-			glog.Infof("Entry %s not found, it's ok", key)
-			return 0, nil
-		}
-		glog.Error("Error when executing query, err:", err)
-		return -1, err
-	}
-	return counter, nil
-}
-
-func (b *CassandraBackend) updateStats(key string, rate *Rate) error {
-	activeTable, _ := b.tableNames()
-	query := b.session.Query(
-		fmt.Sprintf(
-			"UPDATE %s SET value = value + ? WHERE hit = ?",
-			activeTable),
-		rate.Increment,
-		getHit(b.utcNow(), key, rate))
-
-	if err := query.Exec(); err != nil {
-		glog.Error("Error when executing update query, err:", err)
-		return err
-	}
-	return nil
-}
-
-func (b *CassandraBackend) utcNow() time.Time {
-	return b.timeProvider.utcNow()
+func (b *CassandraBackend) UtcNow() time.Time {
+	return b.timeProvider.UtcNow()
 }
 
 func (c *CassandraConfig) applyDefaults() error {

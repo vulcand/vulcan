@@ -1,11 +1,9 @@
 package vulcan
 
 import (
-	"fmt"
 	. "launchpad.net/gocheck"
 	"net/http"
 	"net/url"
-	"time"
 )
 
 //Just to make sure we don't panic, return err and not
@@ -97,40 +95,6 @@ func (s *MainSuite) TestParseBadUrl(c *C) {
 	}
 }
 
-func (s *MainSuite) TestGetHit(c *C) {
-	hits := []struct {
-		Key      string
-		Rate     *Rate
-		Expected string
-	}{
-		{
-			Key:      "key1",
-			Rate:     &Rate{Value: 1, Period: time.Second},
-			Expected: "key1_1s_%d",
-		},
-		{
-			Key:      "key2",
-			Rate:     &Rate{Value: 10, Period: time.Minute},
-			Expected: "key2_1m0s_%d",
-		},
-		{
-			Key:      "key1",
-			Rate:     &Rate{Value: 2, Period: time.Hour},
-			Expected: "key1_1h0m0s_%d",
-		},
-	}
-	for _, u := range hits {
-		expected := fmt.Sprintf(u.Expected, u.Rate.currentBucket(s.timeProvider.utcNow()).Unix())
-		hit := getHit(s.timeProvider.utcNow(), u.Key, u.Rate)
-		c.Assert(expected, Equals, hit)
-	}
-}
-
-func (s *MainSuite) TestTimes(c *C) {
-	tm := &RealTime{}
-	c.Assert(tm.utcNow(), NotNil)
-}
-
 // Make sure copy headers is not shallow and copies all headers
 func (s *MainSuite) TestCopyHeaders(c *C) {
 	source, destination := make(http.Header), make(http.Header)
@@ -164,39 +128,4 @@ func (s *MainSuite) TestRemoveHeaders(c *C) {
 	removeHeaders([]string{"a"}, source)
 	c.Assert(source.Get("a"), Equals, "")
 	c.Assert(source.Get("c"), Equals, "d")
-}
-
-func (s *MainSuite) TestEpochDay(c *C) {
-	dates := []struct {
-		Date time.Time
-		Day  int64
-	}{
-		{
-			Date: time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC),
-			Day:  15403,
-		},
-		{
-			Date: time.Date(2012, 3, 4, 5, 6, 7, 12, time.UTC),
-			Day:  15403,
-		},
-		{
-			Date: time.Date(2012, 3, 4, 5, 6, 59, 12, time.UTC),
-			Day:  15403,
-		},
-		{
-			Date: time.Date(2012, 3, 4, 5, 59, 59, 12, time.UTC),
-			Day:  15403,
-		},
-		{
-			Date: time.Date(2012, 3, 4, 9, 59, 59, 12, time.UTC),
-			Day:  15403,
-		},
-		{
-			Date: time.Date(2012, 3, 5, 9, 59, 59, 12, time.UTC),
-			Day:  15404,
-		},
-	}
-	for _, t := range dates {
-		c.Assert(epochDay(t.Date), Equals, t.Day)
-	}
 }

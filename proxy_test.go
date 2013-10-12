@@ -3,6 +3,8 @@ package vulcan
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/timeutils"
 	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"net/http"
@@ -14,8 +16,8 @@ import (
 )
 
 type ProxySuite struct {
-	timeProvider *FreezedTime
-	backend      *MemoryBackend
+	timeProvider *timeutils.FreezedTime
+	backend      *backend.MemoryBackend
 	throttler    *Throttler
 	loadBalancer LoadBalancer
 	authHeaders  http.Header
@@ -25,8 +27,8 @@ var _ = Suite(&ProxySuite{})
 
 func (s *ProxySuite) SetUpTest(c *C) {
 	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
-	s.timeProvider = &FreezedTime{CurrentTime: start}
-	backend, err := NewMemoryBackend(s.timeProvider)
+	s.timeProvider = &timeutils.FreezedTime{CurrentTime: start}
+	backend, err := backend.NewMemoryBackend(s.timeProvider)
 	c.Assert(err, IsNil)
 	s.backend = backend
 	s.throttler = NewThrottler(s.backend)
@@ -87,7 +89,7 @@ func (s *ProxySuite) loadJson(bytes []byte) map[string]interface{} {
 	return replyObject.(map[string]interface{})
 }
 
-func (s *ProxySuite) newProxy(controlServers []*httptest.Server, b Backend, l LoadBalancer) *httptest.Server {
+func (s *ProxySuite) newProxy(controlServers []*httptest.Server, b backend.Backend, l LoadBalancer) *httptest.Server {
 	controlUrls := make([]string, len(controlServers))
 	for i, controlServer := range controlServers {
 		controlUrls[i] = controlServer.URL
@@ -231,7 +233,7 @@ func (s *ProxySuite) TestUpstreamGetFailover(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, &FailingBackend{}, s.loadBalancer)
+	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, s.loadBalancer)
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -404,7 +406,7 @@ func (s *ProxySuite) TestUpstreamThrottled(c *C) {
 	defer upstream.Close()
 
 	// Upstream is out of capacity, we should be told to be throttled
-	s.backend.updateStats(upstream.URL, &Rate{Increment: 10, Value: 10, Period: time.Minute})
+	s.backend.UpdateCount(upstream.URL, time.Minute, 10)
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(fmt.Sprintf(`{"upstreams": [{"url": "%s", "rates": [{"increment": 10, "value": 10, "period": "minute"}]}]}`, upstream.URL)))
@@ -432,7 +434,7 @@ func (s *ProxySuite) TestUpstreamThrottlerDown(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, &FailingBackend{}, s.loadBalancer)
+	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, s.loadBalancer)
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)

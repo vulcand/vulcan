@@ -112,30 +112,3 @@ func getHit(now time.Time, key string, rate *Rate) string {
 	return fmt.Sprintf(
 		"%s_%s_%d", key, rate.Period.String(), rate.currentBucket(now).Unix())
 }
-
-// This is the interface we use to mock time in tests
-type TimeProvider interface {
-	utcNow() time.Time
-}
-
-//Real clock time, used in production
-type RealTime struct {
-}
-
-func (*RealTime) utcNow() time.Time {
-	return time.Now().UTC()
-}
-
-// This is manually controlled time we use in tests
-type FreezedTime struct {
-	CurrentTime time.Time
-}
-
-func (t *FreezedTime) utcNow() time.Time {
-	return t.CurrentTime
-}
-
-// Retuns the number of the day since epoch
-func epochDay(time time.Time) int64 {
-	return time.Unix() / 86400
-}

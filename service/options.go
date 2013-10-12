@@ -3,7 +3,7 @@ package service
 import (
 	"flag"
 	"fmt"
-	"github.com/mailgun/vulcan"
+	"github.com/mailgun/vulcan/backend"
 	"regexp"
 	"strconv"
 	"time"
@@ -72,7 +72,7 @@ func (o *listOptions) Set(value string) error {
 // Helper to parse cleanup time that is supplied as hh:mm format
 // and represents utc time of the day when to launch cleanup procedures
 type cleanupOptions struct {
-	T *vulcan.CleanupTime
+	T *backend.CleanupTime
 }
 
 func (o *cleanupOptions) String() string {
@@ -96,6 +96,6 @@ func (o *cleanupOptions) Set(value string) error {
 	if err != nil {
 		return err
 	}
-	o.T = &vulcan.CleanupTime{Hour: hour, Minute: minute}
+	o.T = &backend.CleanupTime{Hour: hour, Minute: minute}
 	return nil
 }

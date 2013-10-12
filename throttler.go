@@ -2,11 +2,12 @@ package vulcan
 
 import (
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/backend"
 	"math"
 )
 
 type Throttler struct {
-	backend Backend
+	backend backend.Backend
 }
 
 type TokenStats struct {
@@ -25,7 +26,7 @@ type RateStats struct {
 	rate *Rate
 }
 
-func NewThrottler(b Backend) *Throttler {
+func NewThrottler(b backend.Backend) *Throttler {
 	return &Throttler{backend: b}
 }
 
@@ -133,7 +134,7 @@ func (t *Throttler) getRatesStats(id string, rates []*Rate) ([]*RateStats, error
 	stats := make([]*RateStats, len(rates))
 
 	for i, rate := range rates {
-		counter, err := t.backend.getStats(id, rate)
+		counter, err := t.backend.GetCount(id, rate.Period)
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +145,7 @@ func (t *Throttler) getRatesStats(id string, rates []*Rate) ([]*RateStats, error
 
 func (t *Throttler) updateTokenStats(token *Token) error {
 	for _, rate := range token.Rates {
-		err := t.backend.updateStats(token.Id, rate)
+		err := t.backend.UpdateCount(token.Id, rate.Period, rate.Increment)
 		if err != nil {
 			return err
 		}
@@ -154,7 +155,7 @@ func (t *Throttler) updateTokenStats(token *Token) error {
 
 func (t *Throttler) updateUpstreamStats(upstream *Upstream) error {
 	for _, rate := range upstream.Rates {
-		err := t.backend.updateStats(upstream.Id(), rate)
+		err := t.backend.UpdateCount(upstream.Id(), rate.Period, rate.Increment)
 		if err != nil {
 			return err
 		}
@@ -171,7 +172,7 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 	for _, stat := range stats {
 		//requests in a given period exceeded rate value
 		if stat.counter >= stat.rate.Value {
-			retrySeconds := stat.rate.retrySeconds(t.backend.utcNow())
+			retrySeconds := stat.rate.retrySeconds(t.backend.UtcNow())
 			if retrySeconds > retry {
 				retry = retrySeconds
 			}

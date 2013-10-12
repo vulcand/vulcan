@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/backend"
 	"io"
 	"io/ioutil"
 	"net"
@@ -22,7 +23,7 @@ type ProxySettings struct {
 	ControlServers []string
 	// Any backend that would be used by throttler to keep throttling stats,
 	// e.g. MemoryBackend or CassandraBackend
-	ThrottlerBackend Backend
+	ThrottlerBackend backend.Backend
 	// Load balancing algo, e.g. RandomLoadBalancer
 	LoadBalancer LoadBalancer
 	// How long would proxy wait for server response

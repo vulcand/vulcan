@@ -13,6 +13,8 @@ import (
 	"github.com/mailgun/glogutils"
 	"github.com/mailgun/gocql"
 	"github.com/mailgun/vulcan"
+	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/timeutils"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -83,24 +85,24 @@ func (s *Service) startLogsCleanup() error {
 }
 
 func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
-	var backend vulcan.Backend
+	var b backend.Backend
 	var err error
 
 	if s.options.backend == "cassandra" {
-		cassandraConfig := &vulcan.CassandraConfig{
+		cassandraConfig := &backend.CassandraConfig{
 			Servers:       s.options.cassandraServers,
 			Keyspace:      s.options.cassandraKeyspace,
 			Consistency:   gocql.One,
 			LaunchCleanup: s.options.cassandraCleanup,
 			CleanupTime:   s.options.cassandraCleanupOptions.T,
 		}
-		backend, err = vulcan.NewCassandraBackend(
-			cassandraConfig, &vulcan.RealTime{})
+		b, err = backend.NewCassandraBackend(
+			cassandraConfig, &timeutils.RealTime{})
 		if err != nil {
 			return nil, err
 		}
 	} else if s.options.backend == "memory" {
-		backend, err = vulcan.NewMemoryBackend(&vulcan.RealTime{})
+		b, err = backend.NewMemoryBackend(&timeutils.RealTime{})
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +119,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 
 	proxySettings := &vulcan.ProxySettings{
 		ControlServers:   s.options.controlServers,
-		ThrottlerBackend: backend,
+		ThrottlerBackend: b,
 		LoadBalancer:     loadBalancer,
 	}
 

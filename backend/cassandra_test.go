@@ -1,15 +1,19 @@
-package vulcan
+package backend
 
 import (
 	"fmt"
 	"github.com/mailgun/gocql"
+	"github.com/mailgun/vulcan/timeutils"
 	. "launchpad.net/gocheck"
 	"os"
+	"testing"
 	"time"
 )
 
+func Test(t *testing.T) { TestingT(t) }
+
 type CassandraBackendSuite struct {
-	timeProvider *FreezedTime
+	timeProvider *timeutils.FreezedTime
 	backend      *CassandraBackend
 	shouldSkip   bool
 	currentDay   time.Time
@@ -46,7 +50,7 @@ func (s *CassandraBackendSuite) SetUpTest(c *C) {
 	s.currentDay = time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
 	s.previousDay = time.Date(2012, 3, 3, 5, 6, 7, 0, time.UTC)
 
-	s.timeProvider = &FreezedTime{CurrentTime: s.currentDay}
+	s.timeProvider = &timeutils.FreezedTime{CurrentTime: s.currentDay}
 
 	config := s.GetConfig()
 	config.applyDefaults()
@@ -61,7 +65,7 @@ func (s *CassandraBackendSuite) TestUtcNow(c *C) {
 	if s.shouldSkip {
 		c.Skip("Cassandra backend is not activated")
 	}
-	c.Assert(s.backend.utcNow(), Equals, s.timeProvider.CurrentTime)
+	c.Assert(s.backend.UtcNow(), Equals, s.timeProvider.CurrentTime)
 }
 
 // make sure the backend init is reentrable and does not alter existing data
@@ -83,14 +87,14 @@ func (s *CassandraBackendSuite) TestBackendGetSet(c *C) {
 		c.Skip("Cassandra backend is not activated")
 	}
 
-	counter, err := s.backend.getStats("key1", &Rate{Increment: 1, Value: 1, Period: time.Second})
+	counter, err := s.backend.GetCount("key1", time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(0))
 
-	err = s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	err = s.backend.UpdateCount("key1", time.Second, 2)
 	c.Assert(err, IsNil)
 
-	counter, err = s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	counter, err = s.backend.GetCount("key1", time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(2))
 }
@@ -104,22 +108,22 @@ func (s *CassandraBackendSuite) TestBackendCleanup(c *C) {
 	}
 
 	s.timeProvider.CurrentTime = s.previousDay
-	err := s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	err := s.backend.UpdateCount("key1", time.Second)
 	c.Assert(err, IsNil)
 
 	s.timeProvider.CurrentTime = s.currentDay
-	err = s.backend.updateStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	err = s.backend.UpdateCount("key1", time.Second, 2)
 	c.Assert(err, IsNil)
 
 	s.backend.cleanup()
 
 	s.timeProvider.CurrentTime = s.currentDay
-	counter, err := s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	counter, err := s.backend.GetCount("key1", time.Second, 2)
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(2))
 
 	s.timeProvider.CurrentTime = s.previousDay
-	counter, err = s.backend.getStats("key1", &Rate{Increment: 2, Value: 1, Period: time.Second})
+	counter, err = s.backend.GetCount("key1", time.Second)
 	c.Assert(err, IsNil)
 	c.Assert(counter, Equals, int64(0))
 }
