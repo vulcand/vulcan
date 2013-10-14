@@ -1,13 +1,13 @@
 /* Implements round robin load balancing algorithm.
 
 * As long as vulcan does not have static endpoints configurations most of the time,
-it keeps track of the endpoints that were used before based on their ids and sequence.
+it keeps track of the endpoints that were used recently and keeps cursor for these endpoints for a while.
 
-* Unused endpoints are being expired and removed from the track if they have not been used
-for 60 seconds
+* Unused cursors are being expired and removed from the map if they have not been used
+for 60 seconds.
 
-* If the endpoint sequence have been referred before, algo simply advances to the next one,
-taking into consideration it's availability.
+* If the load balancer can find matching cursor for the given endpoints, algo simply advances to the next one,
+taking into consideration endpoint availability.
 */
 package loadbalance
 
@@ -22,14 +22,17 @@ import (
 )
 
 type RoundRobin struct {
-	cursors      map[string]*cursor
+	// collection of cursors identified by the ids of endpoints
+	cursors map[string]*cursor
+	// time provider (mostly for testing as we need to override time
 	timeProvider timeutils.TimeProvider
-	expiryTimes  *datastruct.PriorityQueue
-	mutex        *sync.Mutex
+	// keep expiration times in the priority queue (min heap) so we can TTL effectively
+	expiryTimes *datastruct.PriorityQueue
+	// keep in mind that load balancer used by different endpoints
+	mutex *sync.Mutex
 }
 
-// Cursor memorises represents the current position in
-// the given endpoints sequence as we need to keep it for round robin
+// Cursor represents the current position in the given endpoints sequence
 type cursor struct {
 	index int
 	id    string
@@ -54,10 +57,11 @@ func (r *RoundRobin) NextEndpoint(endpoints []Endpoint) (Endpoint, error) {
 
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	// Cleanup endpoint sets that have not been accessed for a long time
+	// Cleanup unused cursors
 	r.cleanupGarbage()
-	// Return the next endpoint referred by this set
+	// Get existing or create new cursor
 	cursor := r.getCursor(endpoints)
+	// Return the next endpoint referred by this cursor
 	return cursor.next(endpoints)
 }
 
