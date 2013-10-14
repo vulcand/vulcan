@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/loadbalance"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -30,7 +31,7 @@ type ControlRequest struct {
 // * Request has been denied by auth server, in this case HttpError is returned
 // * Requst has been granted and auth server replied with instructions
 //
-func getInstructions(httpClient *http.Client, controlServers []*url.URL, req *http.Request) (*ProxyInstructions, error) {
+func getInstructions(httpClient *http.Client, loadBalancer loadbalance.Balancer, controlServers []*Upstream, req *http.Request) (*ProxyInstructions, error) {
 	controlRequest, err := controlRequestFromHttp(req)
 	if err != nil {
 		if _, ok := err.(AuthError); ok {
@@ -40,16 +41,26 @@ func getInstructions(httpClient *http.Client, controlServers []*url.URL, req *ht
 		return nil, err
 	}
 
-	for _, controlServer := range controlServers {
-		instructions, err := queryServer(httpClient, controlServer, controlRequest)
+	endpoints := endpointsFromUpstreams(controlServers)
+	for i := 0; i < len(endpoints); i++ {
+		pendpoint, err := loadBalancer.NextEndpoint(endpoints)
+		if err != nil {
+			glog.Errorf("Control server %s denied request %s", pendpoint.Id(), err)
+			return nil, err
+		}
+
+		endpoint := pendpoint.(*Endpoint)
+		instructions, err := queryServer(httpClient, endpoint.upstream.Url, controlRequest)
 		if err != nil {
 			// This is http error that we'd like to transfer to the client
 			_, isHttp := err.(*HttpError)
 			if isHttp {
-				glog.Errorf("Control server %s denied request %s", controlServer, err)
+				glog.Errorf("Control server %s denied request %s", endpoint.upstream, err)
 				return nil, err
 			} else {
-				glog.Errorf("Control server %s failed: %s, try another", controlServer, err)
+				// mark this endpoint as inactive and try another
+				endpoint.active = false
+				glog.Errorf("Control server %s failed: %s, try another", endpoint.upstream, err)
 			}
 		} else {
 			return instructions, err
