@@ -112,7 +112,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 	}
 
 	var loadBalancer loadbalance.Balancer
-	if s.options.loadBalancer == "roundrobin" {
+	if s.options.loadBalancer == "roundrobin" || s.options.loadBalancer == "random" {
 		loadBalancer = loadbalance.NewRoundRobin(&timeutils.RealTime{})
 	} else {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
