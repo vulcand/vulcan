@@ -35,7 +35,6 @@ func (upstream *Upstream) Id() string {
 	url := &url.URL{
 		Scheme: upstream.Url.Scheme,
 		Host:   upstream.Url.Host,
-		Path:   upstream.Url.Path,
 	}
 	return url.String()
 }
