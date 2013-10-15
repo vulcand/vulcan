@@ -2,7 +2,6 @@ package vulcan
 
 import (
 	"github.com/mailgun/vulcan/loadbalance"
-	"net/url"
 )
 
 type Endpoint struct {
@@ -12,13 +11,8 @@ type Endpoint struct {
 }
 
 func newEndpoint(upstream *Upstream, active bool) *Endpoint {
-	normalizedUrl := &url.URL{
-		Scheme: upstream.Url.Scheme,
-		Host:   upstream.Url.Host,
-		Path:   upstream.Url.Path,
-	}
 	return &Endpoint{
-		id:       normalizedUrl.String(),
+		id:       upstream.Id(),
 		upstream: upstream,
 		active:   active,
 	}
