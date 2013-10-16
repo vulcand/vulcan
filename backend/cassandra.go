@@ -86,7 +86,7 @@ func (b *CassandraBackend) UpdateCount(key string, period time.Duration, increme
 // proxy settings
 const (
 	DefaultConnectTimeout    = time.Duration(200) * time.Millisecond
-	DefaultReplicationFactor = 1
+	DefaultReplicationFactor = 3
 	DefaultCleanupHour       = 0
 	DefaultCleanupMinute     = 30
 )

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/loadbalance"
 	"io"
 	"io/ioutil"
 	"net"
@@ -25,7 +26,7 @@ type ProxySettings struct {
 	// e.g. MemoryBackend or CassandraBackend
 	ThrottlerBackend backend.Backend
 	// Load balancing algo, e.g. RandomLoadBalancer
-	LoadBalancer LoadBalancer
+	LoadBalancer loadbalance.Balancer
 	// How long would proxy wait for server response
 	HttpReadTimeout time.Duration
 	// How long would proxy try to dial server
@@ -36,12 +37,12 @@ type ProxySettings struct {
 // use NewReverseProxy function instead
 type ReverseProxy struct {
 	// Control server urls that decide what to do with the request
-	controlServers []*url.URL
+	controlServers []*Upstream
 	// Filters upstreams based on the throtting data
 	throttler *Throttler
 	// Sorts upstreams, control servers in accrordance to it's internal
 	// algorithm
-	loadBalancer LoadBalancer
+	loadBalancer loadbalance.Balancer
 	// Customized transport with dial and read timeouts set
 	httpTransport *http.Transport
 	// Client that uses customized transport
@@ -84,7 +85,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	}
 
 	p := &ReverseProxy{
-		controlServers: make([]*url.URL, len(s.ControlServers)),
+		controlServers: make([]*Upstream, len(s.ControlServers)),
 		throttler:      NewThrottler(s.ThrottlerBackend),
 		loadBalancer:   s.LoadBalancer,
 		httpTransport:  transport,
@@ -98,7 +99,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 		if err != nil {
 			return nil, err
 		}
-		p.controlServers[i] = u
+		p.controlServers[i] = &Upstream{Url: u}
 	}
 	return p, nil
 }
@@ -106,28 +107,22 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
 
-	controlServers, err := p.loadBalancer.sortedUrls(p.controlServers)
-	if err != nil {
-		p.replyError(err, w, req)
-		return
-	}
-
 	// Ask control server for instructions
-	instructions, err := getInstructions(p.httpClient, controlServers, req)
+	instructions, err := getInstructions(p.httpClient, p.loadBalancer, p.controlServers, req)
 	if err != nil {
 		p.replyError(err, w, req)
 		return
 	}
 
-	// Select an upstream
-	upstreams, err := p.getUpstreams(instructions)
+	// Get upstreams ready to process the request
+	endpoints, err := p.rateLimit(instructions)
 	if err != nil {
 		p.replyError(err, w, req)
 		return
 	}
 
 	// Proxy request to the selected upstream
-	upstream, err := p.proxyRequest(w, req, instructions, upstreams)
+	upstream, err := p.proxyRequest(w, req, instructions, endpoints)
 	if err != nil {
 		glog.Error("Failed to proxy to the upstreams:", err)
 		p.replyError(err, w, req)
@@ -158,7 +153,7 @@ func NewProxyInstructions(
 		Headers:   headers}, nil
 }
 
-func (p *ReverseProxy) getUpstreams(instructions *ProxyInstructions) ([]*Upstream, error) {
+func (p *ReverseProxy) rateLimit(instructions *ProxyInstructions) ([]loadbalance.Endpoint, error) {
 	// Throttle the requests to find available upstreams
 	// We may fall back to all upstreams if throttler is down
 	// If there are no available upstreams, we reject the request
@@ -166,40 +161,56 @@ func (p *ReverseProxy) getUpstreams(instructions *ProxyInstructions) ([]*Upstrea
 	if err != nil {
 		// throtller is down, we are falling back
 		// so we won't loose the request
-		glog.Error("Throtter is down, falling back to random shuffling")
-		return p.loadBalancer.sortedUpstreams(instructions.Upstreams)
-	} else if len(upstreamStats) == 0 {
+		glog.Error("Throtter is down, returning all upstreams")
+		return endpointsFromUpstreams(instructions.Upstreams), nil
+	} else if retrySeconds > 0 {
 		// No available upstreams
 		return nil, TooManyRequestsError(retrySeconds)
 	} else {
-		// Choose an upstream based on the usage stats
-		return p.loadBalancer.sortedUpstreamsByStats(upstreamStats)
+		return endpointsFromStats(upstreamStats), nil
 	}
 }
 
-// We need this struct to add a Close method
-// and comply with io.ReadCloser
+// We need this struct to add a Close method and comply with io.ReadCloser
 type Buffer struct {
 	*bytes.Reader
 }
 
 func (*Buffer) Close() error {
-	// Does nothing, created to comply with
-	// io.ReadCloser requirements
+	// Does nothing, created to comply with io.ReadCloser requirements
 	return nil
 }
 
-func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, instructions *ProxyInstructions, upstreams []*Upstream) (*Upstream, error) {
+func (p *ReverseProxy) nextEndpoint(endpoints []loadbalance.Endpoint) (*Endpoint, error) {
+	// Get first endpoint
+	pendpoint, err := p.loadBalancer.NextEndpoint(endpoints)
+	if err != nil {
+		glog.Errorf("Loadbalancer failure: %s", err)
+		return nil, err
+	}
+	endpoint, ok := pendpoint.(*Endpoint)
+	if !ok {
+		return nil, fmt.Errorf("Failed to convert types! Unknown type: %v", pendpoint)
+	}
+	return endpoint, nil
+}
+
+func (p *ReverseProxy) proxyRequest(
+	w http.ResponseWriter, req *http.Request, instructions *ProxyInstructions, endpoints []loadbalance.Endpoint) (*Upstream, error) {
 
 	if !instructions.Failover {
-		upstream := upstreams[0]
-		glog.Infof("Without failover, proxy to upstream: %s", upstream)
-		err := p.proxyToUpstream(w, req, instructions, upstream)
+		endpoint, err := p.nextEndpoint(endpoints)
+		if err != nil {
+			glog.Errorf("Load Balancer failure: %s", err)
+			return nil, err
+		}
+		glog.Infof("Without failover, proxy to upstream: %s", endpoint.upstream)
+		err = p.proxyToUpstream(w, req, instructions, endpoint.upstream)
 		if err != nil {
 			glog.Errorf("Upstream error: %s", err)
 			return nil, NewHttpError(http.StatusBadGateway)
 		}
-		return upstream, nil
+		return endpoint.upstream, nil
 	}
 
 	// We are allowed to fallback in case of upstream failure,
@@ -213,17 +224,23 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request, in
 	reader := &Buffer{bytes.NewReader(buffer)}
 	req.Body = reader
 
-	for _, upstream := range upstreams {
+	for i := 0; i < len(endpoints); i++ {
 		_, err := reader.Seek(0, 0)
 		if err != nil {
 			return nil, err
 		}
-		glog.Infof("With failover, proxy to upstream: %s", upstream)
-		err = p.proxyToUpstream(w, req, instructions, upstream)
+		endpoint, err := p.nextEndpoint(endpoints)
 		if err != nil {
-			glog.Errorf("Upstream %s error, falling back to another", upstream)
+			glog.Errorf("Load Balancer failure: %s", err)
+			return nil, err
+		}
+		glog.Infof("With failover, proxy to upstream: %s", endpoint.upstream)
+		err = p.proxyToUpstream(w, req, instructions, endpoint.upstream)
+		if err != nil {
+			glog.Errorf("Upstream %s error, falling back to another", endpoint.upstream)
+			endpoint.active = false
 		} else {
-			return upstream, nil
+			return endpoint.upstream, nil
 		}
 	}
 
