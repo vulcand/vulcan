@@ -150,8 +150,9 @@ func (s *ThrottlerSuite) TestThrottlerRatesOneUpstreamOut(c *C) {
 	upstreamStats, _, err := s.throttler.throttle(instructions)
 
 	c.Assert(err, IsNil)
-	c.Assert(1, Equals, len(upstreamStats))
-	c.Assert(upstreamStats[0].upstream.Id(), Equals, "http://yahoo.com")
+	c.Assert(len(upstreamStats), Equals, 2)
+	c.Assert(upstreamStats[0].ExceededLimits(), Equals, true)
+	c.Assert(upstreamStats[1].ExceededLimits(), Equals, false)
 }
 
 // All upstreams are out, make sure that retryTime is calculated properly
@@ -169,7 +170,7 @@ func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOut(c *C) {
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
 	c.Assert(err, IsNil)
-	c.Assert(len(upstreamStats), Equals, 0)
+	c.Assert(len(upstreamStats), Equals, 2)
 	c.Assert(retrySeconds, Equals, 1)
 }
 
@@ -191,7 +192,7 @@ func (s *ThrottlerSuite) TestThrottlerRatesAllUpstreamsOutSlowestRate(c *C) {
 	upstreamStats, retrySeconds, err := s.throttler.throttle(instructions)
 
 	c.Assert(err, IsNil)
-	c.Assert(len(upstreamStats), Equals, 0)
+	c.Assert(len(upstreamStats), Equals, 2)
 	// seconds till next hour since s.timeProvider.CurrentTime
 	c.Assert(retrySeconds, Equals, 3233)
 }

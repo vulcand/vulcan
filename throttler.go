@@ -74,13 +74,13 @@ func (t *Throttler) throttleTokens(tokens []*Token) (retrySeconds int, err error
 
 func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*UpstreamStats, retrySeconds int, err error) {
 	retrySeconds = math.MaxInt32
-	outUpstreams = []*UpstreamStats{}
-	for _, upstream := range upstreams {
+	outUpstreams = make([]*UpstreamStats, len(upstreams))
+	for i, upstream := range upstreams {
 		upstreamStats, err := t.getUpstreamStats(upstream)
 		if err != nil {
 			return nil, -1, err
 		}
-
+		outUpstreams[i] = upstreamStats
 		upstreamRetry := t.statsRetrySeconds(upstreamStats.stats)
 		if upstreamRetry > 0 {
 			glog.Infof("Upstream [%s] is out of capacity, next retry: %d seconds", upstream, upstreamRetry)
@@ -88,7 +88,6 @@ func (t *Throttler) throttleUpstreams(upstreams []*Upstream) (outUpstreams []*Up
 				retrySeconds = upstreamRetry
 			}
 		} else {
-			outUpstreams = append(outUpstreams, upstreamStats)
 			retrySeconds = 0
 		}
 	}
@@ -179,4 +178,14 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 		}
 	}
 	return retry
+}
+
+func (u *UpstreamStats) ExceededLimits() bool {
+	for _, stat := range u.stats {
+		//requests in a given period exceeded rate value
+		if stat.counter >= stat.rate.Value {
+			return true
+		}
+	}
+	return false
 }

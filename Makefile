@@ -4,6 +4,14 @@ logtest:clean
 	CASSANDRA=yes go test -v ./... -gocheck.f "LogUtilsSuite.*"
 cstest:clean
 	CASSANDRA=yes go test -v ./... -gocheck.f "CassandraBackendSuite.*"
+pqtest:clean
+	go test -v ./datastruct -gocheck.f "PQSuite.*"
+rrtest:clean
+	go test -v ./loadbalance -gocheck.f "RoundRobinSuite.*"
+rrtest-coverage:clean
+	gocov test -v  ./loadbalance -gocheck.f "RoundRobinSuite.*" | gocov report
+pqtest-coverage:clean
+	gocov test -v ./datastruct  | gocov report
 coverage: clean
 	gocov test | gocov report
 annotate: clean
@@ -16,8 +24,8 @@ all:
 clean:
 	find -name flymake_* -delete
 run: all
-	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=memory -lb=random -log_dir=/tmp -logcleanup=24h
+	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
 runcs: all
-	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:6263 -b=cassandra -lb=random -csnode=localhost -cskeyspace=vulcan_dev -cscleanup=true -cscleanuptime=19:05 -log_dir=/tmp
+	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:6263 -b=cassandra -lb=roundrobin -csnode=localhost -cskeyspace=vulcan_dev -cscleanup=true -cscleanuptime=19:05 -log_dir=/tmp
 sloccount:
 	 find . -name "*.go" -print0 | xargs -0 wc -l

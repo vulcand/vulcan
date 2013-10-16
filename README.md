@@ -210,7 +210,7 @@ vulcan \
        -logcleanup=24h \            # clean up logs every 24 hours
        -log_dir=/var/log/           # keep log files in this folder
        -pid=/var/run/vulcan.pid     # create pid file
-       -lb=random \                 # use random load balancer
+       -lb=roundrobin \             # use round robin load balancer
        -b=cassandra \               # use cassandra for throttling
        -cscleanup=true \            # cleanup old counters
        -cscleanuptime=19:05 \       # cleanup counters 19:05 UTC every day
