@@ -8,10 +8,14 @@ import (
 	"hash/fnv"
 )
 
+// This structure holds cursors for group of endpoints, so we can keep state
+// between iterations. Unused cursors are garbage collected if not used for
+// some certain period of time.
 type cursorMap struct {
 	// collection of cursors identified by the ids of endpoints
 	cursors map[uint32][]*cursor
 	// keep expiration times in the priority queue (min heap) so we can TTL effectively
+	// priority queue holds the ttls
 	expiryTimes *priorityQueue
 }
 
@@ -25,6 +29,8 @@ func newCursorMap() *cursorMap {
 	return m
 }
 
+// Creates a new cursor and returns the existing one if it already exists. If the cursor exists,
+// function updates it ttl so it won't expire in the nearest future.
 func (cm *cursorMap) upsertCursor(endpoints []loadbalance.Endpoint, expiryTime int) *cursor {
 	c := cm.getCursor(endpoints)
 	if c != nil {
@@ -32,7 +38,7 @@ func (cm *cursorMap) upsertCursor(endpoints []loadbalance.Endpoint, expiryTime i
 		cm.expiryTimes.Update(c.item, expiryTime)
 		return c
 	} else {
-		c = cm.addCursor(endpoints)
+		c := cm.addCursor(endpoints)
 		// In case if we have not seen this set of endpoints before,
 		// add it to the expiryTimes priority queue and the map of our endpoint set
 		item := &pqItem{
@@ -45,7 +51,7 @@ func (cm *cursorMap) upsertCursor(endpoints []loadbalance.Endpoint, expiryTime i
 	}
 }
 
-// Returns cursort for the given endpoints set, or returns nil if there's none
+// Returns cursor for the given endpoints set, or returns nil if there's no such cursor
 func (cm *cursorMap) getCursor(endpoints []loadbalance.Endpoint) *cursor {
 	cursorHash := computeHash(endpoints)
 	// Find if the endpoints combination we are referring to already exists
@@ -65,7 +71,7 @@ func (cm *cursorMap) getCursor(endpoints []loadbalance.Endpoint) *cursor {
 	return nil
 }
 
-// Add a new cursor to the collection of cursors
+// Add a new cursor to the collection of cursors, handles collisions by appending to the slice of cursors
 func (cm *cursorMap) addCursor(endpoints []loadbalance.Endpoint) *cursor {
 	c := newCursor(endpoints)
 	cursors, exists := cm.cursors[c.hash]
@@ -73,6 +79,7 @@ func (cm *cursorMap) addCursor(endpoints []loadbalance.Endpoint) *cursor {
 		cm.cursors[c.hash] = []*cursor{c}
 	} else {
 		cm.cursors[c.hash] = append(cursors, c)
+		glog.Infof("RoundRobin: WOW collision, hash: %d, cursors: %d", c.hash, len(cursors))
 	}
 	return c
 }
@@ -95,20 +102,20 @@ func (cm *cursorMap) cursorIndex(c *cursor) int {
 func (cm *cursorMap) deleteCursor(c *cursor) error {
 	cursors, exists := cm.cursors[c.hash]
 	if !exists {
-		return fmt.Errorf("Cursor not found")
+		return fmt.Errorf("RoundRobin: cursor not found")
+	}
+	if len(cursors) == 1 {
+		delete(cm.cursors, c.hash)
 	}
 	index := cm.cursorIndex(c)
 	if index == -1 {
 		return fmt.Errorf("Cursor not found")
 	}
-	if index == 0 && len(cursors) == 1 {
-		delete(cm.cursors, c.hash)
-	} else {
-		cm.cursors[c.hash] = append(cursors[:index], cursors[index+1:]...)
-	}
+	cm.cursors[c.hash] = append(cursors[:index], cursors[index+1:]...)
 	return nil
 }
 
+// Computes the hash of the cursor by computing the hash of every enpdoint supplied
 func computeHash(endpoints []loadbalance.Endpoint) uint32 {
 	h := fnv.New32()
 	for _, endpoint := range endpoints {
@@ -117,37 +124,25 @@ func computeHash(endpoints []loadbalance.Endpoint) uint32 {
 	return h.Sum32()
 }
 
-// Determines if two endpoint sets are equal by comparing endpoint ids one by one
-func endpointSetsEqual(a []loadbalance.Endpoint, b []loadbalance.Endpoint) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, _ := range a {
-		if a[i].Id() != b[i].Id() {
-			return false
-		}
-	}
-	return true
-}
-
+// This function checks if there a
 func (cm *cursorMap) deleteExpiredCursors(now int) {
-	glog.Infof("Gc start: %d cursors, expiry times: %d", len(cm.cursors), cm.expiryTimes.Len())
+	glog.Infof("RoundRobin GC: start: %d cursors, expiry times: %d", len(cm.cursors), cm.expiryTimes.Len())
 	for {
 		if cm.expiryTimes.Len() == 0 {
 			break
 		}
 		item := cm.expiryTimes.Peek()
 		if item.priority > now {
-			glog.Infof("Nothing to expire, earliest expiry is: Cursor(id=%s, lastAccess=%d), now is %d", item.c.hash, item.priority, now)
+			glog.Infof("RoundRobin GC: Nothing to expire, earliest expiry is: Cursor(id=%d, lastAccess=%d), now is %d", item.c.hash, item.priority, now)
 			break
 		} else {
-			glog.Infof("Cursor(id=%s, lastAccess=%d) has expired (now=%d), deleting", item.c.hash, item.priority, now)
+			glog.Infof("RoundRobin GC: Cursor(id=%s, lastAccess=%d) has expired (now=%d), deleting", item.c.hash, item.priority, now)
 			pitem := heap.Pop(cm.expiryTimes)
 			item := pitem.(*pqItem)
 			cm.deleteCursor(item.c)
 		}
 	}
-	glog.Infof("RoundRobin gc end: %d cursors, expiry times: %d", len(cm.cursors), cm.expiryTimes.Len())
+	glog.Infof("RoundRobin GC end: %d cursors, expiry times: %d", len(cm.cursors), cm.expiryTimes.Len())
 }
 
 // Cursor represents the current position in the given endpoints sequence
