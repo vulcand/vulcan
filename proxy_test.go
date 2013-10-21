@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mailgun/vulcan/backend"
 	"github.com/mailgun/vulcan/loadbalance"
+	"github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/timeutils"
 	"io/ioutil"
 	. "launchpad.net/gocheck"
@@ -115,7 +116,7 @@ func (s *ProxySuite) TestProxyAuthRequired(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, http.Header{}, "")
@@ -136,7 +137,7 @@ func (s *ProxySuite) TestProxyAccessDenied(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
@@ -159,7 +160,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	requestHeaders := http.Header{"X-Custom-Header": []string{"Bla"}}
 	copyHeaders(requestHeaders, s.authHeaders)
@@ -201,7 +202,7 @@ func (s *ProxySuite) TestSuccessControlFailover(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{"http://localhost:9999", control.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 	}
 
 	proxyHandler, err := NewReverseProxy(proxySettings)
@@ -227,7 +228,7 @@ func (s *ProxySuite) TestUpstreamGetFailover(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -248,7 +249,7 @@ func (s *ProxySuite) TestFailedUpstreamPostFailover(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 
 	response, bodyBytes := s.Post(c, proxy.URL, s.authHeaders, url.Values{"key": {"Value"}, "id": {"123"}})
@@ -283,7 +284,7 @@ func (s *ProxySuite) TestFailedUpstreamPostTimeoutFailover(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{control.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
 		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
 	}
@@ -316,7 +317,7 @@ func (s *ProxySuite) TestUpstreamHeadersAdded(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -342,7 +343,7 @@ func (s *ProxySuite) TestInstructionsHeadersAdded(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -368,7 +369,7 @@ func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 
 	headers := make(http.Header)
@@ -407,7 +408,7 @@ func (s *ProxySuite) TestUpstreamThrottled(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, s.backend, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, 429)
@@ -428,7 +429,7 @@ func (s *ProxySuite) TestUpstreamThrottlerDown(c *C) {
 	})
 	defer control.Close()
 
-	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, loadbalance.NewRoundRobin(s.timeProvider))
+	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -439,7 +440,7 @@ func (s *ProxySuite) TestProxyControlServerWrongUrl(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{"whoa"},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 	}
 	proxyHandler, err := NewReverseProxy(proxySettings)
 	if err != nil {
@@ -456,7 +457,7 @@ func (s *ProxySuite) TestProxyControlServerUnreachableControlServer(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{"http://localhost:9999"},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 	}
 
 	proxyHandler, err := NewReverseProxy(proxySettings)
@@ -479,7 +480,7 @@ func (s *ProxySuite) TestUpstreamUpstreamIsDown(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{control.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 	}
 	proxyHandler, err := NewReverseProxy(proxySettings)
 	if err != nil {
@@ -509,7 +510,7 @@ func (s *ProxySuite) TestControlServerTimeout(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{control.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
 		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
 	}
@@ -547,7 +548,7 @@ func (s *ProxySuite) TestControlServerTimeoutFailover(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{control.URL, control2.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
 		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
 	}
@@ -580,7 +581,7 @@ func (s *ProxySuite) TestUpstreamServerTimeout(c *C) {
 	proxySettings := &ProxySettings{
 		ControlServers:   []string{control.URL},
 		ThrottlerBackend: s.backend,
-		LoadBalancer:     loadbalance.NewRoundRobin(s.timeProvider),
+		LoadBalancer:     roundrobin.NewRoundRobin(s.timeProvider),
 		HttpReadTimeout:  time.Duration(1) * time.Millisecond,
 		HttpDialTimeout:  time.Duration(1) * time.Millisecond,
 	}

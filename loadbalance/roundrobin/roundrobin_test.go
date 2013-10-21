@@ -1,6 +1,7 @@
-package loadbalance
+package roundrobin
 
 import (
+	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/timeutils"
 	. "launchpad.net/gocheck"
 	"testing"
@@ -35,7 +36,7 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 
 func (s *RoundRobinSuite) TestNoEndpoints(c *C) {
 	r := NewRoundRobin(s.timeProvider)
-	_, err := r.NextEndpoint([]Endpoint{})
+	_, err := r.NextEndpoint([]loadbalance.Endpoint{})
 	c.Assert(err, NotNil)
 }
 
@@ -178,16 +179,17 @@ func (s *RoundRobinSuite) TestRoundRobinGc(c *C) {
 	c.Assert(e.Id(), Equals, "c")
 
 	// Let's inspect and make sure the first one was deleted
-	c.Assert(len(r.cursors), Equals, 1)
-	c.Assert(len(*r.expiryTimes), Equals, 1)
+	c.Assert(len(r.cursors.cursors), Equals, 1)
+	c.Assert(len(*r.cursors.expiryTimes), Equals, 1)
 
 	// Make sure the remaining one is correct
-	_, exists := r.cursors["abc"]
-	c.Assert(exists, Equals, true)
+	for _, cr := range r.cursors.cursors {
+		c.Assert(cr[0].endpointIds, DeepEquals, []string{"a", "b", "c"})
+	}
 }
 
-func endpoints(epts ...*E) []Endpoint {
-	toReturn := make([]Endpoint, len(epts))
+func endpoints(epts ...*E) []loadbalance.Endpoint {
+	toReturn := make([]loadbalance.Endpoint, len(epts))
 	for i, e := range epts {
 		toReturn[i] = e
 	}

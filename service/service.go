@@ -15,6 +15,7 @@ import (
 	"github.com/mailgun/vulcan"
 	"github.com/mailgun/vulcan/backend"
 	"github.com/mailgun/vulcan/loadbalance"
+	"github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/timeutils"
 	"io/ioutil"
 	"net/http"
@@ -113,7 +114,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 
 	var loadBalancer loadbalance.Balancer
 	if s.options.loadBalancer == "roundrobin" || s.options.loadBalancer == "random" {
-		loadBalancer = loadbalance.NewRoundRobin(&timeutils.RealTime{})
+		loadBalancer = roundrobin.NewRoundRobin(&timeutils.RealTime{})
 	} else {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
 	}

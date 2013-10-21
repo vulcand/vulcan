@@ -5,15 +5,15 @@ logtest:clean
 cstest:clean
 	CASSANDRA=yes go test -v ./... -gocheck.f "CassandraBackendSuite.*"
 pqtest:clean
-	go test -v ./datastruct -gocheck.f "PQSuite.*"
+	go test -v ./loadbalance/roundrobin -gocheck.f "PQSuite.*"
 rrtest:clean
-	go test -v ./loadbalance -gocheck.f "RoundRobinSuite.*"
+	go test -v ./loadbalance/roundrobin -gocheck.f "RoundRobinSuite.*"
 rrtest-coverage:clean
-	gocov test -v  ./loadbalance -gocheck.f "RoundRobinSuite.*" | gocov report
+	gocov test -v  ./loadbalance/roundrobin -gocheck.f "RoundRobinSuite.*" | gocov report
 pqtest-coverage:clean
-	gocov test -v ./datastruct  | gocov report
+	gocov test -v ./loadbalance/roundrobin | gocov report
 coverage: clean
-	gocov test | gocov report
+	gocov test -v ./... | gocov report
 annotate: clean
 	FILENAME=$(shell uuidgen)
 	gocov test  > /tmp/--go-test-server-coverage.json
