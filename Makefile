@@ -20,8 +20,16 @@ annotate: clean
 all:
 	go install github.com/mailgun/vulcan # installs library
 	go install github.com/mailgun/vulcan/vulcan # and service
+deps:
+	go get -v -u github.com/axw/gocov
+	go install github.com/axw/gocov/gocov
+	go get -v -u github.com/golang/glog
+	go get -v -u github.com/mailgun/glogutils
+	go get -v -u github.com/axw/gocov
+	go get -v -u launchpad.net/gocheck
+	go get -v -u github.com/mailgun/gocql
 clean:
-	find -name flymake_* -delete
+	find . -name flymake_* -delete
 run: all
 	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
 runcs: all

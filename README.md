@@ -171,15 +171,14 @@ __Install go__
 
 __Get vulcan and install deps__
  
-```bash 
+```bash
+# set your GOPATH to something reasonable.
+export GOPATH=~/projects/vulcan
+cd $GOPATH
 go get github.com/mailgun/vulcan
 
-go get -v github.com/axw/gocov # test coverage
-go install github.com/axw/gocov/gocov # test coverage 
-go get -v github.com/golang/glog # logging system
-go get -v github.com/mailgun/glogutils # utils for google logging library
-go get -v launchpad.net/gocheck # advanced testing framework
-go get -v github.com/mailgun/gocql # cassandra client
+make -C ./src/github.com/mailgun/vulcan deps
+cd ./src/github.com/mailgun/vulcan
 ```
 
 __Run in devmode__
