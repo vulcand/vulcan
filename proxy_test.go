@@ -121,7 +121,7 @@ func (s *ProxySuite) TestProxyAuthRequired(c *C) {
 
 	response, bodyBytes := s.Get(c, proxy.URL, http.Header{}, "")
 	c.Assert(response.StatusCode, Equals, http.StatusProxyAuthRequired)
-	c.Assert(string(bodyBytes), Equals, http.StatusText(http.StatusProxyAuthRequired))
+	c.Assert(string(bodyBytes), Equals, fmt.Sprintf(`{"error":"%s"}`, http.StatusText(http.StatusProxyAuthRequired)))
 }
 
 // Proxy denies request

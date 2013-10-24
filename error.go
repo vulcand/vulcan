@@ -18,10 +18,19 @@ func (r *HttpError) Error() string {
 }
 
 func NewHttpError(statusCode int) *HttpError {
+
+	encodedError, err := json.Marshal(map[string]interface{}{
+		"error": http.StatusText(statusCode),
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
 	return &HttpError{
 		StatusCode: statusCode,
 		Status:     http.StatusText(statusCode),
-		Body:       []byte(http.StatusText(statusCode))}
+		Body:       encodedError}
 }
 
 func TooManyRequestsError(retrySeconds int) *HttpError {
