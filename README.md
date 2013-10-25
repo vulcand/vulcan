@@ -1,5 +1,7 @@
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 
+Trello: https://trello.com/b/DLlP2CKX/vulcan
+
 Vulcan
 ------
 
