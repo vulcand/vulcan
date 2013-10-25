@@ -3,6 +3,7 @@ package vulcan
 import (
 	"github.com/golang/glog"
 	"github.com/mailgun/vulcan/backend"
+	. "github.com/mailgun/vulcan/instructions"
 	"math"
 )
 
@@ -171,7 +172,7 @@ func (t *Throttler) statsRetrySeconds(stats []*RateStats) int {
 	for _, stat := range stats {
 		//requests in a given period exceeded rate value
 		if stat.counter >= stat.rate.Value {
-			retrySeconds := stat.rate.retrySeconds(t.backend.UtcNow())
+			retrySeconds := stat.rate.RetrySeconds(t.backend.UtcNow())
 			if retrySeconds > retry {
 				retry = retrySeconds
 			}

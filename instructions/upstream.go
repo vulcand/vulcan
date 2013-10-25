@@ -1,6 +1,7 @@
-package vulcan
+package instructions
 
 import (
+	"github.com/mailgun/vulcan/netutils"
 	"net/url"
 )
 
@@ -19,7 +20,7 @@ type Upstream struct {
 
 func NewUpstream(inUrl string, rates []*Rate, headers map[string][]string) (*Upstream, error) {
 	//To ensure that upstream is correct url
-	parsedUrl, err := parseUrl(inUrl)
+	parsedUrl, err := netutils.ParseUrl(inUrl)
 	if err != nil {
 		return nil, err
 	}

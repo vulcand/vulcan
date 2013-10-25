@@ -1,11 +1,18 @@
-package vulcan
+package servicecontrol
 
 import (
 	. "launchpad.net/gocheck"
 	"net/http"
+	"testing"
 )
 
-func (s *MainSuite) TestFromHttpSuccess(c *C) {
+func TestClient(t *testing.T) { TestingT(t) }
+
+type ClientSuite struct{}
+
+var _ = Suite(&ClientSuite{})
+
+func (s *ClientSuite) TestFromHttpSuccess(c *C) {
 	requests := []struct {
 		In  http.Request
 		Out ControlRequest
@@ -25,7 +32,7 @@ func (s *MainSuite) TestFromHttpSuccess(c *C) {
 	}
 }
 
-func (s *MainSuite) TestFromHttpFail(c *C) {
+func (s *ClientSuite) TestFromHttpFail(c *C) {
 	requests := []http.Request{
 		http.Request{
 			Method: "GET",

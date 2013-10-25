@@ -14,6 +14,7 @@ import (
 	"github.com/mailgun/gocql"
 	"github.com/mailgun/vulcan"
 	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/control/servicecontrol"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/timeutils"
@@ -119,8 +120,17 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
 	}
 
+	controllerSettings := &servicecontrol.Settings{
+		Servers:      s.options.controlServers,
+		LoadBalancer: loadBalancer,
+	}
+	controller, err := servicecontrol.NewClient(controllerSettings)
+	if err != nil {
+		return nil, err
+	}
+
 	proxySettings := &vulcan.ProxySettings{
-		ControlServers:   s.options.controlServers,
+		Controller:       controller,
 		ThrottlerBackend: b,
 		LoadBalancer:     loadBalancer,
 	}

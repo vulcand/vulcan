@@ -2,6 +2,7 @@ package vulcan
 
 import (
 	"github.com/mailgun/vulcan/backend"
+	. "github.com/mailgun/vulcan/instructions"
 	"github.com/mailgun/vulcan/timeutils"
 	. "launchpad.net/gocheck"
 	"net/http"

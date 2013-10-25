@@ -1,4 +1,4 @@
-package vulcan
+package instructions
 
 // Token identifies the request in any
 // meaningful way, e.g. Token Id can be account id,

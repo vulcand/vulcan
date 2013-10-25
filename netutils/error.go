@@ -1,4 +1,4 @@
-package vulcan
+package netutils
 
 import (
 	"encoding/json"
@@ -50,11 +50,4 @@ func TooManyRequestsError(retrySeconds int) *HttpError {
 		StatusCode: 429, //RFC 6585
 		Status:     "Too Many Requests",
 		Body:       encodedError}
-}
-
-// We somehow failed to authenticate the request
-type AuthError string
-
-func (f AuthError) Error() string {
-	return string(f)
 }

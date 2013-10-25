@@ -1,6 +1,7 @@
-package vulcan
+package instructions
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -21,4 +22,21 @@ type ProxyInstructions struct {
 	Upstreams []*Upstream
 	// If supplied, headers will be added to the proxied request.
 	Headers http.Header
+}
+
+func NewProxyInstructions(
+	failover bool,
+	tokens []*Token,
+	upstreams []*Upstream,
+	headers http.Header) (*ProxyInstructions, error) {
+
+	if len(upstreams) <= 0 {
+		return nil, fmt.Errorf("At least one upstream is required")
+	}
+
+	return &ProxyInstructions{
+		Failover:  failover,
+		Tokens:    tokens,
+		Upstreams: upstreams,
+		Headers:   headers}, nil
 }
