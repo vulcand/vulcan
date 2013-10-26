@@ -1,12 +1,19 @@
-package vulcan
+package instructions
 
 import (
 	. "launchpad.net/gocheck"
 	"net/url"
+	"testing"
 	"time"
 )
 
-func (s *MainSuite) TestUnmarshalSuccessBig(c *C) {
+func Test(t *testing.T) { TestingT(t) }
+
+type MarshalSuite struct{}
+
+var _ = Suite(&RateSuite{})
+
+func (s *MarshalSuite) TestUnmarshalSuccessBig(c *C) {
 	objects := []struct {
 		Bytes    []byte
 		Expected ProxyInstructions
@@ -149,7 +156,7 @@ func (s *MainSuite) TestUnmarshalSuccessBig(c *C) {
 		},
 	}
 	for _, u := range objects {
-		authResponse, err := proxyInstructionsFromJson(u.Bytes)
+		authResponse, err := ProxyInstructionsFromJson(u.Bytes)
 		c.Assert(err, IsNil)
 		//we will be checking individual elements here
 		//as if something fails would be impossible to debug
@@ -175,7 +182,7 @@ func (s *MainSuite) TestUnmarshalSuccessBig(c *C) {
 	}
 }
 
-func (s *MainSuite) TestUnmarshalFail(c *C) {
+func (s *MarshalSuite) TestUnmarshalFail(c *C) {
 	objects := [][]byte{
 		//Empty
 		[]byte(""),
@@ -215,7 +222,7 @@ func (s *MainSuite) TestUnmarshalFail(c *C) {
 }`),
 	}
 	for _, bytes := range objects {
-		_, err := proxyInstructionsFromJson(bytes)
+		_, err := ProxyInstructionsFromJson(bytes)
 		c.Assert(err, NotNil)
 	}
 }

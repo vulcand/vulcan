@@ -1,4 +1,4 @@
-package vulcan
+package instructions
 
 import (
 	"fmt"
@@ -30,23 +30,23 @@ func NewRate(increment int64, value int64, period time.Duration) (*Rate, error) 
 
 // Calculates when this rate can be hit the next time from
 // the given time t, assuming all the requests in the given
-func (r *Rate) retrySeconds(now time.Time) int {
-	return int(r.nextBucket(now).Unix() - now.Unix())
+func (r *Rate) RetrySeconds(now time.Time) int {
+	return int(r.NextBucket(now).Unix() - now.Unix())
 }
 
 //Returns epochSeconds rounded to the rate period
 //e.g. minutes rate would return epoch seconds with seconds set to zero
 //hourly rate would return epoch seconds with minutes and seconds set to zero
-func (r *Rate) currentBucket(t time.Time) time.Time {
+func (r *Rate) CurrentBucket(t time.Time) time.Time {
 	return t.Truncate(r.Period)
 }
 
 // Returns the epoch seconds of the begining of the next time bucket
-func (r *Rate) nextBucket(t time.Time) time.Time {
-	return r.currentBucket(t.Add(r.Period))
+func (r *Rate) NextBucket(t time.Time) time.Time {
+	return r.CurrentBucket(t.Add(r.Period))
 }
 
 // Returns the equivalent of the rate period in seconds
-func (r *Rate) periodSeconds() int64 {
+func (r *Rate) PeriodSeconds() int64 {
 	return int64(time.Duration(r.Value) * time.Duration(r.Period) / time.Second)
 }

@@ -4,7 +4,7 @@ from json encoded strings. This logic is pretty verbose, so we are
 concentrating it here to keep original modules clean and focusd on the
 acutal actions.
 */
-package vulcan
+package instructions
 
 import (
 	"encoding/json"
@@ -39,7 +39,7 @@ type UpstreamObj struct {
 	Headers map[string][]string
 }
 
-func proxyInstructionsFromJson(bytes []byte) (*ProxyInstructions, error) {
+func ProxyInstructionsFromJson(bytes []byte) (*ProxyInstructions, error) {
 	var r ProxyInstructionsObj
 	err := json.Unmarshal(bytes, &r)
 	if err != nil {

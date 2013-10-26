@@ -1,11 +1,18 @@
-package vulcan
+package instructions
 
 import (
 	. "launchpad.net/gocheck"
+	"testing"
 	"time"
 )
 
-func (s *MainSuite) TestNewRateSuccess(c *C) {
+func TestRates(t *testing.T) { TestingT(t) }
+
+type RateSuite struct{}
+
+var _ = Suite(&RateSuite{})
+
+func (s *RateSuite) TestNewRateSuccess(c *C) {
 	rates := []struct {
 		Value     int64
 		Increment int64
@@ -33,7 +40,7 @@ func (s *MainSuite) TestNewRateSuccess(c *C) {
 	}
 }
 
-func (s *MainSuite) TestNewRateFail(c *C) {
+func (s *RateSuite) TestNewRateFail(c *C) {
 	rates := []struct {
 		Value     int64
 		Increment int64
@@ -77,7 +84,7 @@ func (s *MainSuite) TestNewRateFail(c *C) {
 	}
 }
 
-func (s *MainSuite) TestPeriodSecondsAndDuration(c *C) {
+func (s *RateSuite) TestPeriodSecondsAndDuration(c *C) {
 	rates := []struct {
 		Rate     Rate
 		Seconds  int64
@@ -113,11 +120,11 @@ func (s *MainSuite) TestPeriodSecondsAndDuration(c *C) {
 	}
 
 	for _, u := range rates {
-		c.Assert(u.Rate.periodSeconds(), Equals, u.Seconds)
+		c.Assert(u.Rate.PeriodSeconds(), Equals, u.Seconds)
 	}
 }
 
-func (s *MainSuite) TestBuckets(c *C) {
+func (s *RateSuite) TestBuckets(c *C) {
 	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
 	startMinutes := time.Date(2012, 3, 4, 5, 6, 0, 0, time.UTC)
 
@@ -156,12 +163,12 @@ func (s *MainSuite) TestBuckets(c *C) {
 	}
 
 	for _, u := range rates {
-		c.Assert(u.Rate.currentBucket(start), Equals, u.CurrentBucket)
-		c.Assert(u.Rate.nextBucket(start), Equals, u.NextBucket)
+		c.Assert(u.Rate.CurrentBucket(start), Equals, u.CurrentBucket)
+		c.Assert(u.Rate.NextBucket(start), Equals, u.NextBucket)
 	}
 }
 
-func (s *MainSuite) TestRetrySeconds(c *C) {
+func (s *RateSuite) TestRetrySeconds(c *C) {
 	start := time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC)
 
 	rates := []struct {
@@ -203,6 +210,6 @@ func (s *MainSuite) TestRetrySeconds(c *C) {
 	}
 
 	for _, u := range rates {
-		c.Assert(u.Rate.retrySeconds(start), Equals, u.RetrySeconds)
+		c.Assert(u.Rate.RetrySeconds(start), Equals, u.RetrySeconds)
 	}
 }

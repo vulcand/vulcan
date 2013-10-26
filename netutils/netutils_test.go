@@ -1,14 +1,34 @@
-package vulcan
+package netutils
 
 import (
 	. "launchpad.net/gocheck"
 	"net/http"
 	"net/url"
+	"testing"
 )
+
+func TestUtils(t *testing.T) { TestingT(t) }
+
+type NetUtilsSuite struct{}
+
+var _ = Suite(&NetUtilsSuite{})
+
+// Make sure parseUrl is strict enough not to accept total garbage
+func (s *NetUtilsSuite) TestParseBadUrl(c *C) {
+	badUrls := []string{
+		"",
+		" some random text ",
+		"http---{}{\\bad bad url",
+	}
+	for _, badUrl := range badUrls {
+		_, err := ParseUrl(badUrl)
+		c.Assert(err, NotNil)
+	}
+}
 
 //Just to make sure we don't panic, return err and not
 //username and pass and cover the function
-func (s *MainSuite) TestParseBadHeaders(c *C) {
+func (s *NetUtilsSuite) TestParseBadHeaders(c *C) {
 	headers := []string{
 		//just empty string
 		"",
@@ -22,14 +42,14 @@ func (s *MainSuite) TestParseBadHeaders(c *C) {
 		"Basic YW55IGNhcm5hbCBwbGVhcw==",
 	}
 	for _, h := range headers {
-		_, err := parseAuthHeader(h)
+		_, err := ParseAuthHeader(h)
 		c.Assert(err, NotNil)
 	}
 }
 
 //Just to make sure we don't panic, return err and not
 //username and pass and cover the function
-func (s *MainSuite) TestParseSuccess(c *C) {
+func (s *NetUtilsSuite) TestParseSuccess(c *C) {
 	headers := []struct {
 		Header   string
 		Expected BasicAuth
@@ -45,7 +65,7 @@ func (s *MainSuite) TestParseSuccess(c *C) {
 		},
 	}
 	for _, h := range headers {
-		request, err := parseAuthHeader(h.Header)
+		request, err := ParseAuthHeader(h.Header)
 		c.Assert(err, IsNil)
 		c.Assert(request.Username, Equals, h.Expected.Username)
 		c.Assert(request.Password, Equals, h.Expected.Password)
@@ -53,20 +73,9 @@ func (s *MainSuite) TestParseSuccess(c *C) {
 	}
 }
 
-// We should panic with wrong args
-func (s *MainSuite) TestRandomRangeFail(c *C) {
-	c.Assert(func() { randomRange(0, 0) }, PanicMatches, `Invalid range .*`)
-}
-
-// Just make sure we don't panic on good args
-func (s *MainSuite) TestRandomSuccess(c *C) {
-	randomRange(0, 1)
-	randomRange(2, 4)
-}
-
 // Make sure copy does it right, so the copied url
 // is safe to alter without modifying the other
-func (s *MainSuite) TestCopyUrl(c *C) {
+func (s *NetUtilsSuite) TestCopyUrl(c *C) {
 	urlA := &url.URL{
 		Scheme:   "http",
 		Host:     "localhost:5000",
@@ -76,32 +85,19 @@ func (s *MainSuite) TestCopyUrl(c *C) {
 		Fragment: "#hello",
 		User:     &url.Userinfo{},
 	}
-	urlB := copyUrl(urlA)
+	urlB := CopyUrl(urlA)
 	c.Assert(urlB, DeepEquals, urlB)
 	urlB.Scheme = "https"
 	c.Assert(urlB, Not(DeepEquals), urlA)
 }
 
-// Make sure parseUrl is strict enough not to accept total garbage
-func (s *MainSuite) TestParseBadUrl(c *C) {
-	badUrls := []string{
-		"",
-		" some random text ",
-		"http---{}{\\bad bad url",
-	}
-	for _, badUrl := range badUrls {
-		_, err := parseUrl(badUrl)
-		c.Assert(err, NotNil)
-	}
-}
-
 // Make sure copy headers is not shallow and copies all headers
-func (s *MainSuite) TestCopyHeaders(c *C) {
+func (s *NetUtilsSuite) TestCopyHeaders(c *C) {
 	source, destination := make(http.Header), make(http.Header)
 	source.Add("a", "b")
 	source.Add("c", "d")
 
-	copyHeaders(destination, source)
+	CopyHeaders(destination, source)
 
 	c.Assert(destination.Get("a"), Equals, "b")
 	c.Assert(destination.Get("c"), Equals, "d")
@@ -112,20 +108,20 @@ func (s *MainSuite) TestCopyHeaders(c *C) {
 	c.Assert(destination.Get("a"), Equals, "b")
 }
 
-func (s *MainSuite) TestHasHeaders(c *C) {
+func (s *NetUtilsSuite) TestHasHeaders(c *C) {
 	source := make(http.Header)
 	source.Add("a", "b")
 	source.Add("c", "d")
-	c.Assert(hasHeaders([]string{"a", "f"}, source), Equals, true)
-	c.Assert(hasHeaders([]string{"i", "j"}, source), Equals, false)
+	c.Assert(HasHeaders([]string{"a", "f"}, source), Equals, true)
+	c.Assert(HasHeaders([]string{"i", "j"}, source), Equals, false)
 }
 
-func (s *MainSuite) TestRemoveHeaders(c *C) {
+func (s *NetUtilsSuite) TestRemoveHeaders(c *C) {
 	source := make(http.Header)
 	source.Add("a", "b")
 	source.Add("a", "m")
 	source.Add("c", "d")
-	removeHeaders([]string{"a"}, source)
+	RemoveHeaders([]string{"a"}, source)
 	c.Assert(source.Get("a"), Equals, "")
 	c.Assert(source.Get("c"), Equals, "d")
 }

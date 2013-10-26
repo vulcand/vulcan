@@ -1,7 +1,9 @@
 package vulcan
 
 import (
+	"fmt"
 	"github.com/mailgun/vulcan/backend"
+	. "github.com/mailgun/vulcan/instructions"
 	"github.com/mailgun/vulcan/timeutils"
 	. "launchpad.net/gocheck"
 	"net/http"
@@ -42,6 +44,11 @@ func (s *ThrottlerSuite) newToken(tokenId string, rates ...*Rate) *Token {
 		panic(err)
 	}
 	return token
+}
+
+func getHit(now time.Time, key string, rate *Rate) string {
+	return fmt.Sprintf(
+		"%s_%s_%d", key, rate.Period.String(), rate.CurrentBucket(now).Unix())
 }
 
 func (s *ThrottlerSuite) rateBucket(key string, rate *Rate) string {

@@ -1,11 +1,18 @@
-package vulcan
+package instructions
 
 import (
 	. "launchpad.net/gocheck"
+	"testing"
 )
 
+func TestUpstream(t *testing.T) { TestingT(t) }
+
+type UpstreamSuite struct{}
+
+var _ = Suite(&UpstreamSuite{})
+
 // Make sure that upstream ids do not depend on the path
-func (s *MainSuite) TestUpstreamIds(c *C) {
+func (s *UpstreamSuite) TestUpstreamIds(c *C) {
 	dataSet := []struct {
 		url        string
 		expectedId string
@@ -25,9 +32,7 @@ func (s *MainSuite) TestUpstreamIds(c *C) {
 	}
 	for _, s := range dataSet {
 		u, err := NewUpstream(s.url, []*Rate{}, map[string][]string{})
-		e := newEndpoint(u, true)
 		c.Assert(err, IsNil)
 		c.Assert(u.Id(), Equals, s.expectedId)
-		c.Assert(e.Id(), Equals, s.expectedId)
 	}
 }
