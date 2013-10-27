@@ -238,7 +238,10 @@ func (s *ProxySuite) TestUpstreamGetFailover(c *C) {
 	defer upstream.Close()
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"failover": true, "upstreams": [{"url": "http://localhost:9999"}, {"url": "%s"}]}`, upstream.URL)))
+		w.Write(
+			[]byte(
+				fmt.Sprintf(`{"failover": {"active": true}, "upstreams": [{"url": "http://localhost:9999"}, {"url": "%s"}]}`,
+					upstream.URL)))
 	})
 	defer control.Close()
 
@@ -247,6 +250,33 @@ func (s *ProxySuite) TestUpstreamGetFailover(c *C) {
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream!")
+}
+
+func (s *ProxySuite) TestUpstreamGetFailoverCodes(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+		w.Write([]byte("Hi, I'm upstream, but I'm shutting down"))
+	})
+	defer upstream.Close()
+
+	upstream2 := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm upstream that you need"))
+	})
+	defer upstream2.Close()
+
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(
+			fmt.Sprintf(`{"failover": {"active": true, "codes": [410]}, "upstreams": [{"url": "%s"}, {"url": "%s"}]}`,
+				upstream.URL,
+				upstream2.URL)))
+	})
+	defer control.Close()
+
+	proxy := s.newProxy([]*httptest.Server{control}, &backend.FailingBackend{}, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream that you need")
 }
 
 func (s *ProxySuite) TestFailedUpstreamPostFailover(c *C) {
@@ -259,7 +289,7 @@ func (s *ProxySuite) TestFailedUpstreamPostFailover(c *C) {
 	defer upstream.Close()
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"failover": true, "upstreams": [{"url": "http://localhost:9999"}, {"url": "%s"}]}`, upstream.URL)))
+		w.Write([]byte(fmt.Sprintf(`{"failover": {"active": true}, "upstreams": [{"url": "http://localhost:9999"}, {"url": "%s"}]}`, upstream.URL)))
 	})
 	defer control.Close()
 
@@ -291,7 +321,7 @@ func (s *ProxySuite) TestFailedUpstreamPostTimeoutFailover(c *C) {
 	defer slowUpstream.CloseClientConnections()
 
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(fmt.Sprintf(`{"failover": true, "upstreams": [{"url": "%s"}, {"url": "%s"}]}`, slowUpstream.URL, upstream.URL)))
+		w.Write([]byte(fmt.Sprintf(`{"failover": {"active":true}, "upstreams": [{"url": "%s"}, {"url": "%s"}]}`, slowUpstream.URL, upstream.URL)))
 	})
 	defer control.Close()
 

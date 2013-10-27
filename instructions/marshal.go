@@ -14,7 +14,7 @@ import (
 )
 
 type ProxyInstructionsObj struct {
-	Failover  bool
+	Failover  Failover
 	Tokens    []TokenObj
 	Upstreams []UpstreamObj
 	Headers   map[string][]string
@@ -31,8 +31,7 @@ type RateObj struct {
 	Period    string
 }
 
-// This object is used for unmarshalling
-// from json
+// This object is used for unmarshalling from json
 type UpstreamObj struct {
 	Url     string
 	Rates   []RateObj
@@ -56,7 +55,7 @@ func ProxyInstructionsFromJson(bytes []byte) (*ProxyInstructions, error) {
 		return nil, err
 	}
 
-	return NewProxyInstructions(r.Failover, tokens, upstreams, r.Headers)
+	return NewProxyInstructions(&r.Failover, tokens, upstreams, r.Headers)
 }
 
 func upstreamsFromJsonList(inUpstreams []UpstreamObj) ([]*Upstream, error) {

@@ -11,7 +11,7 @@ import (
 type ProxyInstructions struct {
 	// Allows proxy to fall back to the next upstream
 	// if the selected upstream failed
-	Failover bool
+	Failover *Failover
 	// Tokens uniquely identify the requester. E.g. token can be account id or
 	// combination of ip and account id. Tokens can be throttled as well.
 	// The reply can have 0 or several tokens
@@ -25,7 +25,7 @@ type ProxyInstructions struct {
 }
 
 func NewProxyInstructions(
-	failover bool,
+	failover *Failover,
 	tokens []*Token,
 	upstreams []*Upstream,
 	headers http.Header) (*ProxyInstructions, error) {

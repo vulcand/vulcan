@@ -11,7 +11,7 @@ func Test(t *testing.T) { TestingT(t) }
 
 type MarshalSuite struct{}
 
-var _ = Suite(&RateSuite{})
+var _ = Suite(&MarshalSuite{})
 
 func (s *MarshalSuite) TestUnmarshalSuccessBig(c *C) {
 	objects := []struct {
@@ -20,7 +20,10 @@ func (s *MarshalSuite) TestUnmarshalSuccessBig(c *C) {
 	}{
 		{
 			Expected: ProxyInstructions{
-				Failover: true,
+				Failover: &Failover{
+					Active: true,
+					Codes:  []int{410, 411},
+				},
 				Upstreams: []*Upstream{
 					&Upstream{
 						Url: &url.URL{
@@ -33,14 +36,17 @@ func (s *MarshalSuite) TestUnmarshalSuccessBig(c *C) {
 				},
 			},
 			Bytes: []byte(`{
-    "failover": true,
+    "failover": {"active": true, "codes": [410, 411]},
     "upstreams": [{
             "url": "http://localhost:5000/upstream"
         }]}`),
 		},
 		{
 			Expected: ProxyInstructions{
-				Failover: false,
+				Failover: &Failover{
+					Active: false,
+					Codes:  nil,
+				},
 				Tokens: []*Token{
 					&Token{
 						Id: "Hello",
@@ -162,7 +168,7 @@ func (s *MarshalSuite) TestUnmarshalSuccessBig(c *C) {
 		//as if something fails would be impossible to debug
 
 		// Check failover
-		c.Assert(authResponse.Failover, Equals, u.Expected.Failover)
+		c.Assert(authResponse.Failover, DeepEquals, u.Expected.Failover)
 
 		//Check tokens
 		c.Assert(len(authResponse.Tokens), Equals, len(u.Expected.Tokens))
