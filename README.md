@@ -5,13 +5,28 @@ Trello: https://trello.com/b/DLlP2CKX/vulcan
 Vulcan
 ------
 
-HTTP reverse proxy that supports authorization, rate limiting, load balancing and failover.
+Programmatic HTTP reverse proxy for creating JSON-based API services with:
+
+* Rate limiting
+* Load balancing
+* Early error detection, failover and alerting
+* Metrics
+* Dynamic service discovery
+
+__Note__
+
+Metrics and service discovery are not implemented yet, rate limiting and load balancing with failover are here.
 
 Rationale
 ---------
 
-* Request routing and throttling should be dynamic and programmatic task.
-* Proxy should take the pain out of the services failover, authentication, letting services behind it to be simple.
+There's a room for a proxy that would make lives of people writing modern API services a bit simpler.
+
+Project status
+--------------
+
+* Active development (Configuration files and API may change, once we finalize the idea, the config file will be freezed)
+* Vulcan is currently in production at Mailgun serving moderate loads on some services (< 1K requests per second)
 
 Request flow
 ------------
@@ -20,6 +35,7 @@ Request flow
 * Vulcan extracts request information and asks control server what to do with the request.
 * Vulcan denies or throttles and routes the request according to the instructions from the control server.
 * If the upstream fails, Vulcan can optionally forward the request to the next upstream.
+
 
 Authorization
 -------------
@@ -40,7 +56,7 @@ Control server can deny the request by responding with non 200 response code.
 In this case the exact control server response will be proxied to the client.
 Otherwise, control server replies with JSON understood by the proxy. See Routing section for details.
 
-Routing & Throttling
+Routing & Rate limiting
 --------------------
 
 If the request is good to go, control server replies with json in the following format:
@@ -101,13 +117,17 @@ This option turned on by the failover flag in the control response:
 
 ```javascript
 {
-        "failover": true,
+        "failover": {
+            "active": true, // Activate fallback for this request
+            "codes": [410, 411] // Optional fallback codes
+        },
         ...
 }
 
 ```
 
-* In this case Vulcan will retry the request on the next upstream selected by the load balancer. 
+* In case if upstream unexpectedly fails, Vulcan will retry the same request on the next upstream selected by the load balancer
+* Notice "codes" parameter. Once vulcan sees these response codes from the list, it will replay the request instead of proxying it to the client.
 
 __Note__
 

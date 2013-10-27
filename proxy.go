@@ -176,7 +176,7 @@ func (p *ReverseProxy) proxyRequest(
 	instructions *ProxyInstructions,
 	endpoints []loadbalance.Endpoint) (*Upstream, error) {
 
-	if !instructions.Failover {
+	if instructions.Failover == nil || !instructions.Failover.Active {
 		endpoint, err := p.nextEndpoint(endpoints)
 		if err != nil {
 			glog.Errorf("Load Balancer failure: %s", err)
@@ -241,6 +241,18 @@ func (p *ReverseProxy) proxyToUpstream(
 		return err
 	}
 	defer res.Body.Close()
+
+	// In some cases upstreams may return special error codes that indicate that instead
+	// of proxying the response of the upstream to the client we should initiate a failover
+	if instructions.Failover != nil && len(instructions.Failover.Codes) != 0 {
+		for _, code := range instructions.Failover.Codes {
+			if res.StatusCode == code {
+				glog.Errorf("Upstream %s initiated failover with status code %d", upstream, code)
+				return fmt.Errorf("Upstream %s initiated failover with status code %d", upstream, code)
+			}
+		}
+	}
+
 	netutils.CopyHeaders(w.Header(), res.Header)
 
 	w.WriteHeader(res.StatusCode)
