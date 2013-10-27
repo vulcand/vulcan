@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 
 Development/error reporting is coordinated using Trello: https://trello.com/b/DLlP2CKX/vulcan
+Mailing list: https://groups.google.com/forum/#!forum/vulcan-proxy
 
 Vulcan
 ------
