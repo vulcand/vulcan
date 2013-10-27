@@ -1,6 +1,7 @@
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 
-Development/error reporting is coordinated using Trello: https://trello.com/b/DLlP2CKX/vulcan
+Development coordination: https://trello.com/b/DLlP2CKX/vulcan
+
 Mailing list: https://groups.google.com/forum/#!forum/vulcan-proxy
 
 Vulcan
@@ -129,6 +130,7 @@ This option turned on by the failover flag in the control response:
 
 * In case if upstream unexpectedly fails, Vulcan will retry the same request on the next upstream selected by the load balancer
 * Notice "codes" parameter. Once vulcan sees these response codes from the list, it will replay the request instead of proxying it to the client.
+This allows graceful service deployments.
 
 __Note__
 
