@@ -4,6 +4,12 @@ test: clean
 cstest:clean
 	CASSANDRA=yes go test -v ./backend
 
+cmdtest:clean
+	go test -v ./command
+
+cmdcoverage: clean
+	gocov test -v ./command | gocov report
+
 coverage: clean
 	gocov test -v ./... | gocov report
 
