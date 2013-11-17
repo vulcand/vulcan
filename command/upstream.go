@@ -23,12 +23,12 @@ type Upstream struct {
 	// Every upstream can supply the headers to add to the request
 	// in case if the upsteam has been selected by the load balancer
 	AddHeaders    http.Header
-	RemoveHeaders http.Header
+	RemoveHeaders []string
 }
 
 func NewUpstream(
 	scheme string, host string, port int, rewritePath string,
-	addHeaders http.Header, removeHeaders http.Header) (*Upstream, error) {
+	addHeaders http.Header, removeHeaders []string) (*Upstream, error) {
 
 	if len(scheme) == 0 {
 		return nil, fmt.Errorf("Expected scheme")

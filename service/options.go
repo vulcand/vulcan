@@ -13,7 +13,7 @@ import (
 func parseOptions() (*serviceOptions, error) {
 	options := &serviceOptions{}
 
-	flag.Var(&options.controlServers, "c", "HTTP control server url")
+	flag.StringVar(&options.codePath, "js", "", "Js code path")
 	flag.StringVar(&options.backend, "b", "memory", "Backend type e.g. 'cassandra' or 'memory'")
 	flag.StringVar(&options.loadBalancer, "lb", "cassandra", "Loadbalancer algo, e.g. 'random'")
 
@@ -38,10 +38,10 @@ func parseOptions() (*serviceOptions, error) {
 type serviceOptions struct {
 	// Pid path
 	pidPath string
-	// Control servers to bind to
-	controlServers listOptions
-	backend        string
-	loadBalancer   string
+
+	codePath     string
+	backend      string
+	loadBalancer string
 
 	// Host and port to bind to
 	host     string

@@ -30,7 +30,7 @@ type Forward struct {
 	Upstreams []*Upstream
 	// If supplied, headers will be added to the proxied request.
 	AddHeaders    http.Header
-	RemoveHeaders http.Header
+	RemoveHeaders []string
 }
 
 func NewForward(
@@ -38,7 +38,7 @@ func NewForward(
 	rates map[string][]*Rate,
 	upstreams []*Upstream,
 	addHeaders http.Header,
-	removeHeaders http.Header) (*Forward, error) {
+	removeHeaders []string) (*Forward, error) {
 
 	if len(upstreams) <= 0 {
 		return nil, fmt.Errorf("At least one upstream is required")

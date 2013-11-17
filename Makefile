@@ -28,10 +28,12 @@ deps:
 	go get -v -u github.com/axw/gocov
 	go get -v -u launchpad.net/gocheck
 	go get -v -u github.com/mailgun/gocql
+	go get -v -u github.com/robertkrimen/otto
+	go get -v -u github.com/coreos/go-etcd/etcd
 clean:
 	find . -name flymake_* -delete
 run: all
-	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
+	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -js=./examples/hello.js -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
 csrun: all
 	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -c=http://localhost:5000 -b=cassandra -lb=roundrobin -csnode=localhost -cskeyspace=vulcan_dev -cscleanup=true -cscleanuptime=19:05 -log_dir=/tmp
 sloccount:

@@ -30,7 +30,24 @@ func NewHeadersFromObj(in interface{}) (http.Header, error) {
 	return headers, nil
 }
 
-func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, http.Header, error) {
+func NewHeadersListFromObj(in interface{}) ([]string, error) {
+	inHeaders, ok := in.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Headers should be an array")
+	}
+	headers := make([]string, len(inHeaders))
+	for i, inHeader := range inHeaders {
+		switch values := inHeader.(type) {
+		case string:
+			headers[i] = values
+		default:
+			return nil, fmt.Errorf("Unsupported header type: %T in %#v", values, in)
+		}
+	}
+	return headers, nil
+}
+
+func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, []string, error) {
 	addHeadersI, exists := in["add-headers"]
 	var addHeaders http.Header
 	var err error
@@ -42,9 +59,9 @@ func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, http.Head
 	}
 
 	removeHeadersI, exists := in["remove-headers"]
-	var removeHeaders http.Header
+	var removeHeaders []string
 	if exists {
-		removeHeaders, err = NewHeadersFromObj(removeHeadersI)
+		removeHeaders, err = NewHeadersListFromObj(removeHeadersI)
 		if err != nil {
 			return nil, nil, err
 		}
