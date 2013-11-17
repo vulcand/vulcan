@@ -139,7 +139,7 @@ func NewUpstreamFromString(in string) (*Upstream, error) {
 }
 
 func (u *Upstream) String() string {
-	return fmt.Sprintf("Url(%s://%s:%s)", u.Scheme, u.Host, u.Port)
+	return fmt.Sprintf("Url(%s://%s:%d)", u.Scheme, u.Host, u.Port)
 }
 
 func NewUpstreamFromObj(in interface{}) (*Upstream, error) {

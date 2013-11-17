@@ -20,7 +20,7 @@ func NewFailoverFromObj(in interface{}) (*Failover, error) {
 	case bool:
 		return &Failover{Active: val}, nil
 	case map[string]interface{}:
-		return NewFailoverFromObj(val)
+		return NewFailoverFromDict(val)
 	}
 	return nil, nil
 }
@@ -42,7 +42,7 @@ func NewFailoverFromDict(in map[string]interface{}) (*Failover, error) {
 		if !ok {
 			return nil, fmt.Errorf("Codes should be an array")
 		}
-		codes := make([]int, len(vals))
+		codes = make([]int, len(vals))
 		for i, iVal := range vals {
 			val, ok := iVal.(float64)
 			if !ok || float64(val) != float64(int(val)) {
@@ -50,6 +50,7 @@ func NewFailoverFromDict(in map[string]interface{}) (*Failover, error) {
 			}
 			codes[i] = int(val)
 		}
+
 	}
 	return &Failover{Active: active, Codes: codes}, nil
 }

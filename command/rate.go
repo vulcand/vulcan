@@ -10,7 +10,7 @@ import (
 var rateRe *regexp.Regexp
 
 func init() {
-	rateRe = regexp.MustCompile(`(?P<requests>\d+) (?P<unit>(req|reqs|request|requests|MB|Mb))?/(?P<period>(second|minute|hour))`)
+	rateRe = regexp.MustCompile(`(?P<requests>\d+) (?P<unit>(?:req|reqs|request|requests|MB|Mb))?/(?P<period>(?:second|minute|hour))`)
 }
 
 const (
@@ -56,11 +56,6 @@ func (r *Rate) CurrentBucket(t time.Time) time.Time {
 // Returns the epoch seconds of the begining of the next time bucket
 func (r *Rate) NextBucket(t time.Time) time.Time {
 	return r.CurrentBucket(t.Add(r.Period))
-}
-
-// Returns the equivalent of the rate period in seconds
-func (r *Rate) PeriodSeconds() int64 {
-	return int64(time.Duration(r.Period) / time.Second)
 }
 
 func NewRatesFromObj(in interface{}) (map[string][]*Rate, error) {
@@ -129,13 +124,9 @@ func NewRateFromString(in string) (*Rate, error) {
 }
 
 func NewRateFromDict(in map[string]interface{}) (*Rate, error) {
-	requestsI, ok := in["requests"]
-	if !ok {
-		return nil, fmt.Errorf("Expected requests in rate")
-	}
-	requests, ok := requestsI.(float64)
-	if !ok || requests != float64(int(requests)) {
-		return nil, fmt.Errorf("Requests should be an integer")
+	units, unitType, err := getUnitAndValue(in)
+	if err != nil {
+		return nil, err
 	}
 	periodI, ok := in["period"]
 	if !ok {
@@ -149,19 +140,34 @@ func NewRateFromDict(in map[string]interface{}) (*Rate, error) {
 	if err != nil {
 		return nil, err
 	}
-	unitType := UnitTypeRequests
-	unitI, ok := in["unit"]
+	return NewRate(int64(units), period, unitType)
+}
+
+func getUnitAndValue(in map[string]interface{}) (int, int, error) {
+	requestsI, ok := in["requests"]
 	if ok {
-		unitS, ok := unitI.(string)
-		if !ok {
-			return nil, fmt.Errorf("Unit should be a string")
-		}
-		unitType, err = UnitTypeFromString(unitS)
-		if err != nil {
-			return nil, err
-		}
+		units, err := getInt("requests", requestsI)
+		return units, UnitTypeRequests, err
 	}
-	return NewRate(int64(requests), period, unitType)
+	megabytesI, ok := in["MB"]
+	if ok {
+		units, err := getInt("MB", megabytesI)
+		return units, UnitTypeMegabytes, err
+	}
+	megabitsI, ok := in["Mb"]
+	if ok {
+		units, err := getInt("MB", megabitsI)
+		return units, UnitTypeMegabits, err
+	}
+	return -1, -1, fmt.Errorf("Unsupported unit")
+}
+
+func getInt(name string, in interface{}) (int, error) {
+	inF, ok := in.(float64)
+	if !ok || inF != float64(int(inF)) {
+		return -1, fmt.Errorf("Parameter '%s' should be integer", name)
+	}
+	return int(inF), nil
 }
 
 func UnitTypeFromString(u string) (int, error) {

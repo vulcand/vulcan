@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func HeadersFromObj(in interface{}) (http.Header, error) {
+func NewHeadersFromObj(in interface{}) (http.Header, error) {
 	inHeaders, ok := in.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("Headers should be a dictionary")
@@ -35,7 +35,7 @@ func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, http.Head
 	var addHeaders http.Header
 	var err error
 	if exists {
-		addHeaders, err = HeadersFromObj(addHeadersI)
+		addHeaders, err = NewHeadersFromObj(addHeadersI)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -44,7 +44,7 @@ func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, http.Head
 	removeHeadersI, exists := in["remove-headers"]
 	var removeHeaders http.Header
 	if exists {
-		removeHeaders, err = HeadersFromObj(removeHeadersI)
+		removeHeaders, err = NewHeadersFromObj(removeHeadersI)
 		if err != nil {
 			return nil, nil, err
 		}
