@@ -39,7 +39,8 @@ func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error
 	if err != nil {
 		return nil, err
 	}
-	return ctrl.resultToInstructions(value)
+	instr, err = ctrl.resultToInstructions(value)
+	return instr, err
 }
 
 func (ctrl *JsController) resultToInstructions(value otto.Value) (interface{}, error) {

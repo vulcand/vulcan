@@ -253,7 +253,7 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 	*outReq = *req // includes shallow copies of maps, but we handle this below
 
 	outReq.URL.Scheme = upstream.Scheme
-	outReq.URL.Host = upstream.Host
+	outReq.URL.Host = fmt.Sprintf("%s:%d", upstream.Host, upstream.Port)
 	if len(upstream.RewritePath) != 0 {
 		outReq.URL.Path = upstream.RewritePath
 	}
@@ -264,6 +264,8 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 	outReq.ProtoMajor = 1
 	outReq.ProtoMinor = 1
 	outReq.Close = false
+
+	glog.Infof("Proxying request to: %v", outReq)
 
 	// We copy headers only if we alter the original request
 	// headers, otherwise we use the shallow copy
