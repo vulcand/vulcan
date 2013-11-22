@@ -12,6 +12,7 @@ import (
 	"github.com/mailgun/vulcan/control"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/netutils"
+	"github.com/mailgun/vulcan/ratelimit"
 	"io"
 	"io/ioutil"
 	"net"
@@ -48,6 +49,8 @@ type ReverseProxy struct {
 	httpTransport *http.Transport
 	// Client that uses customized transport
 	httpClient *http.Client
+	// Rate limiter
+	rateLimiter *ratelimit.RateLimiter
 }
 
 // Standard dial and read timeouts, can be overriden when supplying proxy settings
@@ -84,10 +87,16 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 		ResponseHeaderTimeout: s.HttpReadTimeout,
 	}
 
+	var rateLimiter *ratelimit.RateLimiter
+	if s.ThrottlerBackend != nil {
+		rateLimiter = &ratelimit.RateLimiter{Backend: s.ThrottlerBackend}
+	}
+
 	p := &ReverseProxy{
 		controller:    s.Controller,
 		loadBalancer:  s.LoadBalancer,
 		httpTransport: transport,
+		rateLimiter:   rateLimiter,
 		httpClient: &http.Client{
 			Transport: transport,
 		},
@@ -114,25 +123,48 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	case *command.Forward:
 		glog.Infof("Got Forward command %v", cmd)
 		// Get upstreams ready to process the request
-		endpoints, err := p.rateLimit(cmd)
+		retrySeconds, err := p.rateLimit(cmd)
 		if err != nil {
 			p.replyError(err, w, req)
 			return
 		}
+		if retrySeconds != 0 {
+			p.replyError(&command.RetryError{Seconds: retrySeconds}, w, req)
+		}
+		endpoints := command.EndpointsFromUpstreams(cmd.Upstreams)
 		// Proxy request to the selected upstream
-		_, err = p.proxyRequest(w, req, cmd, endpoints)
+		requestBytes, err := p.proxyRequest(w, req, cmd, endpoints)
 		if err != nil {
 			glog.Error("Failed to proxy to the upstreams:", err)
 			p.replyError(err, w, req)
 			return
 		}
+		p.updateRates(requestBytes, cmd)
 		return
 	}
 	p.replyError(fmt.Errorf("Internal logic error"), w, req)
 }
 
-func (p *ReverseProxy) rateLimit(cmd *command.Forward) ([]loadbalance.Endpoint, error) {
-	return command.EndpointsFromUpstreams(cmd.Upstreams), nil
+func (p *ReverseProxy) rateLimit(cmd *command.Forward) (int, error) {
+	if p.rateLimiter == nil || cmd.Rates == nil {
+		return 0, nil
+	}
+	retrySeconds, err := p.rateLimiter.GetRetrySeconds(cmd.Rates)
+	if err != nil {
+		glog.Errorf("RateLimiter failure: %s continuing with the request", err)
+		return 0, nil
+	}
+	return retrySeconds, err
+}
+
+func (p *ReverseProxy) updateRates(requestBytes int, cmd *command.Forward) {
+	if p.rateLimiter == nil || cmd.Rates == nil {
+		return
+	}
+	err := p.rateLimiter.UpdateStats(int64(requestBytes), cmd.Rates)
+	if err != nil {
+		glog.Errorf("RateLimiter failure: %s ignoring", err)
+	}
 }
 
 // We need this struct to add a Close method and comply with io.ReadCloser
@@ -162,22 +194,7 @@ func (p *ReverseProxy) nextEndpoint(endpoints []loadbalance.Endpoint) (*command.
 func (p *ReverseProxy) proxyRequest(
 	w http.ResponseWriter, req *http.Request,
 	cmd *command.Forward,
-	endpoints []loadbalance.Endpoint) (*command.Upstream, error) {
-
-	if cmd.Failover == nil || !cmd.Failover.Active {
-		endpoint, err := p.nextEndpoint(endpoints)
-		if err != nil {
-			glog.Errorf("Load Balancer failure: %s", err)
-			return nil, err
-		}
-		glog.Infof("Without failover, proxy to upstream: %s", endpoint.Upstream)
-		err = p.proxyToUpstream(w, req, cmd, endpoint.Upstream)
-		if err != nil {
-			glog.Errorf("Upstream error: %s", err)
-			return nil, netutils.NewHttpError(http.StatusBadGateway)
-		}
-		return endpoint.Upstream, nil
-	}
+	endpoints []loadbalance.Endpoint) (int, error) {
 
 	// We are allowed to fallback in case of upstream failure,
 	// so let us record the request body so we can replay
@@ -185,33 +202,38 @@ func (p *ReverseProxy) proxyRequest(
 	buffer, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		glog.Errorf("Request read error %s", err)
-		return nil, netutils.NewHttpError(http.StatusBadRequest)
+		return 0, netutils.NewHttpError(http.StatusBadRequest)
 	}
+
 	reader := &Buffer{bytes.NewReader(buffer)}
+	requestLength := reader.Len()
 	req.Body = reader
 
 	for i := 0; i < len(endpoints); i++ {
 		_, err := reader.Seek(0, 0)
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
 		endpoint, err := p.nextEndpoint(endpoints)
 		if err != nil {
 			glog.Errorf("Load Balancer failure: %s", err)
-			return nil, err
+			return 0, err
 		}
 		glog.Infof("With failover, proxy to upstream: %s", endpoint.Upstream)
 		err = p.proxyToUpstream(w, req, cmd, endpoint.Upstream)
 		if err != nil {
+			if cmd.Failover == nil || !cmd.Failover.Active {
+				return 0, err
+			}
 			glog.Errorf("Upstream %s error, falling back to another", endpoint.Upstream)
 			endpoint.Active = false
 		} else {
-			return endpoint.Upstream, nil
+			return 0, nil
 		}
 	}
 
 	glog.Errorf("All upstreams failed!")
-	return nil, netutils.NewHttpError(http.StatusBadGateway)
+	return requestLength, netutils.NewHttpError(http.StatusBadGateway)
 }
 
 func (p *ReverseProxy) proxyToUpstream(
@@ -307,18 +329,14 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 
 // Helper function to reply with http errors
 func (p *ReverseProxy) replyError(err error, w http.ResponseWriter, req *http.Request) {
-	httpErr, isHttp := err.(*netutils.HttpError)
-	if !isHttp {
-		httpErr = netutils.NewHttpError(http.StatusInternalServerError)
-	}
-
+	httpResponse := p.controller.ConvertError(req, err)
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection
 	// TODO: actually check this
 	io.Copy(ioutil.Discard, req.Body)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpErr.StatusCode)
-	w.Write(httpErr.Body)
+	w.WriteHeader(httpResponse.StatusCode)
+	w.Write(httpResponse.Body)
 }
 
 // Helper function to reply with http errors

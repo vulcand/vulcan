@@ -71,17 +71,15 @@ func (s *HeadersSuite) TestHeadersParsingFailure(c *C) {
 func (s *HeadersSuite) TestAddRemoveHeaders(c *C) {
 	rates := []struct {
 		AddHeaders    http.Header
-		RemoveHeaders http.Header
+		RemoveHeaders []string
 		Parse         string
 	}{
 		{
 			AddHeaders: http.Header{
 				"A": []string{"b"},
 			},
-			RemoveHeaders: http.Header{
-				"F": []string{"k"},
-			},
-			Parse: `{"add-headers": {"a": "b"}, "remove-headers": {"f": "k"}}`,
+			RemoveHeaders: []string{"F"},
+			Parse:         `{"add-headers": {"a": "b"}, "remove-headers": ["F"]}`,
 		},
 		{
 			AddHeaders: http.Header{
@@ -91,11 +89,9 @@ func (s *HeadersSuite) TestAddRemoveHeaders(c *C) {
 			Parse:         `{"add-headers": {"a": "b"}}`,
 		},
 		{
-			RemoveHeaders: http.Header{
-				"A": []string{"b"},
-			},
-			AddHeaders: nil,
-			Parse:      `{"remove-headers": {"a": "b"}}`,
+			RemoveHeaders: []string{"A"},
+			AddHeaders:    nil,
+			Parse:         `{"remove-headers": ["A"]}`,
 		},
 		{
 			RemoveHeaders: nil,

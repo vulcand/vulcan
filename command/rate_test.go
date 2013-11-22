@@ -25,9 +25,9 @@ func (s *RateSuite) TestNewRateSuccess(c *C) {
 		},
 		{
 			Units:    10,
-			UnitType: UnitTypeMegabytes,
+			UnitType: UnitTypeKilobytes,
 			Period:   time.Minute,
-			Expected: &Rate{Units: 10, Period: time.Minute, UnitType: UnitTypeMegabytes},
+			Expected: &Rate{Units: 10, Period: time.Minute, UnitType: UnitTypeKilobytes},
 		},
 	}
 
@@ -199,18 +199,10 @@ func (s *RateSuite) TestRateParsing(c *C) {
 		{
 			Rate: Rate{
 				Units:    1,
-				UnitType: UnitTypeMegabytes,
+				UnitType: UnitTypeKilobytes,
 				Period:   time.Hour,
 			},
-			Parse: `"1 MB/hour"`,
-		},
-		{
-			Rate: Rate{
-				Units:    4,
-				UnitType: UnitTypeMegabits,
-				Period:   time.Second,
-			},
-			Parse: `"4 Mb/second"`,
+			Parse: `"1 KB/hour"`,
 		},
 		{
 			Rate: Rate{
@@ -239,18 +231,10 @@ func (s *RateSuite) TestRateParsing(c *C) {
 		{
 			Rate: Rate{
 				Units:    8,
-				UnitType: UnitTypeMegabytes,
+				UnitType: UnitTypeKilobytes,
 				Period:   time.Hour,
 			},
-			Parse: `{"MB": 8, "period": "hour"}`,
-		},
-		{
-			Rate: Rate{
-				Units:    2,
-				UnitType: UnitTypeMegabits,
-				Period:   time.Second,
-			},
-			Parse: `{"Mb": 2, "period": "second"}`,
+			Parse: `{"KB": 8, "period": "hour"}`,
 		},
 	}
 	for _, u := range rates {

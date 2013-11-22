@@ -5,6 +5,7 @@ import (
 	"github.com/golang/glog"
 	. "github.com/mailgun/vulcan/command"
 	"github.com/mailgun/vulcan/discovery"
+	"github.com/mailgun/vulcan/netutils"
 	"github.com/robertkrimen/otto"
 	"net/http"
 )
@@ -12,6 +13,62 @@ import (
 type JsController struct {
 	DiscoveryService discovery.Service
 	CodeGetter       CodeGetter
+}
+
+func (ctrl *JsController) ConvertError(req *http.Request, inError error) (response *netutils.HttpError) {
+	response = netutils.NewHttpError(http.StatusInternalServerError)
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Errorf("Recovered:", r)
+		}
+	}()
+	code, err := ctrl.CodeGetter.GetCode()
+	if err != nil {
+		glog.Errorf("Error getting code: %s", err)
+		return response
+	}
+	Otto := otto.New()
+	ctrl.registerBuiltins(Otto)
+
+	_, err = Otto.Run(code)
+	if err != nil {
+		glog.Errorf("Error running code: %s", err)
+		return response
+	}
+	handler, err := Otto.Get("handleError")
+	if err != nil {
+		glog.Infof("Missing error handler: %s", err)
+		converted, err := errorFromJs(errorToJs(err))
+		if err != nil {
+			return response
+		}
+		return converted
+	}
+	obj := errorToJs(inError)
+	jsObj, err := Otto.ToValue(obj)
+	if err != nil {
+		glog.Errorf("Error: %s", err)
+		return response
+	}
+	jsRequest, err := requestToJs(req)
+	if err != nil {
+		return response
+	}
+	jsRequestValue, err := Otto.ToValue(jsRequest)
+	if err != nil {
+		return response
+	}
+	out, err := ctrl.callHandler(handler, jsRequestValue, jsObj)
+	if err != nil {
+		glog.Errorf("Error: %s", err)
+		return response
+	}
+	converted, err := errorFromJs(out)
+	if err != nil {
+		glog.Errorf("Failed to convert error: %s", err)
+		return response
+	}
+	return converted
 }
 
 func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
@@ -35,19 +92,27 @@ func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error
 	if err != nil {
 		return nil, err
 	}
-	value, err := Otto.Get("handle")
+	handler, err := Otto.Get("handle")
 	if err != nil {
 		return nil, err
 	}
-	instr, err = ctrl.resultToInstructions(value)
+	jsRequest, err := requestToJs(req)
+	if err != nil {
+		return nil, err
+	}
+	jsObj, err := Otto.ToValue(jsRequest)
+	if err != nil {
+		return nil, err
+	}
+	instr, err = ctrl.callHandler(handler, jsObj)
 	return instr, err
 }
 
-func (ctrl *JsController) resultToInstructions(value otto.Value) (interface{}, error) {
-	if !value.IsFunction() {
-		return nil, fmt.Errorf("Result should be a function, got %v", value)
+func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{}) (interface{}, error) {
+	if !handler.IsFunction() {
+		return nil, fmt.Errorf("Result should be a function, got %v", handler)
 	}
-	out, err := value.Call(value)
+	out, err := handler.Call(handler, params...)
 	if err != nil {
 		glog.Infof("Call resulted in failure %#v", err)
 		return nil, err

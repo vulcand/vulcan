@@ -1,5 +1,12 @@
-function handle() {
-    return {
-        upstreams: ["http://localhost:5000", "http://localhost:5001", "http://localhost:5002", "http://localhost:5003"]
+function handle(request) {
+    var forward = {
+        rates: {
+        },
+        upstreams: ["http://localhost:5000/fqfwafwaf"]
     };
+    return forward;
+}
+
+function handleError(request, error) {
+    return error
 }

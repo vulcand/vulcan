@@ -10,13 +10,12 @@ import (
 var rateRe *regexp.Regexp
 
 func init() {
-	rateRe = regexp.MustCompile(`(?P<requests>\d+) (?P<unit>(?:req|reqs|request|requests|MB|Mb))?/(?P<period>(?:second|minute|hour))`)
+	rateRe = regexp.MustCompile(`(?P<requests>\d+) (?P<unit>(?:req|reqs|request|requests|KB))?/(?P<period>(?:second|minute|hour))`)
 }
 
 const (
 	UnitTypeRequests  = iota
-	UnitTypeMegabits  = iota
-	UnitTypeMegabytes = iota
+	UnitTypeKilobytes = iota
 )
 
 // Rates stores the information on how many hits per
@@ -31,7 +30,7 @@ func NewRate(units int64, period time.Duration, unitType int) (*Rate, error) {
 	if units <= 0 {
 		return nil, fmt.Errorf("unit value should be > 0")
 	}
-	if unitType != UnitTypeRequests && unitType != UnitTypeMegabytes && unitType != UnitTypeMegabits {
+	if unitType != UnitTypeRequests && unitType != UnitTypeKilobytes {
 		return nil, fmt.Errorf("Unsupported unit type: %v", unitType)
 	}
 	if period < time.Second || period > 24*time.Hour {
@@ -149,15 +148,10 @@ func getUnitAndValue(in map[string]interface{}) (int, int, error) {
 		units, err := getInt("requests", requestsI)
 		return units, UnitTypeRequests, err
 	}
-	megabytesI, ok := in["MB"]
+	kilobytesI, ok := in["KB"]
 	if ok {
-		units, err := getInt("MB", megabytesI)
-		return units, UnitTypeMegabytes, err
-	}
-	megabitsI, ok := in["Mb"]
-	if ok {
-		units, err := getInt("MB", megabitsI)
-		return units, UnitTypeMegabits, err
+		units, err := getInt("KB", kilobytesI)
+		return units, UnitTypeKilobytes, err
 	}
 	return -1, -1, fmt.Errorf("Unsupported unit")
 }
@@ -172,10 +166,8 @@ func getInt(name string, in interface{}) (int, error) {
 
 func UnitTypeFromString(u string) (int, error) {
 	switch u {
-	case "Mb":
-		return UnitTypeMegabits, nil
-	case "MB":
-		return UnitTypeMegabytes, nil
+	case "KB":
+		return UnitTypeKilobytes, nil
 	case "req", "reqs", "requests", "request":
 		return UnitTypeRequests, nil
 	default:

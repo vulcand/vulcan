@@ -16,7 +16,7 @@ func (s *UpstreamSuite) TestNewUpstream(c *C) {
 		"localhost",
 		5000, "/new/path",
 		http.Header{"A": []string{"b"}},
-		http.Header{"B": []string{"c"}})
+		[]string{"B"})
 	c.Assert(err, IsNil)
 	expected := Upstream{
 		Id:            "http://localhost:5000",
@@ -25,7 +25,7 @@ func (s *UpstreamSuite) TestNewUpstream(c *C) {
 		Port:          5000,
 		RewritePath:   "/new/path",
 		AddHeaders:    http.Header{"A": []string{"b"}},
-		RemoveHeaders: http.Header{"B": []string{"c"}},
+		RemoveHeaders: []string{"B"},
 	}
 	c.Assert(*u, DeepEquals, expected)
 }
@@ -74,7 +74,7 @@ func (s *UpstreamSuite) TestUpstreamFromObj(c *C) {
 			},
 		},
 		{
-			Parse: `{"scheme": "https", "host": "localhost", "port": 4000, "rewrite-path": "/new/path", "add-headers": {"a": "b"}, "remove-headers": {"c": ["d", "f"]}}`,
+			Parse: `{"scheme": "https", "host": "localhost", "port": 4000, "rewrite-path": "/new/path", "add-headers": {"a": "b"}, "remove-headers": ["C"]}`,
 			Expected: Upstream{
 				Id:            "https://localhost:4000",
 				Scheme:        "https",
@@ -82,7 +82,7 @@ func (s *UpstreamSuite) TestUpstreamFromObj(c *C) {
 				Port:          4000,
 				RewritePath:   "/new/path",
 				AddHeaders:    http.Header{"A": []string{"b"}},
-				RemoveHeaders: http.Header{"C": []string{"d", "f"}},
+				RemoveHeaders: []string{"C"},
 			},
 		},
 	}

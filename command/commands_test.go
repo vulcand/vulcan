@@ -77,7 +77,7 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
                   "rates": {
                      "$request.ip": [
                          "1 req/second",
-                         {"MB": 8, "period": "hour"}
+                         {"KB": 8, "period": "hour"}
                   ]},
                   "upstreams": [
                        "http://localhost:5000/rewrite-path",
@@ -87,22 +87,22 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
                            "port": 5001,
                            "rewrite-path": "/p2",
                            "add-headers": {"A": "b"},
-                           "remove-headers": {"B": "c"}
+                           "remove-headers": ["B"]
                         }
                   ],
                 "add-headers": {"N": "v1"},
-                "remove-headers": {"M": "v2"}
+                "remove-headers": ["M"]
             }`,
 			Expected: &Forward{
 				Failover: &Failover{Active: true, Codes: []int{301, 302}},
 				Rates: map[string][]*Rate{
 					"$request.ip": []*Rate{
 						&Rate{Units: 1, Period: time.Second},
-						&Rate{Units: 8, UnitType: UnitTypeMegabytes, Period: time.Hour},
+						&Rate{Units: 8, UnitType: UnitTypeKilobytes, Period: time.Hour},
 					},
 				},
 				AddHeaders:    http.Header{"N": []string{"v1"}},
-				RemoveHeaders: http.Header{"M": []string{"v2"}},
+				RemoveHeaders: []string{"M"},
 				Upstreams: []*Upstream{
 					&Upstream{
 						Id:          "http://localhost:5000",
@@ -118,7 +118,7 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
 						Host:          "localhost",
 						RewritePath:   "/p2",
 						AddHeaders:    http.Header{"A": []string{"b"}},
-						RemoveHeaders: http.Header{"B": []string{"c"}},
+						RemoveHeaders: []string{"B"},
 					},
 				},
 			},
