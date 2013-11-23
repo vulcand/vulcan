@@ -105,7 +105,10 @@ func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error
 		return nil, err
 	}
 	instr, err = ctrl.callHandler(handler, jsObj)
-	return instr, err
+	if err != nil {
+		return nil, err
+	}
+	return NewCommandFromObj(instr)
 }
 
 func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{}) (interface{}, error) {
@@ -122,7 +125,7 @@ func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{})
 		glog.Infof("Failed to extract response %#v", err)
 		return nil, err
 	}
-	return NewCommandFromObj(obj)
+	return obj, nil
 }
 
 func (ctrl *JsController) registerBuiltins(o *otto.Otto) {

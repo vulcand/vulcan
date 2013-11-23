@@ -42,11 +42,11 @@ func errorFromDict(in map[string]interface{}) (*netutils.HttpError, error) {
 	if !ok {
 		return nil, fmt.Errorf("Expected 'code' parameter")
 	}
-	codeF, ok := codeI.(float64)
-	if !ok || codeF != float64(int(codeF)) {
-		return nil, fmt.Errorf("Parameter 'code' should be integer")
+	code, ok := codeI.(int)
+	if !ok {
+		return nil, fmt.Errorf("Parameter 'code' should be integer, got %v", code)
 	}
-	message := http.StatusText(int(codeF))
+	message := http.StatusText(code)
 	messageI, ok := in["message"]
 	if ok {
 		message, ok = messageI.(string)
@@ -63,5 +63,5 @@ func errorFromDict(in map[string]interface{}) (*netutils.HttpError, error) {
 		return nil, fmt.Errorf("Failed to serialize body to json: %s", err)
 	}
 
-	return &netutils.HttpError{StatusCode: int(codeF), Status: message, Body: bodyBytes}, nil
+	return &netutils.HttpError{StatusCode: code, Status: message, Body: bodyBytes}, nil
 }

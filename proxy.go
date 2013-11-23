@@ -130,6 +130,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if retrySeconds != 0 {
 			p.replyError(&command.RetryError{Seconds: retrySeconds}, w, req)
+			return
 		}
 		endpoints := command.EndpointsFromUpstreams(cmd.Upstreams)
 		// Proxy request to the selected upstream

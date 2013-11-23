@@ -39,6 +39,10 @@ func NewRate(units int64, period time.Duration, unitType int) (*Rate, error) {
 	return &Rate{Units: units, Period: period, UnitType: unitType}, nil
 }
 
+func (r *Rate) String() string {
+	return fmt.Sprintf("Rate(units=%d, unitType=%d, period=%s)", r.Units, unitTypeToString(r.UnitType), r.Period)
+}
+
 // Calculates when this rate can be hit the next time from
 // the given time t, assuming all the requests in the given
 func (r *Rate) RetrySeconds(now time.Time) int {
@@ -172,6 +176,17 @@ func UnitTypeFromString(u string) (int, error) {
 		return UnitTypeRequests, nil
 	default:
 		return -1, fmt.Errorf("Unsupported unit")
+	}
+}
+
+func unitTypeToString(u int) string {
+	switch u {
+	case UnitTypeRequests:
+		return "requests"
+	case UnitTypeKilobytes:
+		return "KB"
+	default:
+		return "<error:unsupported unit type>"
 	}
 }
 

@@ -18,7 +18,7 @@ func (rl *RateLimiter) GetRetrySeconds(rates map[string][]*command.Rate) (retryS
 				return 0, err
 			}
 			if counter > rate.Units {
-				glog.Infof("Key(%s) %v is out of capacity", key, rate)
+				glog.Infof("Key('%s') %v is out of capacity", key, rate)
 				return rate.RetrySeconds(rl.Backend.UtcNow()), nil
 			}
 		}
