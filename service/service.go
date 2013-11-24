@@ -130,7 +130,12 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		LoadBalancer:     loadBalancer,
 	}
 
-	return vulcan.NewReverseProxy(proxySettings)
+	proxy, err := vulcan.NewReverseProxy(proxySettings)
+	if err != nil {
+		return nil, err
+	}
+	controller.Client = proxy
+	return proxy, nil
 }
 
 func (s *Service) startProxy() error {

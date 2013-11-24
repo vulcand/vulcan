@@ -65,6 +65,18 @@ func NewUpstreamFromUrl(url *url.URL) (*Upstream, error) {
 	return NewUpstream(url.Scheme, host, port, url.Path, nil, nil)
 }
 
+func NewUpstreamsFromUrls(hosts []string) ([]*Upstream, error) {
+	upstreams := make([]*Upstream, len(hosts))
+	for i, host := range hosts {
+		u, err := NewUpstreamFromString(host)
+		if err != nil {
+			return nil, err
+		}
+		upstreams[i] = u
+	}
+	return upstreams, nil
+}
+
 func NewUpstreamsFromObj(in interface{}) ([]*Upstream, error) {
 	upstreamsS, ok := in.([]interface{})
 	if !ok {

@@ -71,9 +71,17 @@ func NewReplyFromDict(in map[string]interface{}) (interface{}, error) {
 	if !exists {
 		return nil, fmt.Errorf("Expected code")
 	}
-	codeF, ok := codeI.(float64)
-	if !ok || codeF != float64(int(codeF)) || codeF < 0 {
-		return nil, fmt.Errorf("Proper HTTP code is required")
+	code := 0
+	switch codeC := codeI.(type) {
+	case int:
+		code = codeC
+	case float64:
+		if codeC != float64(int(codeC)) {
+			return nil, fmt.Errorf("HTTP code should be an integer, got %v", code)
+		}
+		code = int(codeC)
+	default:
+		return nil, fmt.Errorf("HTTP code should be an integer, got %v", code)
 	}
 
 	messageI, exists := in["message"]
@@ -84,7 +92,7 @@ func NewReplyFromDict(in map[string]interface{}) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Message property should be json encodeable")
 	}
-	return &Reply{Code: int(codeF), Message: messageI}, nil
+	return &Reply{Code: code, Message: messageI}, nil
 }
 
 func NewForwardFromDict(in map[string]interface{}) (interface{}, error) {

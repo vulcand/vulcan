@@ -3,23 +3,26 @@ package js
 import (
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/client"
 	. "github.com/mailgun/vulcan/command"
 	"github.com/mailgun/vulcan/discovery"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/robertkrimen/otto"
 	"net/http"
+	"runtime/debug"
 )
 
 type JsController struct {
 	DiscoveryService discovery.Service
 	CodeGetter       CodeGetter
+	Client           client.Client
 }
 
 func (ctrl *JsController) ConvertError(req *http.Request, inError error) (response *netutils.HttpError) {
 	response = netutils.NewHttpError(http.StatusInternalServerError)
 	defer func() {
 		if r := recover(); r != nil {
-			glog.Errorf("Recovered:", r)
+			glog.Errorf("Recovered: %v %s", r, debug.Stack())
 		}
 	}()
 	code, err := ctrl.CodeGetter.GetCode()
@@ -76,7 +79,7 @@ func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error
 	err := fmt.Errorf("Not implemented")
 	defer func() {
 		if r := recover(); r != nil {
-			glog.Errorf("Recovered:", r)
+			glog.Errorf("Recovered: %v %s", r, debug.Stack())
 			err = fmt.Errorf("Internal js error")
 			instr = nil
 		}
@@ -130,6 +133,8 @@ func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{})
 
 func (ctrl *JsController) registerBuiltins(o *otto.Otto) {
 	ctrl.addDiscoveryService(o)
+	ctrl.addGetter(o)
+	ctrl.addInfo(o)
 }
 
 func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
@@ -140,5 +145,98 @@ func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
 		glog.Infof("Got %v, %s", value, err)
 		result, _ := o.ToValue(value)
 		return result
+	})
+}
+
+func (ctrl *JsController) addInfo(o *otto.Otto) {
+	o.Set("info", func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) <= 0 {
+			glog.Errorf("GET: Missing arguments")
+			return otto.NullValue()
+		}
+		formatI, err := call.Argument(0).Export()
+		if err != nil {
+			glog.Errorf("Fail: %s", err)
+			return otto.NullValue()
+		}
+		formatString, err := toString(formatI)
+		if err != nil {
+			return otto.NullValue()
+		}
+		if len(call.ArgumentList) <= 1 {
+			glog.Infof(formatString)
+		} else {
+			arguments := make([]interface{}, len(call.ArgumentList)-1)
+			for i, val := range call.ArgumentList {
+				if i == 0 {
+					continue
+				}
+				obj, err := val.Export()
+				if err != nil {
+					glog.Errorf("Failed to convert argument: %v", err)
+				}
+				arguments[i-1] = obj
+			}
+			glog.Infof(formatString, arguments...)
+		}
+		return otto.NullValue()
+	})
+}
+
+func (ctrl *JsController) addGetter(o *otto.Otto) {
+	o.Set("get", func(call otto.FunctionCall) otto.Value {
+		if len(call.ArgumentList) <= 0 {
+			glog.Errorf("GET: Missing arguments")
+			return newError(o, fmt.Errorf("GET: missing arguments"))
+		}
+
+		// Convert first argument, expect either string with url or list of strings
+		upstreamsI, err := call.Argument(0).Export()
+		if err != nil {
+			return newError(o, err)
+		}
+		upstreams, err := toStringArray(upstreamsI)
+		if err != nil {
+			return newError(o, err)
+		}
+
+		// Second argument may be absent
+		var query client.MultiDict
+		if len(call.ArgumentList) > 1 {
+			queryI, err := call.Argument(1).Export()
+			if err != nil {
+				return newError(o, err)
+			}
+			dict, err := toMultiDict(queryI)
+			if err != nil {
+				return newError(o, err)
+			}
+			query = dict
+		}
+
+		// Third argument is optional username/password object
+		var auth *netutils.BasicAuth
+		if len(call.ArgumentList) > 2 {
+			queryI, err := call.Argument(2).Export()
+			if err != nil {
+				return newError(o, err)
+			}
+			creds, err := toBasicAuth(queryI)
+			if err != nil {
+				return newError(o, err)
+			}
+			auth = creds
+		}
+		writer := NewResponseWriter()
+		err = ctrl.Client.Get(writer, upstreams, query, auth)
+		if err != nil {
+			return newError(o, err)
+		}
+		reply := writer.ToReply()
+		converted, err := o.ToValue(reply)
+		if err != nil {
+			return newError(o, err)
+		}
+		return converted
 	})
 }

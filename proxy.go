@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/mailgun/vulcan/backend"
+	"github.com/mailgun/vulcan/client"
 	"github.com/mailgun/vulcan/command"
 	"github.com/mailgun/vulcan/control"
 	"github.com/mailgun/vulcan/loadbalance"
@@ -17,6 +18,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -104,6 +106,40 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	return p, nil
 }
 
+func (p *ReverseProxy) Get(w http.ResponseWriter, hosts []string, query client.MultiDict, auth *netutils.BasicAuth) error {
+	req, err := http.NewRequest("GET", "http://localhost", nil)
+	if err != nil {
+		return err
+	}
+	if query != nil {
+		parameters := url.Values{}
+		for key, values := range query {
+			for i, _ := range values {
+				parameters.Add(key, values[i])
+			}
+		}
+		req.URL.RawQuery = parameters.Encode()
+	}
+
+	if auth != nil {
+		req.SetBasicAuth(auth.Username, auth.Password)
+	}
+
+	upstreams, err := command.NewUpstreamsFromUrls(hosts)
+	if err != nil {
+		return err
+	}
+	req.Body = &Buffer{&bytes.Reader{}}
+
+	cmd := &command.Forward{
+		Failover:  &command.Failover{Active: true},
+		Upstreams: upstreams,
+	}
+	endpoints := command.EndpointsFromUpstreams(cmd.Upstreams)
+	_, err = p.proxyRequest(w, req, cmd, endpoints)
+	return err
+}
+
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
 
@@ -133,7 +169,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		endpoints := command.EndpointsFromUpstreams(cmd.Upstreams)
-		// Proxy request to the selected upstream
 		requestBytes, err := p.proxyRequest(w, req, cmd, endpoints)
 		if err != nil {
 			glog.Error("Failed to proxy to the upstreams:", err)
@@ -265,7 +300,6 @@ func (p *ReverseProxy) proxyToUpstream(
 	}
 
 	netutils.CopyHeaders(w.Header(), res.Header)
-
 	w.WriteHeader(res.StatusCode)
 	io.Copy(w, res.Body)
 	return nil
