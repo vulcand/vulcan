@@ -1,8 +1,3 @@
-Warning!
---------
-**Vulcan is under heavy development and API is likely to change!**
-**Beware when integrating and using it at this stage!**
-
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 [![Build Status](https://drone.io/github.com/mailgun/vulcan/status.png)](https://drone.io/github.com/mailgun/vulcan/latest)
 
@@ -10,7 +5,7 @@ Vulcan is a HTTP proxy that you program in JavaScript:
 
 ```javascript
 function handler(request){
-        return {upstreams: ["http://localhost:5000"]}
+    return {upstreams: ["http://localhost:5000"]}
 }
 ```
 
@@ -18,11 +13,11 @@ It supports rate limiting and failover:
 
 ```javascript
 function handler(request){
-        return {
-           failover: true,
-           upstreams: ["http://localhost:5000"],
-           rates: {"*": ["10 requests/second", "1000 KB/second"]}
-         }
+    return {
+        failover: true,
+        upstreams: ["http://localhost:5000"],
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
 }
 ```
 
@@ -30,10 +25,10 @@ Service discovery:
 
 ```javascript
 function handler(request){
-        return {
-           upstreams: discover("/upstreams"),
-           rates: {"*": ["10 requests/second", "1000 KB/second"]}
-         }
+    return {
+        upstreams: discover("/upstreams"),
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
 }
 ```
 
