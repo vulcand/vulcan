@@ -9,7 +9,7 @@ function handle(request){
 }
 ```
 
-It supports rate limiting using memory, cassandra or redis backends:
+It supports rate limiting using memory, Cassandra or Redis backends:
 
 ```javascript
 function handle(request){
@@ -21,7 +21,7 @@ function handle(request){
 }
 ```
 
-Service discovery using filesystem, etcd or zookeeper:
+Service discovery using filesystem, Etcd or Zookeeper:
 
 ```javascript
 function handle(request){
@@ -32,7 +32,7 @@ function handle(request){
 }
 ```
 
-Auth and cache control using memory, redis or cassandra backends:
+Auth and cache control using memory, Redis or Cassandra backends:
 
 ```javascript
 function handle(request){
