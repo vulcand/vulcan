@@ -1,200 +1,82 @@
-Warning!
---------
-**Vulcan is under heavy development and API is likely to change!**
-**Beware when integrating and using it at this stage!**
-
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 [![Build Status](https://drone.io/github.com/mailgun/vulcan/status.png)](https://drone.io/github.com/mailgun/vulcan/latest)
 
-Development coordination: https://trello.com/b/DLlP2CKX/vulcan
+Vulcan is a HTTP proxy that you program in JavaScript:
 
-Mailing list: https://groups.google.com/forum/#!forum/vulcan-proxy
+```javascript
+function handle(request){
+    return {upstreams: ["http://localhost:5000", "http://localhost:5001"]}
+}
+```
 
-Vulcan
-------
+It supports rate limiting using memory, Cassandra or Redis backends:
 
-Programmatic HTTP reverse proxy for creating JSON-based API services with:
+```javascript
+function handle(request){
+    return {
+        failover: true,
+        upstreams: ["http://localhost:5000", "http://localhost:5001"],
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
+}
+```
 
-* Rate limiting
-* Load balancing
-* Early error detection, failover and alerting
-* Metrics
-* Dynamic service discovery
+Service discovery using filesystem, Etcd or Zookeeper:
 
-__Note__
+```javascript
+function handle(request){
+    return {
+        upstreams: discover("/upstreams"),
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
+}
+```
 
-Metrics and service discovery are not implemented yet, rate limiting and load balancing with failover are here.
+Auth and cache control using memory, Redis or Cassandra backends:
+
+```javascript
+function handle(request){
+    response = get("http://localhost/auth", {auth: request.auth}, {cache: true, seconds: 20})
+    if(!response.code == 200) {
+        return response
+    }
+    return {
+        upstreams: discover("/upstreams"),
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
+}
+```
+
+
+And many more advanced features you'd need when writing APIs, like Metrics and Failure detection. Read on!
 
 Rationale
 ---------
+Vulcan aims to simplify development of JSON based HTTP services and solve the common problems in this domain:
 
-There's a room for a proxy that would make lives of people writing modern API services a bit simpler.
+* Application specific rate limiting and cache control
+* Downtime-less deployments and service discovery
+* Smart failolver, error reporting and performance measures 
 
-Project status
---------------
+Quick Start
+-----------
 
-* Active development (Configuration files and API may change, once we finalize the idea, the config file will be freezed)
-* Vulcan is currently in production at Mailgun serving moderate loads on some services (< 1K requests per second)
-
-Request flow
-------------
-
-* Client request arrives to the Vulcan.
-* Vulcan extracts request information and asks control server what to do with the request.
-* Vulcan denies or throttles and routes the request according to the instructions from the control server.
-* If the upstream fails, Vulcan can optionally forward the request to the next upstream.
-
-
-Authorization
--------------
-
-Vulcan sends the following request info to the control server:
-
-|Name    |Descripton                |
-|--------|--------------------------|
-|username| HTTP auth username       |
-|password| HTTP auth password       |
-|protocol| protocol (SMTP/HTTP)     |
-|url     | original request url     |
-|headers | (JSON encoded dictionary)|
-|length  | request size in bytes    |
-
-
-Control server can deny the request by responding with non 200 response code. 
-In this case the exact control server response will be proxied to the client.
-Otherwise, control server replies with JSON understood by the proxy. See Routing section for details.
-
-Routing & Rate limiting
---------------------
-
-If the request is good to go, control server replies with json in the following format:
+Vulcan is controlled by Javascript snippets:
 
 ```javascript
-{
-        "tokens": [
-            {
-                "id": "hello",
-                "rates": [
-                    {"increment": 1, "value": 10, "period": "minute"}
-                ]
-            }
-       ],
-       "upstreams": [
-            {
-                "url": "http://localhost:5000/upstream",
-                'rates': [
-                    {"increment": 1, "value": 2, "period": "minute"}
-                 ]
-            },
-            {
-                "url": "http://localhost:5000/upstream2",
-                "rates": [
-                    {"increment": 1, "value": 4, "period": "minute"}
-                 ]
-            }
-       ])
+function handler(request){
+        return {upstreams: ["http://localhost:5000"]}
 }
-
 ```
 
-* In this example all requests will be throttled by the same token 'hello', with maximum 10 hits per minute total.
-* The request can be routed to one of the two upstreams, the first upstream allows max 2 requests per minute, the second one allows 4 requests per minute.
-
-In case if all upstreams are busy or tokens rates are not allowing the request to proceed, Vulcan replies with json-encoded response:
-
-```javascript
-{
-        "retry-seconds": 20,
-        ...
-}
-
-```
-
-Vulcan tells client when the next request can succeed, so clients can embrace this data and reschedule the request in 20 seconds. Note that this
-is an estimate and does not guarantee that request will succeed, it guarantees that request would not succeed if executed before waiting given amount
-of seconds. It allows not to waste resources and keep trying.
-
-Failover
---------
-
-* In case if control server fails, vulcan automatically queries the next available server.
-* In case of upstream being slow or unresponsive, Vulcan can retry the request with the next upstream. 
-
-This option turned on by the failover flag in the control response:
 
 
-```javascript
-{
-        "failover": {
-            "active": true, // Activate fallback for this request
-            "codes": [410, 411] // Optional fallback codes
-        },
-        ...
-}
 
-```
 
-* In case if upstream unexpectedly fails, Vulcan will retry the same request on the next upstream selected by the load balancer
-* Notice "codes" parameter. Once vulcan sees these response codes from the list, it will replay the request instead of proxying it to the client.
-This allows graceful service deployments.
 
-__Note__
+__Development setup__
 
-Failover allows fast deployments of the underlying applications, however it requires that the request would be idempotent, i.e. can be safely retried several times. Read more about the term here: http://stackoverflow.com/questions/1077412/what-is-an-idempotent-operation
-
-E.g. most of the GET requests are idempotent as they don't change the app state, however you should be more careful with POST requests,
-as they may do some damage if repeated.
-
-Failovers can also lead to the cascading failures. Imagine some bad request killing your service, in this case failover will kill all upstreams! That's why make sure you return limited amount of upstreams with the control response in case of failover to limit the potential damage.
-
-Control server example
--------------------
-
-```python
-from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-
-@app.route('/auth')
-def auth():
-    return jsonify(
-        tokens=[
-            {
-                'id': 'hello',
-                'rates': [
-                    {'increment': 1, 'value': 10, 'period': 'minute'}
-                ]
-            }
-       ],
-       upstreams=[
-            {
-                'url': 'http://localhost:5000/upstream',
-                'rates': [
-                    {'increment': 1, 'value': 2, 'period': 'minute'}
-                 ]
-            },
-            {
-                'url': 'http://localhost:5000/upstream2',
-                'rates': [
-                    {'increment': 1, 'value': 4, 'period': 'minute'}
-                 ]
-            }
-       ])
-
-@app.route('/upstream')
-def upstream():
-    return 'Upstream: Hello World!'
-
-@app.route('/upstream2')
-def upstream2():
-    return 'Upstream2: Hello World!'
-
-if __name__ == '__main__':
-    app.run()
-```
-
-Installation
-------------
+Mailing list: https://groups.google.com/forum/#!forum/vulcan-proxy
 
 __Install go__
 
