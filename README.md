@@ -5,7 +5,7 @@ Vulcan is a HTTP proxy that you program in JavaScript:
 
 ```javascript
 function handle(request){
-    return {upstreams: ["http://localhost:5000"]}
+    return {upstreams: ["http://localhost:5000", "http://localhost:5001"]}
 }
 ```
 
@@ -15,7 +15,7 @@ It supports rate limiting and failover:
 function handle(request){
     return {
         failover: true,
-        upstreams: ["http://localhost:5000"],
+        upstreams: ["http://localhost:5000", "http://localhost:5001"],
         rates: {"*": ["10 requests/second", "1000 KB/second"]}
     }
 }
