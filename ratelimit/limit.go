@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/mailgun/vulcan/backend"
 	"github.com/mailgun/vulcan/command"
@@ -13,11 +14,10 @@ type RateLimiter struct {
 func (rl *RateLimiter) GetRetrySeconds(rates map[string][]*command.Rate) (retrySeconds int, err error) {
 	for key, rateList := range rates {
 		for _, rate := range rateList {
-			counter, err := rl.Backend.GetCount(key, rate.Period)
+			counter, err := rl.Backend.GetCount(getKey(key, rate), rate.Period)
 			if err != nil {
 				return 0, err
 			}
-			glog.Errorf("Key(%s) value %v %v", key, counter, rate)
 			if counter >= rate.Units {
 				glog.Infof("Key('%s') %v is out of capacity", key, rate)
 				return rate.RetrySeconds(rl.Backend.UtcNow()), nil
@@ -30,7 +30,7 @@ func (rl *RateLimiter) GetRetrySeconds(rates map[string][]*command.Rate) (retryS
 func (rl *RateLimiter) UpdateStats(requestBytes int64, rates map[string][]*command.Rate) error {
 	for key, rateList := range rates {
 		for _, rate := range rateList {
-			err := rl.Backend.UpdateCount(key, rate.Period, getCount(requestBytes, rate))
+			err := rl.Backend.UpdateCount(getKey(key, rate), rate.Period, getCount(requestBytes, rate))
 			if err != nil {
 				return err
 			}
@@ -47,4 +47,8 @@ func getCount(requestBytes int64, rate *command.Rate) int64 {
 		return requestBytes / 1024
 	}
 	return 1
+}
+
+func getKey(key string, rate *command.Rate) string {
+	return fmt.Sprintf("%s_%s", key, command.UnitTypeToString(rate.UnitType))
 }

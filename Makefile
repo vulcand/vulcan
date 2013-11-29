@@ -13,6 +13,9 @@ cstest:clean
 cmdtest:clean
 	go test -v ./command
 
+ratetest:clean
+	go test -v ./ratelimit
+
 proxytest:clean
 	go test -v .
 
