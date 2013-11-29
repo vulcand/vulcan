@@ -20,12 +20,12 @@ func NewEtcd(machines []string) *Etcd {
 }
 
 func (e *Etcd) Get(key string) (string, error) {
-	responses, err := e.client.Get(key)
+	response, err := e.client.Get(key, false, true)
 	if err != nil {
 		return "", err
 	}
-	if len(responses) == 0 {
+	if response == nil {
 		return "", fmt.Errorf("Not found")
 	}
-	return responses[0].Value, nil
+	return response.Value, nil
 }
