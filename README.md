@@ -32,7 +32,23 @@ function handle(request){
 }
 ```
 
-And many more advanced features you'd need when writing APIs, like Cache control, External authorization, Metrics and Failure detection. Read on!
+Auth and cache control using memory, redis or cassandra backends:
+
+```javascript
+function handle(request){
+    response = get("http://localhost/auth", {auth: request.auth}, {cache: true, seconds: 20})
+    if(!response.code == 200) {
+        return response
+    }
+    return {
+        upstreams: discover("/upstreams"),
+        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+    }
+}
+```
+
+
+And many more advanced features you'd need when writing APIs, like Metrics and Failure detection. Read on!
 
 Rationale
 ---------
