@@ -368,7 +368,7 @@ func (s *ProxySuite) TestRateLimited(c *C) {
 	defer upstream.Close()
 
 	// Upstream is out of capacity, we should be told to be throttled
-	s.backend.UpdateCount("all", time.Minute, 10)
+	s.backend.UpdateCount("all_requests", time.Minute, 10)
 
 	code := fmt.Sprintf(
 		`function handle(request){
@@ -378,6 +378,7 @@ func (s *ProxySuite) TestRateLimited(c *C) {
 
 	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
 	defer proxy.Close()
+
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
 	c.Assert(response.StatusCode, Equals, 429)
 
