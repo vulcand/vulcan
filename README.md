@@ -9,7 +9,7 @@ function handle(request){
 }
 ```
 
-It supports rate limiting and failover:
+It supports rate limiting using memory, cassandra or redis backends:
 
 ```javascript
 function handle(request){
@@ -21,7 +21,7 @@ function handle(request){
 }
 ```
 
-Service discovery:
+Service discovery using filesystem, etcd or zookeeper:
 
 ```javascript
 function handle(request){
@@ -34,22 +34,13 @@ function handle(request){
 
 And many more advanced features you'd need when writing APIs, like Cache control, External authorization, Metrics and Failure detection. Read on!
 
-
-Vulcan
-------
-
-Programmable HTTP reverse proxy for creating JSON-based API services with:
-
-* Rate limiting
-* Load balancing
-* Early error detection, failover and alerting
-* Metrics
-* Dynamic service discovery
-
 Rationale
 ---------
+Vulcan aims to simplify development of JSON based HTTP services and solve the common problems in this domain:
 
-There's a room for specialized HTTP Proxy that simplifies API services on all stages of lifetime - from simple one box playground services to highly loaded HA clusters serving requests.
+* Application specific rate limiting and cache control
+* Downtime-less deployments and service discovery
+* Smart failolver, error reporting and performance measures 
 
 Quick Start
 -----------
@@ -58,7 +49,7 @@ Vulcan is controlled by Javascript snippets:
 
 ```javascript
 function handler(request){
-        return {upstreams: ["http://localhost:5000"}
+        return {upstreams: ["http://localhost:5000"]}
 }
 ```
 
