@@ -4,7 +4,6 @@ Warning!
 **Beware when integrating and using it at this stage!**
 
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
-[![Build Status](https://drone.io/github.com/mailgun/vulcan/status.png)](https://drone.io/github.com/mailgun/vulcan/latest)
 
 Development coordination: https://trello.com/b/DLlP2CKX/vulcan
 
