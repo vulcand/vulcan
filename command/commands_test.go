@@ -17,17 +17,17 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
 		Parse    string
 	}{
 		{
-			Parse: `{"code": 500, "message": "access denied"}`,
+			Parse: `{"code": 500, "body": "access denied"}`,
 			Expected: &Reply{
-				Code:    500,
-				Message: "access denied",
+				Code: 500,
+				Body: "access denied",
 			},
 		},
 		{
-			Parse: `{"code": 405, "message": {"error": "some error"}}`,
+			Parse: `{"code": 405, "body": {"error": "some error"}}`,
 			Expected: &Reply{
-				Code:    405,
-				Message: map[string]interface{}{"error": "some error"},
+				Code: 405,
+				Body: map[string]interface{}{"error": "some error"},
 			},
 		},
 		{
@@ -80,18 +80,16 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
                          {"KB": 8, "period": "hour"}
                   ]},
                   "upstreams": [
-                       "http://localhost:5000/rewrite-path",
+                       "http://localhost:5000",
                         {
                            "scheme": "http",
                            "host": "localhost",
-                           "port": 5001,
-                           "rewrite-path": "/p2",
-                           "add-headers": {"A": "b"},
-                           "remove-headers": ["B"]
+                           "port": 5001
                         }
                   ],
-                "add-headers": {"N": "v1"},
-                "remove-headers": ["M"]
+                "add_headers": {"N": "v1"},
+                "remove_headers": ["M"],
+                "rewrite_path": "/new/path"
             }`,
 			Expected: &Forward{
 				Failover: &Failover{Active: true, Codes: []int{301, 302}},
@@ -103,22 +101,19 @@ func (s *CommandsSuite) TestCommandsFromObj(c *C) {
 				},
 				AddHeaders:    http.Header{"N": []string{"v1"}},
 				RemoveHeaders: []string{"M"},
+				RewritePath:   "/new/path",
 				Upstreams: []*Upstream{
 					&Upstream{
-						Id:          "http://localhost:5000",
-						Scheme:      "http",
-						Port:        5000,
-						Host:        "localhost",
-						RewritePath: "/rewrite-path",
+						Id:     "http://localhost:5000",
+						Scheme: "http",
+						Port:   5000,
+						Host:   "localhost",
 					},
 					&Upstream{
-						Id:            "http://localhost:5001",
-						Scheme:        "http",
-						Port:          5001,
-						Host:          "localhost",
-						RewritePath:   "/p2",
-						AddHeaders:    http.Header{"A": []string{"b"}},
-						RemoveHeaders: []string{"B"},
+						Id:     "http://localhost:5001",
+						Scheme: "http",
+						Port:   5001,
+						Host:   "localhost",
 					},
 				},
 			},

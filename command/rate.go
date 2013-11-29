@@ -40,7 +40,7 @@ func NewRate(units int64, period time.Duration, unitType int) (*Rate, error) {
 }
 
 func (r *Rate) String() string {
-	return fmt.Sprintf("Rate(units=%d, unitType=%d, period=%s)", r.Units, unitTypeToString(r.UnitType), r.Period)
+	return fmt.Sprintf("Rate(units=%d, unitType=%s, period=%s)", r.Units, unitTypeToString(r.UnitType), r.Period)
 }
 
 // Calculates when this rate can be hit the next time from

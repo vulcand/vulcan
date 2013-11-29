@@ -48,7 +48,7 @@ func NewHeadersListFromObj(in interface{}) ([]string, error) {
 }
 
 func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, []string, error) {
-	addHeadersI, exists := in["add-headers"]
+	addHeadersI, exists := in["add_headers"]
 	var addHeaders http.Header
 	var err error
 	if exists {
@@ -58,7 +58,7 @@ func AddRemoveHeadersFromDict(in map[string]interface{}) (http.Header, []string,
 		}
 	}
 
-	removeHeadersI, exists := in["remove-headers"]
+	removeHeadersI, exists := in["remove_headers"]
 	var removeHeaders []string
 	if exists {
 		removeHeaders, err = NewHeadersListFromObj(removeHeadersI)

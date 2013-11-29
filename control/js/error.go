@@ -10,20 +10,29 @@ import (
 
 func errorToJs(inErr error) map[string]interface{} {
 	switch err := inErr.(type) {
+	case *command.AllUpstreamsDownError:
+		return map[string]interface{}{
+			"type": "all_upstreams_down",
+			"code": http.StatusBadGateway,
+			"body": map[string]interface{}{
+				"error": http.StatusText(http.StatusBadGateway),
+			},
+		}
 	case *command.RetryError:
 		return map[string]interface{}{
 			"type":          "retry",
-			"retry-seconds": err.Seconds,
+			"retry_seconds": err.Seconds,
 			"code":          429,
-			"message":       "Too Many Requests",
-			"body":          "Too Many Requests",
+			"body": map[string]interface{}{
+				"error":         "Too Many Requests",
+				"retry_seconds": err.Seconds,
+			},
 		}
 	default:
 		return map[string]interface{}{
-			"type":    "internal",
-			"code":    http.StatusInternalServerError,
-			"body":    http.StatusText(http.StatusInternalServerError),
-			"message": err.Error(),
+			"type": "internal",
+			"code": http.StatusInternalServerError,
+			"body": http.StatusText(http.StatusInternalServerError),
 		}
 	}
 }

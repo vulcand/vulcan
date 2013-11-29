@@ -1,11 +1,20 @@
 test: clean
 	go test -v ./...
 
+testinstall:
+	go test -i github.com/mailgun/vulcan/client
+	go test -i github.com/mailgun/vulcan/command
+	go test -i github.com/mailgun/vulcan/ratelimit
+	go test -i github.com/mailgun/vulcan/control/js
+
 cstest:clean
 	CASSANDRA=yes go test -v ./backend
 
 cmdtest:clean
 	go test -v ./command
+
+proxytest:clean
+	go test -v .
 
 cmdcoverage: clean
 	gocov test -v ./command | gocov report

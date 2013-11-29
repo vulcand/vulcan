@@ -6,7 +6,7 @@ function handle(request) {
     }
     var forward = {
         rates: {
-            "token": ["10 requests/minute", "100 KB/minute"]
+            "token": ["3 requests/minute", "100 KB/minute"]
         },
         upstreams: ["http://localhost:5000", "http://localhost:5000"]
     };

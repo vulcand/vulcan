@@ -3,7 +3,6 @@ package command
 import (
 	"fmt"
 	"github.com/mailgun/vulcan/netutils"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,23 +11,14 @@ import (
 // Upstream is HTTP server that will actually serve
 // the request that would be proxied
 type Upstream struct {
-	Scheme      string
-	Host        string
-	Port        int
-	RewritePath string
-	Id          string
-	// Upstreams can be rate controlled, if at least one rate
-	// does not allow upstream it won't be chosen by the load balancer
-
-	// Every upstream can supply the headers to add to the request
-	// in case if the upsteam has been selected by the load balancer
-	AddHeaders    http.Header
-	RemoveHeaders []string
+	Scheme string
+	Host   string
+	Port   int
+	Id     string
 }
 
 func NewUpstream(
-	scheme string, host string, port int, rewritePath string,
-	addHeaders http.Header, removeHeaders []string) (*Upstream, error) {
+	scheme string, host string, port int) (*Upstream, error) {
 
 	if len(scheme) == 0 {
 		return nil, fmt.Errorf("Expected scheme")
@@ -39,13 +29,10 @@ func NewUpstream(
 	}
 
 	return &Upstream{
-		Id:            fmt.Sprintf("%s://%s:%d", scheme, host, port),
-		Scheme:        scheme,
-		Host:          host,
-		Port:          port,
-		RewritePath:   rewritePath,
-		AddHeaders:    addHeaders,
-		RemoveHeaders: removeHeaders,
+		Id:     fmt.Sprintf("%s://%s:%d", scheme, host, port),
+		Scheme: scheme,
+		Host:   host,
+		Port:   port,
 	}, nil
 }
 
@@ -62,7 +49,7 @@ func NewUpstreamFromUrl(url *url.URL) (*Upstream, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Expected numeric port in %s", url)
 	}
-	return NewUpstream(url.Scheme, host, port, url.Path, nil, nil)
+	return NewUpstream(url.Scheme, host, port)
 }
 
 func NewUpstreamsFromUrls(hosts []string) ([]*Upstream, error) {
@@ -124,21 +111,7 @@ func NewUpstreamFromDict(in map[string]interface{}) (*Upstream, error) {
 		return nil, fmt.Errorf("Port should be an integer")
 	}
 
-	pathI, exists := in["rewrite-path"]
-	rewritePath := ""
-	if exists {
-		rewritePath, ok = pathI.(string)
-		if !ok {
-			return nil, fmt.Errorf("Rewrite-path should be a string")
-		}
-	}
-
-	addHeaders, removeHeaders, err := AddRemoveHeadersFromDict(in)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewUpstream(scheme, host, int(port), rewritePath, addHeaders, removeHeaders)
+	return NewUpstream(scheme, host, int(port))
 }
 
 func NewUpstreamFromString(in string) (*Upstream, error) {

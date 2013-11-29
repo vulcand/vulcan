@@ -79,19 +79,19 @@ func (s *HeadersSuite) TestAddRemoveHeaders(c *C) {
 				"A": []string{"b"},
 			},
 			RemoveHeaders: []string{"F"},
-			Parse:         `{"add-headers": {"a": "b"}, "remove-headers": ["F"]}`,
+			Parse:         `{"add_headers": {"a": "b"}, "remove_headers": ["F"]}`,
 		},
 		{
 			AddHeaders: http.Header{
 				"A": []string{"b"},
 			},
 			RemoveHeaders: nil,
-			Parse:         `{"add-headers": {"a": "b"}}`,
+			Parse:         `{"add_headers": {"a": "b"}}`,
 		},
 		{
 			RemoveHeaders: []string{"A"},
 			AddHeaders:    nil,
-			Parse:         `{"remove-headers": ["A"]}`,
+			Parse:         `{"remove_headers": ["A"]}`,
 		},
 		{
 			RemoveHeaders: nil,
@@ -115,10 +115,10 @@ func (s *HeadersSuite) TestAddRemoveHeadersFailure(c *C) {
 		Parse string
 	}{
 		{
-			Parse: `{"add-headers": "invalid-format", "remove-headers": {"f": "k"}}`,
+			Parse: `{"add_headers": "invalid-format", "remove_headers": {"f": "k"}}`,
 		},
 		{
-			Parse: `{"add-headers": {}, "add-headers": ["invalid", "format"]}`,
+			Parse: `{"add_headers": {}, "add_headers": ["invalid", "format"]}`,
 		},
 	}
 	for _, u := range rates {

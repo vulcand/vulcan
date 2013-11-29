@@ -7,5 +7,5 @@ import (
 
 type Controller interface {
 	GetInstructions(*http.Request) (interface{}, error)
-	ConvertError(*http.Request, error) *netutils.HttpError
+	ConvertError(*http.Request, error) (*netutils.HttpError, error)
 }

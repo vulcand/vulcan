@@ -3,7 +3,6 @@ package command
 import (
 	"encoding/json"
 	. "launchpad.net/gocheck"
-	"net/http"
 )
 
 type UpstreamSuite struct{}
@@ -14,18 +13,13 @@ func (s *UpstreamSuite) TestNewUpstream(c *C) {
 	u, err := NewUpstream(
 		"http",
 		"localhost",
-		5000, "/new/path",
-		http.Header{"A": []string{"b"}},
-		[]string{"B"})
+		5000)
 	c.Assert(err, IsNil)
 	expected := Upstream{
-		Id:            "http://localhost:5000",
-		Scheme:        "http",
-		Host:          "localhost",
-		Port:          5000,
-		RewritePath:   "/new/path",
-		AddHeaders:    http.Header{"A": []string{"b"}},
-		RemoveHeaders: []string{"B"},
+		Id:     "http://localhost:5000",
+		Scheme: "http",
+		Host:   "localhost",
+		Port:   5000,
 	}
 	c.Assert(*u, DeepEquals, expected)
 }
@@ -47,21 +41,10 @@ func (s *UpstreamSuite) TestUpstreamFromObj(c *C) {
 		{
 			Parse: `"http://google.com:5000/"`,
 			Expected: Upstream{
-				Id:          "http://google.com:5000",
-				Scheme:      "http",
-				Host:        "google.com",
-				Port:        5000,
-				RewritePath: "/",
-			},
-		},
-		{
-			Parse: `"https://google.com:5000/a/b"`,
-			Expected: Upstream{
-				Id:          "https://google.com:5000",
-				Scheme:      "https",
-				Host:        "google.com",
-				Port:        5000,
-				RewritePath: "/a/b",
+				Id:     "http://google.com:5000",
+				Scheme: "http",
+				Host:   "google.com",
+				Port:   5000,
 			},
 		},
 		{
@@ -74,15 +57,12 @@ func (s *UpstreamSuite) TestUpstreamFromObj(c *C) {
 			},
 		},
 		{
-			Parse: `{"scheme": "https", "host": "localhost", "port": 4000, "rewrite-path": "/new/path", "add-headers": {"a": "b"}, "remove-headers": ["C"]}`,
+			Parse: `{"scheme": "https", "host": "localhost", "port": 4000}`,
 			Expected: Upstream{
-				Id:            "https://localhost:4000",
-				Scheme:        "https",
-				Host:          "localhost",
-				Port:          4000,
-				RewritePath:   "/new/path",
-				AddHeaders:    http.Header{"A": []string{"b"}},
-				RemoveHeaders: []string{"C"},
+				Id:     "https://localhost:4000",
+				Scheme: "https",
+				Host:   "localhost",
+				Port:   4000,
 			},
 		},
 	}

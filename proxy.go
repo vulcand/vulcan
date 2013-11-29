@@ -171,8 +171,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		endpoints := command.EndpointsFromUpstreams(cmd.Upstreams)
 		requestBytes, err := p.proxyRequest(w, req, cmd, endpoints)
 		if err != nil {
-			glog.Error("Failed to proxy to the upstreams:", err)
-			p.replyError(err, w, req)
+			glog.Error("Failed to proxy to all upstreams:", err)
+			p.replyError(&command.AllUpstreamsDownError{}, w, req)
 			return
 		}
 		p.updateRates(requestBytes, cmd)
@@ -187,7 +187,7 @@ func (p *ReverseProxy) rateLimit(cmd *command.Forward) (int, error) {
 	}
 	retrySeconds, err := p.rateLimiter.GetRetrySeconds(cmd.Rates)
 	if err != nil {
-		glog.Errorf("RateLimiter failure: %s continuing with the request", err)
+		glog.Errorf("RateLimiter get stats failure: %s, ignoring error", err)
 		return 0, nil
 	}
 	return retrySeconds, err
@@ -199,7 +199,7 @@ func (p *ReverseProxy) updateRates(requestBytes int, cmd *command.Forward) {
 	}
 	err := p.rateLimiter.UpdateStats(int64(requestBytes), cmd.Rates)
 	if err != nil {
-		glog.Errorf("RateLimiter failure: %s ignoring", err)
+		glog.Errorf("RateLimiter update stats failire: %s, ignoring error", err)
 	}
 }
 
@@ -311,8 +311,8 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 
 	outReq.URL.Scheme = upstream.Scheme
 	outReq.URL.Host = fmt.Sprintf("%s:%d", upstream.Host, upstream.Port)
-	if len(upstream.RewritePath) != 0 {
-		outReq.URL.Path = upstream.RewritePath
+	if len(cmd.RewritePath) != 0 {
+		outReq.URL.Path = cmd.RewritePath
 	}
 
 	outReq.URL.RawQuery = req.URL.RawQuery
@@ -328,21 +328,9 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 	// headers, otherwise we use the shallow copy
 	if len(cmd.AddHeaders) != 0 ||
 		len(cmd.RemoveHeaders) != 0 ||
-		len(upstream.AddHeaders) != 0 ||
-		len(upstream.RemoveHeaders) != 0 ||
 		netutils.HasHeaders(hopHeaders, req.Header) {
 		outReq.Header = make(http.Header)
 		netutils.CopyHeaders(outReq.Header, req.Header)
-	}
-
-	if len(upstream.RemoveHeaders) != 0 {
-		netutils.RemoveHeaders(upstream.RemoveHeaders, outReq.Header)
-	}
-
-	// Add upstream headers to the request
-	if len(upstream.AddHeaders) != 0 {
-		glog.Info("Proxying Upstream headers:", upstream.AddHeaders)
-		netutils.CopyHeaders(outReq.Header, upstream.AddHeaders)
 	}
 
 	if len(cmd.RemoveHeaders) != 0 {
@@ -364,7 +352,11 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 
 // Helper function to reply with http errors
 func (p *ReverseProxy) replyError(err error, w http.ResponseWriter, req *http.Request) {
-	httpResponse := p.controller.ConvertError(req, err)
+	httpResponse, err := p.controller.ConvertError(req, err)
+	if err != nil {
+		glog.Errorf("Error converter failed: %s", err)
+		httpResponse = netutils.NewHttpError(http.StatusInternalServerError)
+	}
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection
 	// TODO: actually check this
@@ -382,7 +374,7 @@ func (p *ReverseProxy) replyCommand(cmd *command.Reply, w http.ResponseWriter, r
 	io.Copy(ioutil.Discard, req.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(cmd.Code)
-	body, err := json.Marshal(cmd.Message)
+	body, err := json.Marshal(cmd.Body)
 	if err != nil {
 		glog.Errorf("Failed to serialize body: %s", err)
 		body = []byte("Internal system error")

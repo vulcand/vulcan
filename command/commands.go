@@ -7,10 +7,8 @@ import (
 )
 
 type Reply struct {
-	//
 	Code int
-	//
-	Message interface{}
+	Body interface{}
 }
 
 // On every request proxy asks control server what to do
@@ -31,6 +29,7 @@ type Forward struct {
 	// If supplied, headers will be added to the proxied request.
 	AddHeaders    http.Header
 	RemoveHeaders []string
+	RewritePath   string
 }
 
 func NewForward(
@@ -84,15 +83,15 @@ func NewReplyFromDict(in map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("HTTP code should be an integer, got %v", code)
 	}
 
-	messageI, exists := in["message"]
+	bodyI, exists := in["body"]
 	if !exists {
-		return nil, fmt.Errorf("Expected message")
+		return nil, fmt.Errorf("Expected body")
 	}
-	_, err := json.Marshal(messageI)
+	_, err := json.Marshal(bodyI)
 	if err != nil {
-		return nil, fmt.Errorf("Message property should be json encodeable")
+		return nil, fmt.Errorf("Property 'body' should be json encodeable")
 	}
-	return &Reply{Code: code, Message: messageI}, nil
+	return &Reply{Code: code, Body: bodyI}, nil
 }
 
 func NewForwardFromDict(in map[string]interface{}) (interface{}, error) {
@@ -124,6 +123,16 @@ func NewForwardFromDict(in map[string]interface{}) (interface{}, error) {
 		}
 	}
 
+	pathI, exists := in["rewrite_path"]
+	ok := false
+	rewritePath := ""
+	if exists {
+		rewritePath, ok = pathI.(string)
+		if !ok {
+			return nil, fmt.Errorf("Rewrite-path should be a string")
+		}
+	}
+
 	addHeaders, removeHeaders, err := AddRemoveHeadersFromDict(in)
 	if err != nil {
 		return nil, err
@@ -135,5 +144,6 @@ func NewForwardFromDict(in map[string]interface{}) (interface{}, error) {
 		Upstreams:     upstreams,
 		AddHeaders:    addHeaders,
 		RemoveHeaders: removeHeaders,
+		RewritePath:   rewritePath,
 	}, nil
 }

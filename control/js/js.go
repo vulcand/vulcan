@@ -18,8 +18,9 @@ type JsController struct {
 	Client           client.Client
 }
 
-func (ctrl *JsController) ConvertError(req *http.Request, inError error) (response *netutils.HttpError) {
+func (ctrl *JsController) ConvertError(req *http.Request, inError error) (response *netutils.HttpError, err error) {
 	response = netutils.NewHttpError(http.StatusInternalServerError)
+	err = fmt.Errorf("Internal error")
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Errorf("Recovered: %v %s", r, debug.Stack())
@@ -28,7 +29,7 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 	code, err := ctrl.CodeGetter.GetCode()
 	if err != nil {
 		glog.Errorf("Error getting code: %s", err)
-		return response
+		return response, err
 	}
 	Otto := otto.New()
 	ctrl.registerBuiltins(Otto)
@@ -36,42 +37,46 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 	_, err = Otto.Run(code)
 	if err != nil {
 		glog.Errorf("Error running code: %s", err)
-		return response
+		return response, err
 	}
 	handler, err := Otto.Get("handleError")
 	if err != nil {
+		return nil, err
+	}
+	if handler.IsUndefined() {
 		glog.Infof("Missing error handler: %s", err)
-		converted, err := errorFromJs(errorToJs(err))
+		converted, err := errorFromJs(errorToJs(inError))
 		if err != nil {
-			return response
+			glog.Errorf("Failed to convert error: %s", err)
+			return nil, err
 		}
-		return converted
+		return converted, nil
 	}
 	obj := errorToJs(inError)
 	jsObj, err := Otto.ToValue(obj)
 	if err != nil {
 		glog.Errorf("Error: %s", err)
-		return response
+		return nil, err
 	}
 	jsRequest, err := requestToJs(req)
 	if err != nil {
-		return response
+		return nil, err
 	}
 	jsRequestValue, err := Otto.ToValue(jsRequest)
 	if err != nil {
-		return response
+		return nil, err
 	}
 	out, err := ctrl.callHandler(handler, jsRequestValue, jsObj)
 	if err != nil {
 		glog.Errorf("Error: %s", err)
-		return response
+		return nil, err
 	}
 	converted, err := errorFromJs(out)
 	if err != nil {
 		glog.Errorf("Failed to convert error: %s", err)
-		return response
+		return nil, err
 	}
-	return converted
+	return converted, nil
 }
 
 func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
