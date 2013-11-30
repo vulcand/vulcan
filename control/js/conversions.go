@@ -6,6 +6,7 @@ import (
 	"github.com/mailgun/vulcan/client"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/robertkrimen/otto"
+	"net/url"
 )
 
 func newError(o *otto.Otto, inError error) otto.Value {
@@ -44,10 +45,22 @@ func toStringArray(in interface{}) ([]string, error) {
 	return values, nil
 }
 
-func toMultiDict(in interface{}) (client.MultiDict, error) {
+func toMultiDict(in interface{}) (map[string][]string, error) {
+	switch value := in.(type) {
+	case map[string][]string:
+		return value, nil
+	case url.Values:
+		return value, nil
+	case map[string]interface{}:
+		return toMultiDictFromInterface(in)
+	}
+	return nil, fmt.Errorf("Unsupported type: %T", in)
+}
+
+func toMultiDictFromInterface(in interface{}) (client.MultiDict, error) {
 	value, ok := in.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("Expected dictionary")
+		return nil, fmt.Errorf("Expected dictionary, got %T", in)
 	}
 	query := make(client.MultiDict)
 	for key, valuesI := range value {
@@ -70,7 +83,7 @@ func toMultiDict(in interface{}) (client.MultiDict, error) {
 func toBasicAuth(in interface{}) (*netutils.BasicAuth, error) {
 	value, ok := in.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("Expected dictionary")
+		return nil, fmt.Errorf("Expected dictionary, got %T")
 	}
 	usernameI, ok := value["username"]
 	if !ok {

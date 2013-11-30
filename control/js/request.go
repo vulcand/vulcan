@@ -10,9 +10,13 @@ func requestToJs(r *http.Request) (map[string]interface{}, error) {
 	if err != nil {
 		auth = &netutils.BasicAuth{}
 	}
+
 	return map[string]interface{}{
-		"username": auth.Username,
-		"password": auth.Password,
+		"auth": map[string]interface{}{
+			"username": auth.Username,
+			"password": auth.Password,
+		},
+		"query":    r.URL.Query(),
 		"protocol": r.Proto,
 		"method":   r.Method,
 		"url":      r.RequestURI,

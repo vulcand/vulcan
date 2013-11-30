@@ -125,12 +125,12 @@ func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{})
 	}
 	out, err := handler.Call(handler, params...)
 	if err != nil {
-		glog.Infof("Call resulted in failure %#v", err)
+		glog.Errorf("Call resulted in failure %#v", err)
 		return nil, err
 	}
 	obj, err := out.Export()
 	if err != nil {
-		glog.Infof("Failed to extract response %#v", err)
+		glog.Errorf("Failed to extract response %#v", err)
 		return nil, err
 	}
 	return obj, nil
@@ -198,10 +198,12 @@ func (ctrl *JsController) addGetter(o *otto.Otto) {
 		// Convert first argument, expect either string with url or list of strings
 		upstreamsI, err := call.Argument(0).Export()
 		if err != nil {
+			glog.Errorf("GET: Failed to export first argument: %s", err)
 			return newError(o, err)
 		}
 		upstreams, err := toStringArray(upstreamsI)
 		if err != nil {
+			glog.Errorf("GET: Failed to convert upstreams: %s", err)
 			return newError(o, err)
 		}
 
@@ -210,10 +212,12 @@ func (ctrl *JsController) addGetter(o *otto.Otto) {
 		if len(call.ArgumentList) > 1 {
 			queryI, err := call.Argument(1).Export()
 			if err != nil {
+				glog.Errorf("GET: Failed to export first argument: %s", err)
 				return newError(o, err)
 			}
 			dict, err := toMultiDict(queryI)
 			if err != nil {
+				glog.Errorf("GET: Failed: %s", err)
 				return newError(o, err)
 			}
 			query = dict
@@ -224,10 +228,12 @@ func (ctrl *JsController) addGetter(o *otto.Otto) {
 		if len(call.ArgumentList) > 2 {
 			queryI, err := call.Argument(2).Export()
 			if err != nil {
+				glog.Errorf("GET: Failed: %s", err)
 				return newError(o, err)
 			}
 			creds, err := toBasicAuth(queryI)
 			if err != nil {
+				glog.Errorf("GET: Failed: %s", err)
 				return newError(o, err)
 			}
 			auth = creds
@@ -235,11 +241,13 @@ func (ctrl *JsController) addGetter(o *otto.Otto) {
 		writer := NewResponseWriter()
 		err = ctrl.Client.Get(writer, upstreams, query, auth)
 		if err != nil {
+			glog.Errorf("GET: Failed: %s", err)
 			return newError(o, err)
 		}
 		reply := writer.ToReply()
 		converted, err := o.ToValue(reply)
 		if err != nil {
+			glog.Errorf("GET: Failed: %s", err)
 			return newError(o, err)
 		}
 		return converted

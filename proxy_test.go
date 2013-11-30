@@ -173,7 +173,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 
 	code := fmt.Sprintf(
 		`function handle(request){
-            if(!request.username || ! request.password)
+            if(!request.auth.username || ! request.auth.password)
                return {code: 401, body: {error: "Unauthorized"}};
             return {upstreams: ["%s"]};
          }
@@ -320,6 +320,43 @@ func (s *ProxySuite) TestHeadersAdded(c *C) {
 	c.Assert(customHeaders["X-Header-B"][0], Equals, "val2")
 }
 
+// Make sure upstream headers were removed from the request
+func (s *ProxySuite) TestHeadersRemoved(c *C) {
+	var customHeaders http.Header
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		customHeaders = r.Header
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return {
+               upstreams: ["%s"],
+               remove_headers: ["x-authorized", "X-Account-id"],
+            };
+         }
+     `, upstream.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	headers := make(http.Header)
+	headers.Add("X-Authorized", "yes")
+	headers.Add("X-Authorized", "sure")
+	headers.Add("X-Account-Id", "a")
+
+	response, bodyBytes := s.Get(c, proxy.URL, headers, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+
+	// make sure the headers are removed
+	for key, _ := range headers {
+		c.Assert(customHeaders.Get(key), Equals, "")
+	}
+}
+
 // Make sure hop headers were removed
 func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
 	var capturedHeaders http.Header
@@ -443,4 +480,56 @@ func (s *ProxySuite) TestUpstreamServerTimeout(c *C) {
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream 2")
+}
+
+// Make sure that path has been altered
+func (s *ProxySuite) TestRewritePath(c *C) {
+	path := ""
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return {failover: true, upstreams: ["%s"], rewrite_path: "/new/path"};
+         }
+     `, upstream.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+	c.Assert(path, Equals, "/new/path")
+}
+
+// Make sure get request in proxy works
+func (s *ProxySuite) TestGetRequestInProxySuccess(c *C) {
+	var query url.Values
+	var headers http.Header
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		headers = r.Header
+		query = r.URL.Query()
+		w.Write([]byte(`{"response": "hello!"}`))
+	})
+	defer control.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return get("%s", request.query, request.auth)
+         }
+     `, control.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, fmt.Sprintf("%s?a=b&a=c&x=y", proxy.URL), s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, `{"response":"hello!"}`)
+	c.Assert(query, DeepEquals, url.Values{"a": []string{"b", "c"}, "x": []string{"y"}})
+	c.Assert(headers.Get("Authorization"), DeepEquals, s.authHeaders.Get("Authorization"))
 }

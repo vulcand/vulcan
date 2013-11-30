@@ -3,6 +3,7 @@ package js
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/golang/glog"
 	"net/http"
 )
 
@@ -38,9 +39,10 @@ func (w *ResponseWriter) ToReply() map[string]interface{} {
 	var out interface{}
 	err := json.Unmarshal(bytes, &out)
 	if err != nil {
-		reply["message"] = out
+		glog.Errorf("Failed to marshal into json: %v", bytes)
+		reply["body"] = out
 	} else {
-		reply["message"] = string(bytes)
+		reply["body"] = out
 	}
 	reply["headers"] = w.Headers
 	return reply
