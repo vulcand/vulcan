@@ -261,7 +261,7 @@ func (p *ReverseProxy) proxyRequest(
 			if cmd.Failover == nil || !cmd.Failover.Active {
 				return 0, err
 			}
-			glog.Errorf("Upstream %s error, falling back to another", endpoint.Upstream)
+			glog.Errorf("Upstream: %s error: %s, falling back to another", endpoint.Upstream, err)
 			endpoint.Active = false
 		} else {
 			return 0, nil

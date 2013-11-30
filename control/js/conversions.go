@@ -28,10 +28,11 @@ func toString(in interface{}) (string, error) {
 }
 
 func toStringArray(in interface{}) ([]string, error) {
-	var values []string
 	switch converted := in.(type) {
 	case string:
-		values = []string{converted}
+		return []string{converted}, nil
+	case []string:
+		return converted, nil
 	case []interface{}:
 		values := make([]string, len(converted))
 		for i, valI := range converted {
@@ -41,8 +42,9 @@ func toStringArray(in interface{}) ([]string, error) {
 			}
 			values[i] = val
 		}
+		return values, nil
 	}
-	return values, nil
+	return nil, fmt.Errorf("Unsupported type: %T", in)
 }
 
 func toMultiDict(in interface{}) (map[string][]string, error) {

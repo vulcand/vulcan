@@ -122,48 +122,6 @@ func (s *ProxySuite) newProxy(code string, b backend.Backend, l loadbalance.Bala
 	return s.newProxyWithTimeouts(code, b, l, time.Duration(0), time.Duration(0))
 }
 
-// This proxy requires authentication, so Authenticate header is required
-func (s *ProxySuite) TestProxyAuthRequired(c *C) {
-	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hi, I'm upstream"))
-	})
-	defer upstream.Close()
-
-	code := fmt.Sprintf(
-		`function handle(request){
-            if(!request.username || ! request.password)
-               return {code: 401, body: {error: "Unauthorized"}};
-            return {upstreams: ["%s"]};
-         }
-     `, upstream.URL)
-
-	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
-	defer proxy.Close()
-
-	response, bodyBytes := s.Get(c, proxy.URL, http.Header{}, "")
-	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
-	c.Assert(string(bodyBytes), Equals, fmt.Sprintf(`{"error":"%s"}`, http.StatusText(http.StatusUnauthorized)))
-}
-
-// Proxy denies request
-func (s *ProxySuite) TestProxyAccessDenied(c *C) {
-	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("I am upstream!"))
-	})
-	defer upstream.Close()
-
-	code := `function handle(request){
-               return {code: 403, body: {error: "Forbidden"}};
-             }`
-
-	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
-	defer proxy.Close()
-
-	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
-	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
-	c.Assert(string(bodyBytes), Equals, `{"error":"Forbidden"}`)
-}
-
 // Success, make sure we've successfully proxied the response
 func (s *ProxySuite) TestSuccess(c *C) {
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
@@ -397,6 +355,47 @@ func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
 	}
 }
 
+func (s *ProxySuite) TestProxyAuthRequired(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            if(!request.username || ! request.password)
+               return {code: 401, body: {error: "Unauthorized"}};
+            return {upstreams: ["%s"]};
+         }
+     `, upstream.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, http.Header{}, "")
+	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+	c.Assert(string(bodyBytes), Equals, fmt.Sprintf(`{"error":"%s"}`, http.StatusText(http.StatusUnauthorized)))
+}
+
+// Proxy denies request
+func (s *ProxySuite) TestProxyAccessDenied(c *C) {
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("I am upstream!"))
+	})
+	defer upstream.Close()
+
+	code := `function handle(request){
+               return {code: 403, body: {error: "Forbidden"}};
+             }`
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "")
+	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
+	c.Assert(string(bodyBytes), Equals, `{"error":"Forbidden"}`)
+}
+
 // Make sure we've returned response with valid retry-seconds
 func (s *ProxySuite) TestRateLimited(c *C) {
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
@@ -508,7 +507,52 @@ func (s *ProxySuite) TestRewritePath(c *C) {
 }
 
 // Make sure get request in proxy works
-func (s *ProxySuite) TestGetRequestInProxySuccess(c *C) {
+func (s *ProxySuite) TestGetRequestInProxyNoParams(c *C) {
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"response": "hi!"}`))
+	})
+	defer control.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return get("%s")
+         }
+     `, control.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, `{"response":"hi!"}`)
+}
+
+// Make sure get request in proxy works
+func (s *ProxySuite) TestGetRequestInProxyQuery(c *C) {
+	var query url.Values
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		w.Write([]byte(`{"response": "hi!"}`))
+	})
+	defer control.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return get("%s", request.query)
+         }
+     `, control.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, fmt.Sprintf("%s?a=b&a=c&x=y", proxy.URL), s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, `{"response":"hi!"}`)
+	c.Assert(query, DeepEquals, url.Values{"a": []string{"b", "c"}, "x": []string{"y"}})
+}
+
+// Make sure get request in proxy works
+func (s *ProxySuite) TestGetRequestInProxyAuth(c *C) {
 	var query url.Values
 	var headers http.Header
 	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
@@ -532,4 +576,53 @@ func (s *ProxySuite) TestGetRequestInProxySuccess(c *C) {
 	c.Assert(string(bodyBytes), Equals, `{"response":"hello!"}`)
 	c.Assert(query, DeepEquals, url.Values{"a": []string{"b", "c"}, "x": []string{"y"}})
 	c.Assert(headers.Get("Authorization"), DeepEquals, s.authHeaders.Get("Authorization"))
+}
+
+// Make sure get request in proxy works despite of the one server being down
+func (s *ProxySuite) TestGetRequestInProxyFailover(c *C) {
+	control := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"response": "hi!"}`))
+	})
+	defer control.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return get(["http://localhost:9999", "%s"])
+         }
+     `, control.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, `{"response":"hi!"}`)
+}
+
+// Make sure get request in proxy works despite of the one server being down
+func (s *ProxySuite) TestGetRequestInProxyFailoverOnTimeout(c *C) {
+	slowUpstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Second * time.Duration(100))
+		w.Write([]byte(`{"response": "hi, I'm super slow"}`))
+	})
+	defer slowUpstream.CloseClientConnections()
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"response": "hi, I'm fast!"}`))
+	})
+	defer upstream.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return get(["%s", "%s"])
+         }
+     `, slowUpstream.URL, upstream.URL)
+
+	timeout := time.Duration(10) * time.Millisecond
+	proxy := s.newProxyWithTimeouts(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider), timeout, timeout)
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, `{"response":"hi, I'm fast!"}`)
 }
