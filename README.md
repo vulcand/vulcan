@@ -2,10 +2,10 @@
 [![Build Status](https://drone.io/github.com/mailgun/vulcan/status.png)](https://drone.io/github.com/mailgun/vulcan/latest)
 [![Coverage Status](https://coveralls.io/repos/mailgun/vulcan/badge.png?branch=master)](https://coveralls.io/r/mailgun/vulcan?branch=sasha/js)
 
-Programmable HTTP Proxy
------------------------
+Programmable Proxy
+------------------
 
-Vulcan is a HTTP proxy that you program in JavaScript.
+Vulcan is HTTP proxy that you program in JavaScript.
 
 ```javascript
 function handle(request){
