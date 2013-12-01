@@ -1,5 +1,5 @@
-// Proxy accepts the request, calls the control service for instructions
-// And takes actions according to instructions received.
+// This package contains the proxy core - the main proxy function that accepts and modifies
+// request, forwards or denies it.
 package vulcan
 
 import (
@@ -22,14 +22,12 @@ import (
 	"time"
 )
 
-// Defines Reverse proxy runtime settings, what loadbalancing algo to use,
-// timeouts, throttling backend.
+// Reverse proxy settings, what loadbalancing algo to use,
+// timeouts, rate limiting backend
 type ProxySettings struct {
-	// Controlller that tells proxy what to do with the request
-	// as controller implementation may vary
+	// Controlller tells proxy what to do with each request
 	Controller control.Controller
-	// Any backend that would be used by throttler to keep throttling stats,
-	// e.g. MemoryBackend or CassandraBackend
+	// MemoryBackend or CassandraBackend
 	ThrottlerBackend backend.Backend
 	// Load balancing algo, e.g. RandomLoadBalancer
 	LoadBalancer loadbalance.Balancer
@@ -42,17 +40,16 @@ type ProxySettings struct {
 // This is a reverse proxy, not meant to be created directly,
 // use NewReverseProxy function instead
 type ReverseProxy struct {
-	// Controller that decides what to do with the request
+	// Controller decides what to do with the request
 	controller control.Controller
-	// Sorts upstreams, control servers in accrordance to it's internal
-	// algorithm
+	// Load balancer algorightm implementation
 	loadBalancer loadbalance.Balancer
 	// Customized transport with dial and read timeouts set
 	httpTransport *http.Transport
 	// Client that uses customized transport
 	httpClient *http.Client
 	// Rate limiter
-	rateLimiter *ratelimit.RateLimiter
+	rateLimiter ratelimit.RateLimiter
 }
 
 // Standard dial and read timeouts, can be overriden when supplying proxy settings
@@ -75,7 +72,7 @@ var hopHeaders = []string{
 	"Upgrade",
 }
 
-// Creates reverse proxy that acts like http server
+// Creates reverse proxy that acts like http server.
 func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	s, err := validateProxySettings(s)
 	if err != nil {
@@ -89,9 +86,9 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 		ResponseHeaderTimeout: s.HttpReadTimeout,
 	}
 
-	var rateLimiter *ratelimit.RateLimiter
+	var rateLimiter ratelimit.RateLimiter
 	if s.ThrottlerBackend != nil {
-		rateLimiter = &ratelimit.RateLimiter{Backend: s.ThrottlerBackend}
+		rateLimiter = &ratelimit.BasicRateLimiter{Backend: s.ThrottlerBackend}
 	}
 
 	p := &ReverseProxy{
@@ -106,6 +103,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	return p, nil
 }
 
+// Vulcan implements Getter interface that is used by controllers to issue concurrent get requests with failover
 func (p *ReverseProxy) Get(w http.ResponseWriter, hosts []string, query client.MultiDict, auth *netutils.BasicAuth) error {
 	req, err := http.NewRequest("GET", "http://localhost", nil)
 	if err != nil {
@@ -140,6 +138,8 @@ func (p *ReverseProxy) Get(w http.ResponseWriter, hosts []string, query client.M
 	return err
 }
 
+// Main request handler, accepts requests, round trips it to the upstream
+// proxies back the response.
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
 
@@ -153,10 +153,14 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	switch cmd := cmdI.(type) {
 	case *command.Reply:
+		// reply command provides the exact response
+		// for the client. Proxy responds and hangs up.
 		glog.Infof("Got Reply command: %v", cmd)
 		p.replyCommand(cmd, w, req)
 		return
 	case *command.Forward:
+		// Forward command contains list of upstreams
+		// instructions for the failover and request modification
 		glog.Infof("Got Forward command %v", cmd)
 		// Get upstreams ready to process the request
 		retrySeconds, err := p.rateLimit(cmd)
@@ -186,6 +190,8 @@ func (p *ReverseProxy) rateLimit(cmd *command.Forward) (int, error) {
 		return 0, nil
 	}
 	retrySeconds, err := p.rateLimiter.GetRetrySeconds(cmd.Rates)
+	// Vulcan prefers to proxy the request in case of rate limiter failure
+	// versus hanging up with the error as it's less evil.
 	if err != nil {
 		glog.Errorf("RateLimiter get stats failure: %s, ignoring error", err)
 		return 0, nil
@@ -227,14 +233,15 @@ func (p *ReverseProxy) nextEndpoint(endpoints []loadbalance.Endpoint) (*command.
 	return endpoint, nil
 }
 
+// Round trips the request to one of the upstreams, returns the streamed
+// request body length in bytes and the upstream reply.
 func (p *ReverseProxy) proxyRequest(
 	w http.ResponseWriter, req *http.Request,
 	cmd *command.Forward,
 	endpoints []loadbalance.Endpoint) (int, error) {
 
 	// We are allowed to fallback in case of upstream failure,
-	// so let us record the request body so we can replay
-	// it on errors actually
+	// record the request body so we can replay it on errors.
 	buffer, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		glog.Errorf("Request read error %s", err)
@@ -262,16 +269,20 @@ func (p *ReverseProxy) proxyRequest(
 				return 0, err
 			}
 			glog.Errorf("Upstream: %s error: %s, falling back to another", endpoint.Upstream, err)
+			// Mark the endpoint as inactive for the next round of the load balance iteration
 			endpoint.Active = false
 		} else {
 			return 0, nil
 		}
 	}
-
 	glog.Errorf("All upstreams failed!")
 	return requestLength, netutils.NewHttpError(http.StatusBadGateway)
 }
 
+// Proxy the request to the given upstream, in case if upstream is down
+// or failover code sequence has been recorded as the reply, return the error.
+// Failover sequence - is a special response code from the upstream that indicates
+// that upstream is shutting down and is not willing to accept new requests.
 func (p *ReverseProxy) proxyToUpstream(
 	w http.ResponseWriter,
 	req *http.Request,
@@ -305,6 +316,8 @@ func (p *ReverseProxy) proxyToUpstream(
 	return nil
 }
 
+// This function alters the original request - adds/removes headers, removes hop headers,
+// changes the request path.
 func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.Upstream) *http.Request {
 	outReq := new(http.Request)
 	*outReq = *req // includes shallow copies of maps, but we handle this below
@@ -366,11 +379,11 @@ func (p *ReverseProxy) replyError(err error, w http.ResponseWriter, req *http.Re
 	w.Write(httpResponse.Body)
 }
 
-// Helper function to reply with http errors
+// Helper function to reply with a response specified in the reply command
 func (p *ReverseProxy) replyCommand(cmd *command.Reply, w http.ResponseWriter, req *http.Request) {
 	// Discard the request body, so that clients can actually receive the response
-	// Otherwise they can only see lost connection
-	// TODO: actually check this
+	// Otherwise they can only see lost connection.
+	// TODO: actually check this in tests
 	io.Copy(ioutil.Discard, req.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(cmd.Code)

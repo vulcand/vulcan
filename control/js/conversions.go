@@ -59,7 +59,7 @@ func toMultiDict(in interface{}) (map[string][]string, error) {
 	return nil, fmt.Errorf("Unsupported type: %T", in)
 }
 
-func toMultiDictFromInterface(in interface{}) (client.MultiDict, error) {
+func toMultiDictFromInterface(in interface{}) (map[string][]string, error) {
 	value, ok := in.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("Expected dictionary, got %T", in)
@@ -69,6 +69,10 @@ func toMultiDictFromInterface(in interface{}) (client.MultiDict, error) {
 		switch values := valuesI.(type) {
 		case string:
 			query.Add(key, values)
+		case []string:
+			for _, val := range values {
+				query.Add(key, val)
+			}
 		case []interface{}:
 			for _, subValueI := range values {
 				val, ok := subValueI.(string)
@@ -77,6 +81,8 @@ func toMultiDictFromInterface(in interface{}) (client.MultiDict, error) {
 				}
 				query.Add(key, val)
 			}
+		default:
+			return nil, fmt.Errorf("Unsupported type: %T", values)
 		}
 	}
 	return query, nil

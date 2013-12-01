@@ -22,7 +22,7 @@ import (
 type ProxySuite struct {
 	timeProvider *timeutils.FreezedTime
 	backend      *backend.MemoryBackend
-	limiter      *ratelimit.RateLimiter
+	limiter      ratelimit.RateLimiter
 	authHeaders  http.Header
 }
 
@@ -34,7 +34,7 @@ func (s *ProxySuite) SetUpTest(c *C) {
 	backend, err := backend.NewMemoryBackend(s.timeProvider)
 	c.Assert(err, IsNil)
 	s.backend = backend
-	s.limiter = &ratelimit.RateLimiter{Backend: s.backend}
+	s.limiter = &ratelimit.BasicRateLimiter{Backend: s.backend}
 	s.authHeaders = http.Header{"Authorization": []string{"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="}}
 }
 

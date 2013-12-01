@@ -8,6 +8,8 @@ import (
 	"net/http"
 )
 
+// Converts vulcan-specific errors to json compatible representation
+// so the errors can be handled and altered by the proxy logic.
 func errorToJs(inErr error) map[string]interface{} {
 	switch err := inErr.(type) {
 	case *command.AllUpstreamsDownError:

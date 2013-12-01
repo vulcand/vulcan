@@ -14,8 +14,8 @@ func TestRateLimit(t *testing.T) { TestingT(t) }
 type LimitSuite struct {
 	timeProvider       *timeutils.FreezedTime
 	backend            *backend.MemoryBackend
-	rateLimiter        *RateLimiter
-	failingRateLimiter *RateLimiter
+	rateLimiter        RateLimiter
+	failingRateLimiter RateLimiter
 }
 
 var _ = Suite(&LimitSuite{})
@@ -26,8 +26,8 @@ func (s *LimitSuite) SetUpTest(c *C) {
 	b, err := backend.NewMemoryBackend(s.timeProvider)
 	c.Assert(err, IsNil)
 	s.backend = b
-	s.rateLimiter = &RateLimiter{Backend: s.backend}
-	s.failingRateLimiter = &RateLimiter{Backend: &backend.FailingBackend{}}
+	s.rateLimiter = &BasicRateLimiter{Backend: s.backend}
+	s.failingRateLimiter = &BasicRateLimiter{Backend: &backend.FailingBackend{}}
 }
 
 // Getting rates when there's no stats

@@ -5,8 +5,12 @@ import (
 	"fmt"
 )
 
+// Reply command tells proxy to reply with a special
+// code and body and do not forward the request.
 type Reply struct {
+	// HTTP status code
 	Code int
+	// Body that should be json serializable
 	Body interface{}
 }
 

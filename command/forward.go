@@ -5,23 +5,26 @@ import (
 	"net/http"
 )
 
-// Forward reply tells proxy to forward the request to the provided
+// Forward reply tells proxy to forward the request to the given upstreams
 type Forward struct {
 	// Allows proxy to fall back to the next upstream
 	// if the selected upstream failed
 	Failover *Failover
-	// Tokens uniquely identify the requester. E.g. token can be account id or
-	// combination of ip and account id. Tokens can be throttled as well.
-	// The reply can have 0 or several tokens
+	// Each rate key represents a resource to limit, e.g. ip address or account id
+	// or a combination of both. Key is a string with a list of rates attached to it.
+	// If any of the given rates of the reuqest is exceeded, the request will be not allowed.
 	Rates map[string][]*Rate
 	// List of upstreams that can accept this request. Load balancer will
 	// choose an upstream based on the algo, e.g. random, round robin,
 	// or least connections. At least one upstream is required.
 	Upstreams []*Upstream
 	// If supplied, headers will be added to the proxied request.
-	AddHeaders    http.Header
+	AddHeaders http.Header
+	// These headers will be removed from the request header if met, note that
+	// hop headers will be removed no matter what.
 	RemoveHeaders []string
-	RewritePath   string
+	// If not emtpy, the original request path will be replaced with the supplied path
+	RewritePath string
 }
 
 func NewForward(

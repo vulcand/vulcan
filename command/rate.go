@@ -14,15 +14,20 @@ func init() {
 }
 
 const (
-	UnitTypeRequests  = iota
+	// Limit type by the amount of requests in a given time period.
+	UnitTypeRequests = iota
+	// Limit type by the amount by used bandwidth.
 	UnitTypeKilobytes = iota
 )
 
-// Rates stores the information on how many hits per
-// period of time any endpoint can accept
+// Rates  the information on how many hits or bytes
+// per period of time any endpoint can accept.
 type Rate struct {
-	Units    int64
-	Period   time.Duration
+	// The amount of unit (e.g. 100 for 100 Kilobytes)
+	Units int64
+	// Rate's period of time (e.g. second in 100 request/second)
+	Period time.Duration
+	// Unit to measure, e.g. requests or kilobytes
 	UnitType int
 }
 

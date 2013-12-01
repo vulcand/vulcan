@@ -1,3 +1,5 @@
+// This package implements vulcan controller and is based on
+// Robert Krimen's Otto javascript magnificent interpreter.
 package js
 
 import (
@@ -13,14 +15,20 @@ import (
 )
 
 type JsController struct {
+	// Discovery service interface, Zookeeper or Etcd can hide behind
+	// the simple interface.
 	DiscoveryService discovery.Service
-	CodeGetter       CodeGetter
-	Client           client.Client
+	// Code getter is responsible for fetching the request from file,
+	// hardcoded string or discovery service.
+	CodeGetter CodeGetter
+	// Client allows controlller to issue concurrent get requests
+	// within the javascript handler.
+	Client client.Client
 }
 
 func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
 	var instr interface{}
-	err := fmt.Errorf("Not implemented")
+	err := fmt.Errorf("Internal system error")
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Errorf("Recovered: %v %s", r, debug.Stack())
