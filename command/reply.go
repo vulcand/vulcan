@@ -28,6 +28,10 @@ func NewReplyFromDict(in map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("HTTP code should be an integer, got %v", code)
 	}
 
+	if code < 0 {
+		return nil, fmt.Errorf("HTTP code should be a positive integer, got %v", code)
+	}
+
 	bodyI, exists := in["body"]
 	if !exists {
 		return nil, fmt.Errorf("Expected body")

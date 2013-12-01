@@ -18,6 +18,46 @@ type JsController struct {
 	Client           client.Client
 }
 
+func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
+	var instr interface{}
+	err := fmt.Errorf("Not implemented")
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Errorf("Recovered: %v %s", r, debug.Stack())
+			err = fmt.Errorf("Internal js error")
+			instr = nil
+		}
+	}()
+	code, err := ctrl.CodeGetter.GetCode()
+	if err != nil {
+		return nil, err
+	}
+	Otto := otto.New()
+	ctrl.registerBuiltins(Otto)
+
+	_, err = Otto.Run(code)
+	if err != nil {
+		return nil, err
+	}
+	handler, err := Otto.Get("handle")
+	if err != nil {
+		return nil, err
+	}
+	jsRequest, err := requestToJs(req)
+	if err != nil {
+		return nil, err
+	}
+	jsObj, err := Otto.ToValue(jsRequest)
+	if err != nil {
+		return nil, err
+	}
+	instr, err = ctrl.callHandler(handler, jsObj)
+	if err != nil {
+		return nil, err
+	}
+	return NewCommandFromObj(instr)
+}
+
 func (ctrl *JsController) ConvertError(req *http.Request, inError error) (response *netutils.HttpError, err error) {
 	response = netutils.NewHttpError(http.StatusInternalServerError)
 	err = fmt.Errorf("Internal error")
@@ -77,46 +117,6 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 		return nil, err
 	}
 	return converted, nil
-}
-
-func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
-	var instr interface{}
-	err := fmt.Errorf("Not implemented")
-	defer func() {
-		if r := recover(); r != nil {
-			glog.Errorf("Recovered: %v %s", r, debug.Stack())
-			err = fmt.Errorf("Internal js error")
-			instr = nil
-		}
-	}()
-	code, err := ctrl.CodeGetter.GetCode()
-	if err != nil {
-		return nil, err
-	}
-	Otto := otto.New()
-	ctrl.registerBuiltins(Otto)
-
-	_, err = Otto.Run(code)
-	if err != nil {
-		return nil, err
-	}
-	handler, err := Otto.Get("handle")
-	if err != nil {
-		return nil, err
-	}
-	jsRequest, err := requestToJs(req)
-	if err != nil {
-		return nil, err
-	}
-	jsObj, err := Otto.ToValue(jsRequest)
-	if err != nil {
-		return nil, err
-	}
-	instr, err = ctrl.callHandler(handler, jsObj)
-	if err != nil {
-		return nil, err
-	}
-	return NewCommandFromObj(instr)
 }
 
 func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{}) (interface{}, error) {

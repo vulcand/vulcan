@@ -7,29 +7,15 @@ import (
 	"time"
 )
 
-type CommandsSuite struct{}
+type ForwardSuite struct{}
 
-var _ = Suite(&CommandsSuite{})
+var _ = Suite(&ForwardSuite{})
 
-func (s *CommandsSuite) TestCommandsFromObj(c *C) {
+func (s *ForwardSuite) TestForwardSuccess(c *C) {
 	commands := []struct {
-		Expected interface{}
+		Expected *Forward
 		Parse    string
 	}{
-		{
-			Parse: `{"code": 500, "body": "access denied"}`,
-			Expected: &Reply{
-				Code: 500,
-				Body: "access denied",
-			},
-		},
-		{
-			Parse: `{"code": 405, "body": {"error": "some error"}}`,
-			Expected: &Reply{
-				Code: 405,
-				Body: map[string]interface{}{"error": "some error"},
-			},
-		},
 		{
 			Parse: `{"upstreams": ["http://localhost:5000", "http://localhost:5001"]}`,
 			Expected: &Forward{

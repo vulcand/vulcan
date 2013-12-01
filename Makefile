@@ -13,6 +13,9 @@ cstest:clean
 cmdtest:clean
 	go test -v ./command
 
+jstest:clean
+	go test -v ./control/js
+
 ratetest:clean
 	go test -v ./ratelimit
 
@@ -21,6 +24,9 @@ proxytest:clean
 
 cmdcoverage: clean
 	gocov test -v ./command | gocov report
+
+jscoverage: clean
+	gocov test -v ./control/js | gocov report
 
 coverage: clean
 	gocov test -v ./... | gocov report
