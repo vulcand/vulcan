@@ -31,7 +31,7 @@ function handle(request){
 Discover FTW!
 -------------
 
-Storing upstreams addresses in files is ok up to certain extent. On the other hand, keeping upstreams settings in discovery service simplifies deployment and configuration management. Vulcan supports Etcd or Zookeeper:
+Storing upstreams in files is ok up to a certain extent. On the other hand, keeping upstreams in discovery service simplifies deployment and configuration management. Vulcan supports Etcd or Zookeeper:
 
 ```javascript
 function handle(request){
@@ -45,7 +45,7 @@ function handle(request){
 Caching and Auth
 -----------------
 
-Auth is a complex task and you don't want every endpoint to do auth for you. It's better to implement auth once, and make your proxy deal with it. As a bonus you can cache auth using memory, Redis or Cassandra backends, reducing load on the databases holding account creds.
+Auth is hard and you don't want every endpoint to implement auth for you. It's better to implement auth once, and make your proxy deal with it. As a bonus you can cache results using memory, Redis or Cassandra backends, reducing load on the databases holding account creds.
 
 ```javascript
 function handle(request){
