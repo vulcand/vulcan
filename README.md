@@ -1,7 +1,11 @@
 [![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
 [![Build Status](https://drone.io/github.com/mailgun/vulcan/status.png)](https://drone.io/github.com/mailgun/vulcan/latest)
+[![Coverage Status](https://coveralls.io/repos/mailgun/vulcan/badge.png?branch=sasha%2Fjs)](https://coveralls.io/r/mailgun/vulcan?branch=sasha%2Fjs)
 
-Vulcan is a HTTP proxy that you program in JavaScript:
+Proxy for HTTP services
+-----------------------
+
+Vulcan is a proxy built for APi's specific needs that are usually different from website's needs. It is a proxy that you program in JavaScript.
 
 ```javascript
 function handle(request){
@@ -9,7 +13,10 @@ function handle(request){
 }
 ```
 
-It supports rate limiting using memory, Cassandra or Redis backends:
+How slow can your proxy be?
+---------------------------
+One wants proxies to be fast, but in case of services proxy is rarely a bottleneck, whereas DB and filesystem are.
+Vulcan supports rate limiting using memory, Cassandra or Redis backends, so your service can introduce proper account-specific rates and expectations right from the start.
 
 ```javascript
 function handle(request){
@@ -21,7 +28,10 @@ function handle(request){
 }
 ```
 
-Service discovery using filesystem, Etcd or Zookeeper:
+Discover FTW!
+-------------
+
+Storing upstreams in files is ok up to a certain extent. On the other hand, keeping upstreams in a discovery service simplifies deployment and configuration management. Vulcan supports Etcd or Zookeeper:
 
 ```javascript
 function handle(request){
@@ -32,7 +42,10 @@ function handle(request){
 }
 ```
 
-Auth and cache control using memory, Redis or Cassandra backends:
+Caching and Auth
+-----------------
+
+Auth is hard and you don't want every endpoint to implement auth. It's better to implement auth endpoint once, and make proxy deal with it. As a bonus you can cache results using memory, Redis or Cassandra, reducing load on the databases holding account creds.
 
 ```javascript
 function handle(request){
@@ -46,7 +59,6 @@ function handle(request){
     }
 }
 ```
-
 
 And many more advanced features you'd need when writing APIs, like Metrics and Failure detection. Read on!
 
