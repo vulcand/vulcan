@@ -45,7 +45,7 @@ function handle(request){
 Caching and Auth
 -----------------
 
-Auth is hard and you don't want every endpoint to implement auth. It's better to implement auth endpoint, and make proxy deal with it. As a bonus you can cache results using memory, Redis or Cassandra, reducing load on the databases holding account creds.
+Auth is hard and you don't want every endpoint to implement auth. It's better to implement auth endpoint once, and make proxy deal with it. As a bonus you can cache results using memory, Redis or Cassandra, reducing load on the databases holding account creds.
 
 ```javascript
 function handle(request){
