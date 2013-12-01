@@ -42,6 +42,7 @@ deps:
 	go get -v -u github.com/mailgun/gocql
 	go get -v -u github.com/robertkrimen/otto
 	go get -v -u github.com/coreos/go-etcd/etcd
+	go get -v -u github.com/mailgun/minheap
 clean:
 	find . -name flymake_* -delete
 

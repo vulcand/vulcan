@@ -15,6 +15,7 @@ install:
  - go get -v github.com/mailgun/glogutils
  - go get -v -u github.com/robertkrimen/otto
  - go get -v -u github.com/coreos/go-etcd/etcd
+ - go get -v -u github.com/mailgun/minheap
 
 script:
  - go test -v ./...
