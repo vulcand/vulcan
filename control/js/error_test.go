@@ -58,6 +58,6 @@ func (s *ErrorSuite) TestErrorToJs(c *C) {
 		c.Assert(netErr.StatusCode, Equals, in.Expected["code"])
 		bytes, err := json.Marshal(in.Expected["body"])
 		c.Assert(err, Equals, nil)
-		c.Assert(bytes, DeepEquals, in.Expected["body"])
+		c.Assert(bytes, DeepEquals, netErr.Body)
 	}
 }

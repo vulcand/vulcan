@@ -27,5 +27,5 @@ func (e *Etcd) Get(key string) (string, error) {
 	if response == nil {
 		return "", fmt.Errorf("Not found")
 	}
-	return response.Value, nil
+	return response.Node.Value, nil
 }
