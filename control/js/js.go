@@ -147,7 +147,7 @@ func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{})
 func (ctrl *JsController) registerBuiltins(o *otto.Otto) {
 	ctrl.addDiscoveryService(o)
 	ctrl.addGetter(o)
-	ctrl.addInfo(o)
+	ctrl.addLoggers(o)
 }
 
 func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
@@ -161,7 +161,7 @@ func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
 	})
 }
 
-func (ctrl *JsController) addInfo(o *otto.Otto) {
+func (ctrl *JsController) addLoggers(o *otto.Otto) {
 	o.Set("info", func(call otto.FunctionCall) otto.Value {
 		if len(call.ArgumentList) <= 0 {
 			glog.Errorf("GET: Missing arguments")

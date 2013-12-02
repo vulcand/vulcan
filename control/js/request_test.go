@@ -11,24 +11,13 @@ type RequestSuite struct{}
 
 var _ = Suite(&RequestSuite{})
 
-func (s *RequestSuite) newRequest(method string, url string, auth *netutils.BasicAuth) *http.Request {
-	req, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		panic(err)
-	}
-	if auth != nil {
-		req.SetBasicAuth(auth.Username, auth.Password)
-	}
-	return req
-}
-
 func (s *RequestSuite) TestRequestToJs(c *C) {
 	commands := []struct {
 		Request  *http.Request
 		Expected map[string]interface{}
 	}{
 		{
-			Request: s.newRequest("GET", "http://localhost", nil),
+			Request: NewTestRequest("GET", "http://localhost", nil),
 			Expected: map[string]interface{}{
 				"auth": map[string]interface{}{
 					"username": "",
@@ -44,7 +33,8 @@ func (s *RequestSuite) TestRequestToJs(c *C) {
 			},
 		},
 		{
-			Request: s.newRequest("GET", "http://localhost/path?a=b", &netutils.BasicAuth{"user", "pass"}),
+			Request: NewTestRequest(
+				"GET", "http://localhost/path?a=b", &netutils.BasicAuth{"user", "pass"}),
 			Expected: map[string]interface{}{
 				"auth": map[string]interface{}{
 					"username": "user",

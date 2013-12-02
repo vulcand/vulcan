@@ -17,8 +17,7 @@ type Upstream struct {
 	Id     string
 }
 
-func NewUpstream(
-	scheme string, host string, port int) (*Upstream, error) {
+func NewUpstream(scheme string, host string, port int) (*Upstream, error) {
 
 	if len(scheme) == 0 {
 		return nil, fmt.Errorf("Expected scheme")
