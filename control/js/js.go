@@ -84,7 +84,7 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 
 	_, err = Otto.Run(code)
 	if err != nil {
-		glog.Errorf("Error running code: %s", err)
+		glog.Errorf("Error running code %s: %s", code, err)
 		return response, err
 	}
 	handler, err := Otto.Get("handleError")
@@ -163,37 +163,12 @@ func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
 
 func (ctrl *JsController) addLoggers(o *otto.Otto) {
 	o.Set("info", func(call otto.FunctionCall) otto.Value {
-		if len(call.ArgumentList) <= 0 {
-			glog.Errorf("GET: Missing arguments")
-			return otto.NullValue()
-		}
-		formatI, err := call.Argument(0).Export()
-		if err != nil {
-			glog.Errorf("Fail: %s", err)
-			return otto.NullValue()
-		}
-		formatString, err := toString(formatI)
-		if err != nil {
-			return otto.NullValue()
-		}
-		if len(call.ArgumentList) <= 1 {
-			glog.Infof(formatString)
-		} else {
-			arguments := make([]interface{}, len(call.ArgumentList)-1)
-			for i, val := range call.ArgumentList {
-				if i == 0 {
-					continue
-				}
-				obj, err := val.Export()
-				if err != nil {
-					glog.Errorf("Failed to convert argument: %v", err)
-				}
-				arguments[i-1] = obj
-			}
-			glog.Infof(formatString, arguments...)
-		}
-		return otto.NullValue()
+		return log("info", call)
 	})
+	o.Set("error", func(call otto.FunctionCall) otto.Value {
+		return log("error", call)
+	})
+
 }
 
 func (ctrl *JsController) addGetter(o *otto.Otto) {
@@ -260,4 +235,45 @@ func (ctrl *JsController) addGetter(o *otto.Otto) {
 		}
 		return converted
 	})
+}
+
+func log(severity string, call otto.FunctionCall) otto.Value {
+	var logger func(string, ...interface{})
+	if severity == "info" {
+		logger = glog.Infof
+	} else if severity == "error" {
+		logger = glog.Errorf
+	} else {
+		glog.Errorf("Unsupported severity: %s", severity)
+		return otto.NullValue()
+	}
+
+	if len(call.ArgumentList) <= 0 {
+		glog.Errorf("Missing arguments")
+		return otto.NullValue()
+	}
+	formatI, err := call.Argument(0).Export()
+	if err != nil {
+		glog.Errorf("Fail: %s", err)
+		return otto.NullValue()
+	}
+	formatString, err := toString(formatI)
+	if err != nil {
+		return otto.NullValue()
+	}
+
+	arguments := make([]interface{}, len(call.ArgumentList)-1)
+	for i, val := range call.ArgumentList {
+		if i == 0 {
+			continue
+		}
+		obj, err := val.Export()
+		if err != nil {
+			glog.Errorf("Failed to convert argument: %v", err)
+			return otto.NullValue()
+		}
+		arguments[i-1] = obj
+	}
+	logger(formatString, arguments...)
+	return otto.NullValue()
 }

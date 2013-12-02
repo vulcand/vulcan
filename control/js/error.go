@@ -55,9 +55,14 @@ func errorFromDict(in map[string]interface{}) (*netutils.HttpError, error) {
 	if !ok {
 		return nil, fmt.Errorf("Expected 'code' parameter")
 	}
-	code, ok := codeI.(int)
-	if !ok {
-		return nil, fmt.Errorf("Parameter 'code' should be integer, got %v", code)
+	code := 0
+	switch codeVal := codeI.(type) {
+	case int:
+		code = codeVal
+	case float64:
+		code = int(codeVal)
+	default:
+		return nil, fmt.Errorf("Parameter 'code' should be integer, got %T", codeI)
 	}
 	bodyI, ok := in["body"]
 	if !ok {
