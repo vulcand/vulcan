@@ -23,7 +23,7 @@ function handle(request){
     return {
         failover: true,
         upstreams: ["http://localhost:5000", "http://localhost:5001"],
-        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+        rates: {request.ip: ["10 requests/second", "1000 KB/second"]}
     }
 }
 ```
@@ -37,7 +37,7 @@ Storing upstreams in files is ok up to a certain extent. On the other hand, keep
 function handle(request){
     return {
         upstreams: discover("/upstreams"),
-        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+        rates: {request.ip: ["10 requests/second", "1000 KB/second"]}
     }
 }
 ```
@@ -49,13 +49,16 @@ Auth is hard and you don't want every endpoint to implement auth. It's better to
 
 ```javascript
 function handle(request){
-    response = get("http://localhost/auth", {auth: request.auth}, {cache: true, seconds: 20})
+    response = get(
+        discover("/auth"), 
+        {auth: request.auth}, 
+        {cache: true, seconds: 20})
     if(!response.code == 200) {
         return response
     }
     return {
         upstreams: discover("/upstreams"),
-        rates: {"*": ["10 requests/second", "1000 KB/second"]}
+        rates: {request.ip: ["10 requests/second", "1000 KB/second"]}
     }
 }
 ```
