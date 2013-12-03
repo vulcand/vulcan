@@ -49,10 +49,7 @@ Auth is hard and you don't want every endpoint to implement auth. It's better to
 
 ```javascript
 function handle(request){
-    response = get(
-        discover("/auth"), 
-        {auth: request.auth}, 
-        {cache: true, seconds: 20})
+    response = get(discover("/auth-endpoints"), {auth: request.auth}, {cache: true})
     if(!response.code == 200) {
         return response
     }
@@ -64,29 +61,6 @@ function handle(request){
 ```
 
 And many more advanced features you'd need when writing APIs, like Metrics and Failure detection. Read on!
-
-Rationale
----------
-Vulcan aims to simplify development of JSON based HTTP services and solve the common problems in this domain:
-
-* Application specific rate limiting and cache control
-* Downtime-less deployments and service discovery
-* Smart failolver, error reporting and performance measures 
-
-Quick Start
------------
-
-Vulcan is controlled by Javascript snippets:
-
-```javascript
-function handler(request){
-        return {upstreams: ["http://localhost:5000"]}
-}
-```
-
-
-
-
 
 
 __Development setup__
