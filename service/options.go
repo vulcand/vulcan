@@ -30,6 +30,8 @@ func parseOptions() (*serviceOptions, error) {
 
 	flag.DurationVar(&options.cleanupPeriod, "logcleanup", time.Duration(24)*time.Hour, "How often should we remove unused golang logs (e.g. 24h, 1h, 7h)")
 
+	flag.Var(&options.etcdEndpoints, "etcd", "Etcd discovery service API endpoints")
+
 	flag.Parse()
 
 	return options, nil
@@ -52,6 +54,9 @@ type serviceOptions struct {
 	cassandraKeyspace       string
 	cassandraCleanup        bool
 	cassandraCleanupOptions cleanupOptions
+
+	// Discovery service
+	etcdEndpoints listOptions
 
 	// How often should we clean up golang old logs
 	cleanupPeriod time.Duration

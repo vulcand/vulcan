@@ -136,6 +136,7 @@ func (ctrl *JsController) callHandler(handler otto.Value, params ...interface{})
 		glog.Errorf("Call resulted in failure %#v", err)
 		return nil, err
 	}
+
 	obj, err := out.Export()
 	if err != nil {
 		glog.Errorf("Failed to extract response %#v", err)
@@ -151,12 +152,27 @@ func (ctrl *JsController) registerBuiltins(o *otto.Otto) {
 }
 
 func (ctrl *JsController) addDiscoveryService(o *otto.Otto) {
-	return
 	o.Set("discover", func(call otto.FunctionCall) otto.Value {
-		right, _ := call.Argument(0).ToString()
-		value, err := ctrl.DiscoveryService.Get(right)
-		glog.Infof("Got %v, %s", value, err)
-		result, _ := o.ToValue(value)
+		if len(call.ArgumentList) == 0 {
+			glog.Errorf("DISCOVER: Missing arguments")
+			return otto.NullValue()
+		}
+
+		url, _ := call.Argument(0).ToString()
+		upstreams, err := ctrl.DiscoveryService.Get(url)
+		if err != nil {
+			glog.Errorf("Failed to discover upstreams: %v", err)
+			return otto.NullValue()
+		}
+
+		glog.Infof("Discovered upstreams: %v", upstreams)
+
+		result, err := o.ToValue(upstreams)
+		if err != nil {
+			glog.Errorf("Failed to convert: %v", err)
+			return otto.NullValue()
+		}
+
 		return result
 	})
 }

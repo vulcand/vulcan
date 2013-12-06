@@ -15,6 +15,7 @@ import (
 	"github.com/mailgun/vulcan"
 	"github.com/mailgun/vulcan/backend"
 	"github.com/mailgun/vulcan/control/js"
+	"github.com/mailgun/vulcan/discovery"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/timeutils"
@@ -120,8 +121,14 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
 	}
 
+	var discoveryService discovery.Service
+	if len(s.options.etcdEndpoints) > 0 {
+		discoveryService = discovery.NewEtcd(s.options.etcdEndpoints)
+	}
+
 	controller := &js.JsController{
-		CodeGetter: &js.FileGetter{Path: s.options.codePath},
+		CodeGetter:       &js.FileGetter{Path: s.options.codePath},
+		DiscoveryService: discoveryService,
 	}
 
 	proxySettings := &vulcan.ProxySettings{
