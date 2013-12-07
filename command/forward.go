@@ -52,8 +52,17 @@ func NewForwardFromDict(in map[string]interface{}) (interface{}, error) {
 	if !exists {
 		return nil, fmt.Errorf("Upstreams are required")
 	}
+
+	var upstreams []*Upstream
 	var err error
-	upstreams, err := NewUpstreamsFromObj(upstreamsI)
+
+	switch upstreamsI.(type) {
+	case []string:
+		upstreams, err = NewUpstreamsFromUrls(upstreamsI.([]string))
+	default:
+		upstreams, err = NewUpstreamsFromObj(upstreamsI)
+	}
+
 	if err != nil {
 		return nil, err
 	}
