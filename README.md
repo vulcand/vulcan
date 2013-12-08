@@ -4,7 +4,7 @@
 
 Status
 ------
-Don't use it in production
+Don't use it in production, early adopters and hackers are welcome
 
 
 Proxy for HTTP services
