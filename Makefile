@@ -22,20 +22,6 @@ ratetest:clean
 proxytest:clean
 	go test -v .
 
-cmdcoverage: clean
-	gocov test -v ./command | gocov report
-
-jscoverage: clean
-	gocov test -v ./control/js | gocov report
-
-coverage: clean
-	gocov test -v ./... | gocov report
-
-annotate: clean
-	FILENAME=$(shell uuidgen)
-	gocov test -v ./... > /tmp/--go-test-server-coverage.json
-	gocov annotate /tmp/--go-test-server-coverage.json $(fn)
-
 all:
 	go install github.com/mailgun/vulcan # installs library
 	go install github.com/mailgun/vulcan/vulcan # and service
