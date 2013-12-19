@@ -24,6 +24,18 @@ func (s *UpstreamSuite) TestNewUpstream(c *C) {
 	c.Assert(*u, DeepEquals, expected)
 }
 
+func (s *UpstreamSuite) TestNewUpstreamNoPort(c *C) {
+	u, err := NewUpstreamFromString("http://localhost")
+	c.Assert(err, IsNil)
+	expected := Upstream{
+		Id:     "http://localhost:80",
+		Scheme: "http",
+		Host:   "localhost",
+		Port:   80,
+	}
+	c.Assert(*u, DeepEquals, expected)
+}
+
 func (s *UpstreamSuite) TestUpstreamFromObj(c *C) {
 	upstreams := []struct {
 		Expected Upstream

@@ -35,20 +35,33 @@ func NewUpstream(scheme string, host string, port int) (*Upstream, error) {
 	}, nil
 }
 
+// Given a string of the form "host", "host:port", or "[ipv6::address]:port",
+// return true if the string includes a port.
+func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
+
+var portMap = map[string]int{
+	"http":  80,
+	"https": 443,
+}
+
 func NewUpstreamFromUrl(url *url.URL) (*Upstream, error) {
 	if url == nil {
 		return nil, fmt.Errorf("Someone provided nil url. How dare you?")
 	}
-	values := strings.SplitN(url.Host, ":", 2)
-	if len(values) != 2 {
-		return nil, fmt.Errorf("Expected host and port in %s", url)
+
+	if hasPort(url.Host) {
+		host := url.Host[:strings.LastIndex(url.Host, ":")]
+		port, err := strconv.Atoi(url.Host[strings.LastIndex(url.Host, ":")+1:])
+		if err != nil {
+			return nil, fmt.Errorf("Expected numeric port in %s", url)
+		}
+		return NewUpstream(url.Scheme, host, port)
 	}
-	host := values[0]
-	port, err := strconv.Atoi(values[1])
-	if err != nil {
-		return nil, fmt.Errorf("Expected numeric port in %s", url)
+
+	if _, badScheme := portMap[url.Scheme]; !badScheme {
+		return nil, fmt.Errorf("Unknown scheme in URL: %s", url.Scheme)
 	}
-	return NewUpstream(url.Scheme, host, port)
+	return NewUpstream(url.Scheme, url.Host, portMap[url.Scheme])
 }
 
 func NewUpstreamsFromUrls(hosts []string) ([]*Upstream, error) {
