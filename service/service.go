@@ -121,6 +121,12 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
 	}
 
+	if s.options.sslCertFile != "" && s.options.sslKeyFile == "" {
+		return nil, fmt.Errorf("invalid configuration: -sslkey unspecified, but -sslcert was specified.")
+	} else if s.options.sslCertFile == "" && s.options.sslKeyFile != "" {
+		return nil, fmt.Errorf("invalid configuration: -sslcert unspecified, but -sslkey was specified.")
+	}
+
 	var discoveryService discovery.Service
 	if len(s.options.etcdEndpoints) > 0 {
 		discoveryService = discovery.NewEtcd(s.options.etcdEndpoints)
@@ -154,5 +160,10 @@ func (s *Service) startProxy() error {
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
+
+	if s.options.sslCertFile != "" && s.options.sslKeyFile != "" {
+		return server.ListenAndServeTLS(s.options.sslCertFile, s.options.sslKeyFile)
+	}
+
 	return server.ListenAndServe()
 }
