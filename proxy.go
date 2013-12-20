@@ -12,6 +12,7 @@ import (
 	"github.com/mailgun/vulcan/command"
 	"github.com/mailgun/vulcan/control"
 	"github.com/mailgun/vulcan/loadbalance"
+	"github.com/mailgun/vulcan/metrics"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/ratelimit"
 	"io"
@@ -40,6 +41,8 @@ type ProxySettings struct {
 // This is a reverse proxy, not meant to be created directly,
 // use NewReverseProxy function instead
 type ReverseProxy struct {
+	// Metrics we track about this reverse proxy.
+	metrics *metrics.ProxyMetrics
 	// Controller decides what to do with the request
 	controller control.Controller
 	// Load balancer algorightm implementation
@@ -73,7 +76,7 @@ var hopHeaders = []string{
 }
 
 // Creates reverse proxy that acts like http server.
-func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
+func NewReverseProxy(metrics *metrics.ProxyMetrics, s *ProxySettings) (*ReverseProxy, error) {
 	s, err := validateProxySettings(s)
 	if err != nil {
 		return nil, err
@@ -92,6 +95,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 	}
 
 	p := &ReverseProxy{
+		metrics:       metrics,
 		controller:    s.Controller,
 		loadBalancer:  s.LoadBalancer,
 		httpTransport: transport,
@@ -141,6 +145,7 @@ func (p *ReverseProxy) Get(w http.ResponseWriter, hosts []string, query client.M
 // Main request handler, accepts requests, round trips it to the upstream
 // proxies back the response.
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	p.metrics.Requests.Mark(1)
 	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
 
 	// Ask controller for instructions
@@ -156,12 +161,14 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// reply command provides the exact response
 		// for the client. Proxy responds and hangs up.
 		glog.Infof("Got Reply command: %v", cmd)
+		p.metrics.CmdReply.Mark(1)
 		p.replyCommand(cmd, w, req)
 		return
 	case *command.Forward:
 		// Forward command contains list of upstreams
 		// instructions for the failover and request modification
 		glog.Infof("Got Forward command %v", cmd)
+		p.metrics.CmdForward.Mark(1)
 		// Get upstreams ready to process the request
 		retrySeconds, err := p.rateLimit(cmd)
 		if err != nil {
@@ -248,6 +255,7 @@ func (p *ReverseProxy) proxyRequest(
 		return 0, netutils.NewHttpError(http.StatusBadRequest)
 	}
 
+	p.metrics.RequestBodySize.Update(int64(len(buffer)))
 	reader := &Buffer{bytes.NewReader(buffer)}
 	requestLength := reader.Len()
 	req.Body = reader
@@ -293,17 +301,21 @@ func (p *ReverseProxy) proxyToUpstream(
 	outReq := rewriteRequest(req, cmd, upstream)
 
 	// Forward the reuest and mirror the response
+	upstream.Metrics.Requests.Mark(1)
+	startts := time.Now()
 	res, err := p.httpTransport.RoundTrip(outReq)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
+	upstream.Metrics.Latency.Update(time.Since(startts))
 
 	// In some cases upstreams may return special error codes that indicate that instead
 	// of proxying the response of the upstream to the client we should initiate a failover
 	if cmd.Failover != nil && len(cmd.Failover.Codes) != 0 {
 		for _, code := range cmd.Failover.Codes {
 			if res.StatusCode == code {
+				upstream.Metrics.Failovers.Mark(1)
 				glog.Errorf("Upstream %s initiated failover with status code %d", upstream, code)
 				return fmt.Errorf("Upstream %s initiated failover with status code %d", upstream, code)
 			}
@@ -312,6 +324,7 @@ func (p *ReverseProxy) proxyToUpstream(
 
 	netutils.CopyHeaders(w.Header(), res.Header)
 	w.WriteHeader(res.StatusCode)
+	upstream.Metrics.Http.MarkResponseCode(res.StatusCode)
 	io.Copy(w, res.Body)
 	return nil
 }

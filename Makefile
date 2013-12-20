@@ -38,6 +38,7 @@ deps:
 	go get -v -u github.com/robertkrimen/otto
 	go get -v -u github.com/coreos/go-etcd/etcd
 	go get -v -u github.com/mailgun/minheap
+	go get -v -u github.com/rcrowley/go-metrics
 clean:
 	find . -name flymake_* -delete
 

@@ -7,6 +7,7 @@ import (
 	"github.com/mailgun/vulcan/control/js"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/loadbalance/roundrobin"
+	"github.com/mailgun/vulcan/metrics"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/ratelimit"
 	"github.com/mailgun/vulcan/timeutils"
@@ -24,6 +25,7 @@ type ProxySuite struct {
 	backend      *backend.MemoryBackend
 	limiter      ratelimit.RateLimiter
 	authHeaders  http.Header
+	metrics      metrics.ProxyMetrics
 }
 
 var _ = Suite(&ProxySuite{})
@@ -109,7 +111,9 @@ func (s *ProxySuite) newProxyWithTimeouts(
 		HttpDialTimeout:  dialTimeout,
 	}
 
-	proxy, err := NewReverseProxy(proxySettings)
+	s.metrics = metrics.NewProxyMetrics()
+
+	proxy, err := NewReverseProxy(&s.metrics, proxySettings)
 	if err != nil {
 		panic(err)
 	}

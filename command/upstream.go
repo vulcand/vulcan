@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"github.com/mailgun/vulcan/metrics"
 	"github.com/mailgun/vulcan/netutils"
 	"net/url"
 	"strconv"
@@ -11,10 +12,11 @@ import (
 // Upstream is HTTP server that will actually serve
 // the request that would be proxied
 type Upstream struct {
-	Scheme string
-	Host   string
-	Port   int
-	Id     string
+	Scheme  string
+	Host    string
+	Port    int
+	Id      string
+	Metrics *metrics.UpstreamMetrics
 }
 
 func NewUpstream(scheme string, host string, port int) (*Upstream, error) {
@@ -27,11 +29,17 @@ func NewUpstream(scheme string, host string, port int) (*Upstream, error) {
 		return nil, fmt.Errorf("Unsupported scheme: %s", scheme)
 	}
 
+	id := fmt.Sprintf("%s://%s:%d", scheme, host, port)
+	metricsId := fmt.Sprintf("%s_%s_%d", scheme, host, port)
+	metricsId = strings.Replace(metricsId, ".", "_", -1)
+	um := metrics.GetUpstreamMetrics(metricsId)
+
 	return &Upstream{
-		Id:     fmt.Sprintf("%s://%s:%d", scheme, host, port),
-		Scheme: scheme,
-		Host:   host,
-		Port:   port,
+		Id:      id,
+		Scheme:  scheme,
+		Host:    host,
+		Port:    port,
+		Metrics: um,
 	}, nil
 }
 
