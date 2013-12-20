@@ -15,7 +15,7 @@ func parseOptions() (*serviceOptions, error) {
 
 	flag.StringVar(&options.codePath, "js", "", "Js code path")
 	flag.StringVar(&options.backend, "b", "memory", "Backend type e.g. 'cassandra' or 'memory'")
-	flag.StringVar(&options.loadBalancer, "lb", "cassandra", "Loadbalancer algo, e.g. 'random'")
+	flag.StringVar(&options.loadBalancer, "lb", "random", "Loadbalancer algo, e.g. 'random'")
 
 	flag.StringVar(&options.host, "h", "localhost", "Host to bind to")
 	flag.IntVar(&options.httpPort, "p", 8080, "HTTP port to bind to")
@@ -32,6 +32,9 @@ func parseOptions() (*serviceOptions, error) {
 
 	flag.Var(&options.etcdEndpoints, "etcd", "Etcd discovery service API endpoints")
 
+	flag.StringVar(&options.sslCertFile, "sslcert", "", "File containing SSL Certificates")
+	flag.StringVar(&options.sslKeyFile, "sslkey", "", "File containing SSL Private Key")
+
 	flag.Parse()
 
 	return options, nil
@@ -44,6 +47,9 @@ type serviceOptions struct {
 	codePath     string
 	backend      string
 	loadBalancer string
+
+	sslCertFile string
+	sslKeyFile  string
 
 	// Host and port to bind to
 	host     string
