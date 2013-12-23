@@ -35,6 +35,8 @@ func parseOptions() (*serviceOptions, error) {
 	flag.StringVar(&options.sslCertFile, "sslcert", "", "File containing SSL Certificates")
 	flag.StringVar(&options.sslKeyFile, "sslkey", "", "File containing SSL Private Key")
 
+	flag.StringVar(&options.metricsOutput, "metrics", "console", "Comma seperated list of where to send metrics.")
+
 	flag.Parse()
 
 	return options, nil
@@ -42,7 +44,8 @@ func parseOptions() (*serviceOptions, error) {
 
 type serviceOptions struct {
 	// Pid path
-	pidPath string
+	pidPath       string
+	metricsOutput string
 
 	codePath     string
 	backend      string

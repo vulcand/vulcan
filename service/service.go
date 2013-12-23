@@ -18,16 +18,19 @@ import (
 	"github.com/mailgun/vulcan/discovery"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/loadbalance/roundrobin"
+	"github.com/mailgun/vulcan/metrics"
 	"github.com/mailgun/vulcan/timeutils"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
 type Service struct {
 	options *serviceOptions
 	proxy   *vulcan.ReverseProxy
+	metrics metrics.ProxyMetrics
 }
 
 // Initializes service from the command line args
@@ -36,7 +39,7 @@ func NewService() (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{options: options}, nil
+	return &Service{options: options, metrics: metrics.NewProxyMetrics()}, nil
 }
 
 // This is a blocking call, starts reverse proxy, connects to the backends, etc
@@ -121,6 +124,11 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		return nil, fmt.Errorf("Unsupported loadbalancing algo")
 	}
 
+	outputs := strings.Split(s.options.metricsOutput, ",")
+	for _, v := range outputs {
+		metrics.AddOutput(v)
+	}
+
 	if s.options.sslCertFile != "" && s.options.sslKeyFile == "" {
 		return nil, fmt.Errorf("invalid configuration: -sslkey unspecified, but -sslcert was specified.")
 	} else if s.options.sslCertFile == "" && s.options.sslKeyFile != "" {
@@ -143,7 +151,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 		LoadBalancer:     loadBalancer,
 	}
 
-	proxy, err := vulcan.NewReverseProxy(proxySettings)
+	proxy, err := vulcan.NewReverseProxy(&s.metrics, proxySettings)
 	if err != nil {
 		return nil, err
 	}

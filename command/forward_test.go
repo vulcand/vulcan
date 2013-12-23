@@ -2,6 +2,7 @@ package command
 
 import (
 	"encoding/json"
+	"github.com/mailgun/vulcan/metrics"
 	. "launchpad.net/gocheck"
 	"net/http"
 	"time"
@@ -21,16 +22,18 @@ func (s *ForwardSuite) TestForwardSuccess(c *C) {
 			Expected: &Forward{
 				Upstreams: []*Upstream{
 					&Upstream{
-						Id:     "http://localhost:5000",
-						Scheme: "http",
-						Port:   5000,
-						Host:   "localhost",
+						Id:      "http://localhost:5000",
+						Scheme:  "http",
+						Port:    5000,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5000"),
 					},
 					&Upstream{
-						Id:     "http://localhost:5001",
-						Scheme: "http",
-						Port:   5001,
-						Host:   "localhost",
+						Id:      "http://localhost:5001",
+						Scheme:  "http",
+						Port:    5001,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5001"),
 					},
 				},
 			},
@@ -43,16 +46,18 @@ func (s *ForwardSuite) TestForwardSuccess(c *C) {
 				},
 				Upstreams: []*Upstream{
 					&Upstream{
-						Id:     "http://localhost:5000",
-						Scheme: "http",
-						Port:   5000,
-						Host:   "localhost",
+						Id:      "http://localhost:5000",
+						Scheme:  "http",
+						Port:    5000,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5000"),
 					},
 					&Upstream{
-						Id:     "http://localhost:5001",
-						Scheme: "http",
-						Port:   5001,
-						Host:   "localhost",
+						Id:      "http://localhost:5001",
+						Scheme:  "http",
+						Port:    5001,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5001"),
 					},
 				},
 			},
@@ -90,16 +95,18 @@ func (s *ForwardSuite) TestForwardSuccess(c *C) {
 				RewritePath:   "/new/path",
 				Upstreams: []*Upstream{
 					&Upstream{
-						Id:     "http://localhost:5000",
-						Scheme: "http",
-						Port:   5000,
-						Host:   "localhost",
+						Id:      "http://localhost:5000",
+						Scheme:  "http",
+						Port:    5000,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5000"),
 					},
 					&Upstream{
-						Id:     "http://localhost:5001",
-						Scheme: "http",
-						Port:   5001,
-						Host:   "localhost",
+						Id:      "http://localhost:5001",
+						Scheme:  "http",
+						Port:    5001,
+						Host:    "localhost",
+						Metrics: metrics.GetUpstreamMetrics("http_localhost_5001"),
 					},
 				},
 			},

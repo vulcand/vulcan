@@ -8,13 +8,7 @@ go:
 
 install:
  - export PATH=$HOME/gopath/bin:$PATH
- - go get -v github.com/golang/glog
- - go get -v launchpad.net/gocheck
- - go get -v github.com/mailgun/gocql
- - go get -v github.com/mailgun/glogutils
- - go get -v -u github.com/robertkrimen/otto
- - go get -v -u github.com/coreos/go-etcd/etcd
- - go get -v -u github.com/mailgun/minheap
+ - make deps
 
 script:
  - go test -v ./...
