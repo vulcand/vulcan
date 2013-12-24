@@ -39,11 +39,12 @@ deps:
 	go get -v -u github.com/coreos/go-etcd/etcd
 	go get -v -u github.com/mailgun/minheap
 	go get -v -u github.com/rcrowley/go-metrics
+
 clean:
 	find . -name flymake_* -delete
 
 run: all
-	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -js=./examples/hello.js -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
+	GOMAXPROCS=32 vulcan -cpuprofile vulcan.pprof -stderrthreshold=INFO -logtostderr=true -js=./examples/hello.js -b=memory -lb=roundrobin -log_dir=/tmp -logcleanup=24h
 
 csrun: all
 	GOMAXPROCS=4 vulcan -stderrthreshold=INFO -logtostderr=true -b=cassandra -lb=roundrobin -csnode=localhost -cskeyspace=vulcan_dev -cscleanup=true -cscleanuptime=19:05 -log_dir=/tmp

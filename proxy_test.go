@@ -90,7 +90,7 @@ func (s *ProxySuite) loadJson(bytes []byte) map[string]interface{} {
 
 func (s *ProxySuite) newController(code string) *js.JsController {
 	return &js.JsController{
-		CodeGetter: &js.StringGetter{Code: code},
+		CodeGetter: js.NewStringGetter(code),
 	}
 }
 

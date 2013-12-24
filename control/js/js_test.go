@@ -20,10 +20,8 @@ var _ = Suite(&JsSuite{})
 func (s *JsSuite) executeCode(request *http.Request, code string) (interface{}, error) {
 	s.Client = &client.RecordingClient{}
 	controller := &JsController{
-		CodeGetter: &StringGetter{
-			Code: code,
-		},
-		Client: s.Client,
+		CodeGetter: NewStringGetter(code),
+		Client:     s.Client,
 	}
 	return controller.GetInstructions(request)
 }
@@ -31,10 +29,8 @@ func (s *JsSuite) executeCode(request *http.Request, code string) (interface{}, 
 func (s *JsSuite) convertError(request *http.Request, code string, err error) (*netutils.HttpError, error) {
 	s.Client = &client.RecordingClient{}
 	controller := &JsController{
-		CodeGetter: &StringGetter{
-			Code: code,
-		},
-		Client: s.Client,
+		CodeGetter: NewStringGetter(code),
+		Client:     s.Client,
 	}
 	return controller.ConvertError(request, err)
 }

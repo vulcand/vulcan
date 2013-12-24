@@ -162,7 +162,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 	}
 
 	controller := &js.JsController{
-		CodeGetter:       &js.FileGetter{Path: s.options.codePath},
+		CodeGetter:       js.NewFileGetter(s.options.codePath),
 		DiscoveryService: discoveryService,
 	}
 
