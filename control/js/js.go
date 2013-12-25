@@ -12,6 +12,7 @@ import (
 	"github.com/robertkrimen/otto"
 	"net/http"
 	"runtime/debug"
+	"sync"
 )
 
 type JsController struct {
@@ -24,6 +25,127 @@ type JsController struct {
 	// Client allows controlller to issue concurrent get requests
 	// within the javascript handler.
 	Client client.Client
+
+	pool     *ContextPool
+	lasthash string
+}
+
+type JsContext struct {
+	otto        *otto.Otto
+	handle      otto.Value
+	handleError otto.Value
+	pool        *ContextPool
+}
+
+// TODO(pquerna): Remove once Go 1.3 is out <https://code.google.com/p/go/issues/detail?id=4720>
+type ContextPool struct {
+	list []*JsContext
+	ctrl *JsController
+	mu   sync.Mutex
+}
+
+func NewContextPool(ctrl *JsController) *ContextPool {
+	return &ContextPool{ctrl: ctrl, list: make([]*JsContext, 0, 64)}
+}
+
+func (p *ContextPool) New() (*JsContext, error) {
+	return p.ctrl.getContext()
+}
+
+func (p *ContextPool) Get() (*JsContext, error) {
+	p.mu.Lock()
+	var x *JsContext
+	var err error
+	if n := len(p.list); n > 0 {
+		x = p.list[n-1]
+		p.list[n-1] = nil // Just to be safe
+		p.list = p.list[:n-1]
+	}
+	p.mu.Unlock()
+
+	if x == nil {
+		x, err = p.New()
+		if x != nil {
+			x.pool = p
+		}
+	}
+
+	return x, err
+}
+
+func (p *ContextPool) Put(jsc *JsContext) {
+	if jsc == nil {
+		return
+	}
+	p.mu.Lock()
+	p.list = append(p.list, jsc)
+	p.mu.Unlock()
+}
+
+func NewJsContext() *JsContext {
+	return &JsContext{otto: otto.New()}
+}
+
+func (jsc *JsContext) Release() {
+	if jsc.pool != nil {
+		jsc.pool.Put(jsc)
+	}
+}
+
+func (ctrl *JsController) getContext() (*JsContext, error) {
+	code, err := ctrl.CodeGetter.GetCode()
+
+	if err != nil {
+		return nil, err
+	}
+
+	jsc := NewJsContext()
+	ctrl.registerBuiltins(jsc.otto)
+
+	_, err = jsc.otto.Run(code)
+	if err != nil {
+		return nil, err
+	}
+
+	handler, err := jsc.otto.Get("handle")
+	if err != nil {
+		return nil, err
+	}
+
+	jsc.handle = handler
+
+	handler, err = jsc.otto.Get("handleError")
+	if err != nil {
+		return nil, err
+	}
+
+	jsc.handleError = handler
+
+	return jsc, nil
+}
+
+const SKIP_CONTEXT_CACHE = false
+
+func (ctrl *JsController) getContextFromCache() (*JsContext, error) {
+	pool := ctrl.pool
+
+	if SKIP_CONTEXT_CACHE {
+		jsc, err := ctrl.getContext()
+		return jsc, err
+	}
+
+	hash, err := ctrl.CodeGetter.GetHash()
+	if err != nil {
+		return nil, err
+	}
+
+	if hash != ctrl.lasthash || ctrl.pool == nil {
+		pool = NewContextPool(ctrl)
+		ctrl.pool = pool
+		ctrl.lasthash = hash
+	}
+
+	return pool.Get()
 }
 
 func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error) {
@@ -36,30 +158,22 @@ func (ctrl *JsController) GetInstructions(req *http.Request) (interface{}, error
 			instr = nil
 		}
 	}()
-	code, err := ctrl.CodeGetter.GetCode()
-	if err != nil {
-		return nil, err
-	}
-	Otto := otto.New()
-	ctrl.registerBuiltins(Otto)
 
-	_, err = Otto.Run(code)
+	jsc, err := ctrl.getContextFromCache()
 	if err != nil {
 		return nil, err
 	}
-	handler, err := Otto.Get("handle")
-	if err != nil {
-		return nil, err
-	}
+	defer jsc.Release()
+
 	jsRequest, err := requestToJs(req)
 	if err != nil {
 		return nil, err
 	}
-	jsObj, err := Otto.ToValue(jsRequest)
+	jsObj, err := jsc.otto.ToValue(jsRequest)
 	if err != nil {
 		return nil, err
 	}
-	instr, err = ctrl.callHandler(handler, jsObj)
+	instr, err = ctrl.callHandler(jsc.handle, jsObj)
 	if err != nil {
 		return nil, err
 	}
@@ -74,24 +188,14 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 			glog.Errorf("Recovered: %v %s", r, debug.Stack())
 		}
 	}()
-	code, err := ctrl.CodeGetter.GetCode()
-	if err != nil {
-		glog.Errorf("Error getting code: %s", err)
-		return response, err
-	}
-	Otto := otto.New()
-	ctrl.registerBuiltins(Otto)
 
-	_, err = Otto.Run(code)
-	if err != nil {
-		glog.Errorf("Error running code %s: %s", code, err)
-		return response, err
-	}
-	handler, err := Otto.Get("handleError")
+	jsc, err := ctrl.getContextFromCache()
 	if err != nil {
 		return nil, err
 	}
-	if handler.IsUndefined() {
+	defer jsc.Release()
+
+	if jsc.handleError.IsUndefined() {
 		glog.Infof("Missing error handler: %s", err)
 		converted, err := errorFromJs(errorToJs(inError))
 		if err != nil {
@@ -101,7 +205,7 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 		return converted, nil
 	}
 	obj := errorToJs(inError)
-	jsObj, err := Otto.ToValue(obj)
+	jsObj, err := jsc.otto.ToValue(obj)
 	if err != nil {
 		glog.Errorf("Error: %s", err)
 		return nil, err
@@ -110,11 +214,11 @@ func (ctrl *JsController) ConvertError(req *http.Request, inError error) (respon
 	if err != nil {
 		return nil, err
 	}
-	jsRequestValue, err := Otto.ToValue(jsRequest)
+	jsRequestValue, err := jsc.otto.ToValue(jsRequest)
 	if err != nil {
 		return nil, err
 	}
-	out, err := ctrl.callHandler(handler, jsRequestValue, jsObj)
+	out, err := ctrl.callHandler(jsc.handleError, jsRequestValue, jsObj)
 	if err != nil {
 		glog.Errorf("Error: %s", err)
 		return nil, err

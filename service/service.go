@@ -23,6 +23,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
+	"runtime/pprof"
 	"strings"
 	"time"
 )
@@ -44,6 +46,25 @@ func NewService() (*Service, error) {
 
 // This is a blocking call, starts reverse proxy, connects to the backends, etc
 func (s *Service) Start() error {
+	if s.options.cpuProfile != "" {
+		f, err := os.Create(s.options.cpuProfile)
+		if err != nil {
+			return err
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for sig := range c {
+				glog.Errorf("captured %v, stopping profiler and exiting..", sig)
+				pprof.StopCPUProfile()
+				os.Exit(1)
+			}
+		}()
+	}
+
 	if err := s.writePid(); err != nil {
 		return err
 	}
@@ -141,7 +162,7 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 	}
 
 	controller := &js.JsController{
-		CodeGetter:       &js.FileGetter{Path: s.options.codePath},
+		CodeGetter:       js.NewFileGetter(s.options.codePath),
 		DiscoveryService: discoveryService,
 	}
 

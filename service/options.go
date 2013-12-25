@@ -36,6 +36,7 @@ func parseOptions() (*serviceOptions, error) {
 	flag.StringVar(&options.sslKeyFile, "sslkey", "", "File containing SSL Private Key")
 
 	flag.StringVar(&options.metricsOutput, "metrics", "console", "Comma seperated list of where to send metrics.")
+	flag.StringVar(&options.cpuProfile, "cpuprofile", "", "Run with CPU Profiling enabled.")
 
 	flag.Parse()
 
@@ -53,6 +54,8 @@ type serviceOptions struct {
 
 	sslCertFile string
 	sslKeyFile  string
+
+	cpuProfile string
 
 	// Host and port to bind to
 	host     string
