@@ -157,8 +157,19 @@ func (s *Service) initProxy() (*vulcan.ReverseProxy, error) {
 	}
 
 	var discoveryService discovery.Service
-	if len(s.options.etcdEndpoints) > 0 {
-		discoveryService = discovery.NewEtcd(s.options.etcdEndpoints)
+
+	if s.options.discovery != "" {
+		discoveryUrl := s.options.discovery
+		if s.options.discovery == "etcd" {
+			// TODO remove this compat hack?
+			discoveryUrl = "etcd://" + strings.Join(s.options.etcdEndpoints, ",")
+			discoveryService = discovery.NewEtcd(s.options.etcdEndpoints)
+		}
+
+		discoveryService, err = discovery.New(discoveryUrl)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	controller := &js.JsController{

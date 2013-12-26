@@ -1,75 +1,50 @@
 package discovery
 
 import (
-	"github.com/coreos/go-etcd/etcd"
+	"fmt"
 	"github.com/golang/glog"
+	"net/url"
+	"strings"
 )
 
 type Service interface {
 	Get(key string) ([]string, error)
 }
 
-type Etcd struct {
-	client *etcd.Client
-	cache  map[string][]string
+type DisabledDiscovery struct{}
+
+func NewDisabledDiscovery() *DisabledDiscovery {
+	return &DisabledDiscovery{}
 }
 
-func NewEtcd(machines []string) *Etcd {
-	glog.Infof("Initialized etcd discovery service: %v", machines)
+func (d *DisabledDiscovery) Get(serviceName string) ([]string, error) {
+	return []string{}, nil
+}
 
-	service := &Etcd{
-		client: etcd.NewClient(machines),
-		cache:  make(map[string][]string),
+func New(discoveryUrl string) (Service, error) {
+
+	if !strings.Contains(discoveryUrl, ":") {
+		discoveryUrl = discoveryUrl + "://"
 	}
 
-	service.UpdateCache()
-
-	go service.Watch()
-
-	return service
-}
-
-func (e *Etcd) Watch() {
-	for {
-		_, err := e.client.Watch("/", 0, true, nil, nil)
-		if err != nil {
-			glog.Errorf("Error watching for a change: %v", err)
-			continue
-		}
-		glog.Infof("Etcd update detected")
-		e.UpdateCache()
-	}
-}
-
-func (e *Etcd) UpdateCache() {
-	glog.Infof("Updating the cache")
-
-	response, err := e.client.Get("/", false, true)
+	u, err := url.Parse(discoveryUrl)
 
 	if err != nil {
-		glog.Errorf("Error updating cache: %v", err)
+		return nil, err
 	}
 
-	for _, node := range response.Node.Nodes {
-		serviceName := node.Key
-
-		upstreams := make([]string, len(node.Nodes))
-		for i, node := range node.Nodes {
-			upstreams[i] = node.Value
-		}
-
-		e.cache[serviceName] = upstreams
+	switch u.Scheme {
+	case "disabled":
+		return NewDisabledDiscovery(), nil
+	case "rackspace":
+		return NewRackspaceFromUrl(u)
+	case "etcd":
+		hosts := strings.Split(u.Host, ",")
+		return NewEtcd(hosts), nil
+	default:
+		glog.Errorf("Bad URL for discovery: %s", discoveryUrl)
+		return nil, fmt.Errorf("invalid configuration: Unknown discovery scheme: %s", u.Scheme)
 	}
 
-	glog.Infof("Updated cache: %v", e.cache)
-}
-
-func (e *Etcd) Get(serviceName string) ([]string, error) {
-	if upstreams, ok := e.cache[serviceName]; ok {
-		glog.Infof("Found upstreams: %v %v", serviceName, upstreams)
-		return upstreams, nil
-	}
-
-	glog.Infof("Not found upstreams: %v", serviceName)
-	return []string{}, nil
+	return nil, nil
 }
