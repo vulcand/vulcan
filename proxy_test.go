@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -44,6 +45,11 @@ func (s *ProxySuite) Get(c *C, requestUrl string, header http.Header, body strin
 	request, _ := http.NewRequest("GET", requestUrl, strings.NewReader(body))
 	netutils.CopyHeaders(request.Header, header)
 	request.Close = true
+	// the HTTP lib treats Host as a special header.  it only respects the value on req.Host, and ignores
+	// values in req.Headers
+	if header.Get("Host") != "" {
+		request.Host = header.Get("Host")
+	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		c.Fatalf("Get: %v", err)
@@ -357,6 +363,38 @@ func (s *ProxySuite) TestHopHeadersRemoved(c *C) {
 	for _, h := range hopHeaders {
 		c.Assert(capturedHeaders.Get(h), Equals, "")
 	}
+}
+
+func (s *ProxySuite) TestForwardHeadersAdded(c *C) {
+	var capturedHeaders http.Header
+
+	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.Write([]byte("Hi, I'm upstream"))
+	})
+	defer upstream.Close()
+
+	code := fmt.Sprintf(
+		`function handle(request){
+            return {failover: true, upstreams: ["%s"]};
+         }
+     `, upstream.URL)
+
+	proxy := s.newProxy(code, s.backend, roundrobin.NewRoundRobin(s.timeProvider))
+	defer proxy.Close()
+
+	response, bodyBytes := s.Get(c,
+		proxy.URL,
+		http.Header{"Host": []string{"crazyhostname.example.com"}},
+		"hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+
+	hostname, _ := os.Hostname()
+	c.Assert(capturedHeaders.Get("X-Forwarded-For"), Equals, "127.0.0.1")
+	c.Assert(capturedHeaders.Get("X-Forwarded-Proto"), Equals, "http")
+	c.Assert(capturedHeaders.Get("X-Forwarded-Host"), Equals, "crazyhostname.example.com")
+	c.Assert(capturedHeaders.Get("X-Forwarded-Server"), Equals, hostname)
 }
 
 func (s *ProxySuite) TestProxyAuthRequired(c *C) {
