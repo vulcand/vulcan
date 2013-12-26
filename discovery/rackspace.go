@@ -5,6 +5,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/rackspace/gophercloud"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,16 +17,19 @@ type Rackspace struct {
 	protocol       string
 	port           string
 	region         string
+	metadataKey    string
 }
 
 const DEFAULT_REGION = "dfw"
 const DEFAULT_PORT = ""
 const DEFAULT_PROTOCOL = "http"
+const DEFAULT_METADATA_KEY = "rax:auto_scaling_group_id"
 
 func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	var port = DEFAULT_PORT
 	var region = DEFAULT_REGION
 	var protocol = DEFAULT_PROTOCOL
+	var metadataKey = DEFAULT_METADATA_KEY
 
 	qs := u.Query()
 
@@ -39,6 +43,10 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 
 	if qs.Get("region") != "" {
 		region = qs.Get("region")
+	}
+
+	if qs.Get("metadatakey") != "" {
+		metadataKey = qs.Get("metadatakey")
 	}
 
 	if u.User == nil {
@@ -69,9 +77,10 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	}
 
 	r := &Rackspace{accessProvider: ap,
-		region:   region,
-		port:     port,
-		protocol: protocol,
+		region:      region,
+		port:        port,
+		protocol:    protocol,
+		metadataKey: metadataKey,
 	}
 
 	err = r.UpdateCache()
@@ -142,8 +151,8 @@ func (r *Rackspace) Get(serviceName string) ([]string, error) {
 		if s.Status != "ACTIVE" {
 			continue
 		}
-		if val, ok := s.Metadata["rax:auto_scaling_group_id"]; ok {
-			if val == serviceName {
+		if val, ok := s.Metadata[r.metadataKey]; ok {
+			if strings.Contains(val, serviceName) {
 				us := r.serverToUrl(s)
 				out = append(out, us)
 			}
