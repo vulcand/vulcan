@@ -20,6 +20,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -329,6 +331,10 @@ func (p *ReverseProxy) proxyToUpstream(
 	return nil
 }
 
+var vulcanHostname, _ = os.Hostname()
+
+const TRUST_FORWARD_HEADER = false
+
 // This function alters the original request - adds/removes headers, removes hop headers,
 // changes the request path.
 func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.Upstream) *http.Request {
@@ -350,14 +356,30 @@ func rewriteRequest(req *http.Request, cmd *command.Forward, upstream *command.U
 
 	glog.Infof("Proxying request to: %v", outReq)
 
-	// We copy headers only if we alter the original request
-	// headers, otherwise we use the shallow copy
-	if len(cmd.AddHeaders) != 0 ||
-		len(cmd.RemoveHeaders) != 0 ||
-		netutils.HasHeaders(hopHeaders, req.Header) {
-		outReq.Header = make(http.Header)
-		netutils.CopyHeaders(outReq.Header, req.Header)
+	outReq.Header = make(http.Header)
+	netutils.CopyHeaders(outReq.Header, req.Header)
+
+	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		// TODO(pquerna): configure this?  Not all backends properly parse the header..
+		if TRUST_FORWARD_HEADER {
+			if prior, ok := outReq.Header["X-Forwarded-For"]; ok {
+				clientIP = strings.Join(prior, ", ") + ", " + clientIP
+			}
+		}
+		outReq.Header.Set("X-Forwarded-For", clientIP)
 	}
+
+	if req.TLS != nil {
+		outReq.Header.Set("X-Forwarded-Proto", "https")
+	} else {
+		outReq.Header.Set("X-Forwarded-Proto", "http")
+	}
+
+	if req.Host != "" {
+		outReq.Header.Set("X-Forwarded-Host", req.Host)
+	}
+
+	outReq.Header.Set("X-Forwarded-Server", vulcanHostname)
 
 	if len(cmd.RemoveHeaders) != 0 {
 		netutils.RemoveHeaders(cmd.RemoveHeaders, outReq.Header)
