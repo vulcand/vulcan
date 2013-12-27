@@ -1,8 +1,11 @@
 package discovery
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/mailgun/vulcan/timeutils"
 	"github.com/rackspace/gophercloud"
 	"net/url"
 	"os"
@@ -14,7 +17,9 @@ import (
 type Rackspace struct {
 	accessProvider gophercloud.AccessProvider
 	mu             sync.RWMutex
+	serversHash    string
 	servers        []gophercloud.Server
+	backoff        *timeutils.BackoffTimer
 	protocol       string
 	port           string
 	region         string
@@ -100,6 +105,7 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 		port:        port,
 		protocol:    protocol,
 		metadataKey: metadataKey,
+		backoff:     timeutils.NewBackoffTimer(30.0, 1800.0),
 	}
 
 	err = r.UpdateCache()
@@ -131,22 +137,36 @@ func (r *Rackspace) UpdateCache() error {
 	if err != nil {
 		return err
 	}
+	h := md5.New()
+	for _, s := range r.servers {
+		h.Write([]byte(s.Id))
+		h.Write([]byte(s.Status))
+		h.Write([]byte(s.Metadata[r.metadataKey]))
+	}
+
+	serverHash := hex.EncodeToString(h.Sum(nil))
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.servers = servers
 
+	r.servers = servers
+	r.serversHash = serverHash
 	return nil
 }
 
 func (r *Rackspace) Watch() {
 	for {
-		// TOOD: expotential backoff on no changes?
-		time.Sleep(30000 * time.Millisecond)
-
+		time.Sleep(time.Duration(r.backoff.Delay * float64(time.Second)))
+		var lastServersHash = r.serversHash
 		err := r.UpdateCache()
 		if err != nil {
 			glog.Errorf("Error fetching servers from Rackspace: %v", err)
+		} else {
+			if lastServersHash == r.serversHash {
+				r.backoff.Increase()
+			} else {
+				r.backoff.Reset()
+			}
 		}
 	}
 }
