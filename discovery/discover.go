@@ -47,6 +47,4 @@ func New(discoveryUrl string) (Service, error) {
 		glog.Errorf("Bad URL for discovery: %s", discoveryUrl)
 		return nil, fmt.Errorf("invalid configuration: Unknown discovery scheme: %s", u.Scheme)
 	}
-
-	return nil, nil
 }
