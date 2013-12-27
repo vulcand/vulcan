@@ -5,6 +5,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/rackspace/gophercloud"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,12 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	var region = DEFAULT_REGION
 	var protocol = DEFAULT_PROTOCOL
 	var metadataKey = DEFAULT_METADATA_KEY
+	var username = ""
+	var apiKey = ""
+
+	if os.Getenv("OS_REGION_NAME") != "" {
+		region = strings.ToLower(os.Getenv("OS_REGION_NAME"))
+	}
 
 	qs := u.Query()
 
@@ -42,25 +49,37 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	}
 
 	if qs.Get("region") != "" {
-		region = qs.Get("region")
+		region = strings.ToLower(qs.Get("region"))
 	}
 
 	if qs.Get("metadatakey") != "" {
 		metadataKey = qs.Get("metadatakey")
 	}
 
-	if u.User == nil {
+	if os.Getenv("OS_USERNAME") != "" {
+		username = os.Getenv("OS_USERNAME")
+	}
+
+	if os.Getenv("OS_PASSWORD") != "" {
+		apiKey = os.Getenv("OS_PASSWORD")
+	}
+
+	if username == "" && u.User != nil {
+		username = u.User.Username()
+	} else if username == "" && u.User == nil {
 		return nil, fmt.Errorf("Missing Username for Rackspace provider.")
 	}
 
-	apiKey, ok := u.User.Password()
-
-	if !ok {
-		return nil, fmt.Errorf("Missing API Key for Rackspace provider.")
+	if apiKey == "" && u.User != nil {
+		var ok bool
+		apiKey, ok = u.User.Password()
+		if !ok {
+			return nil, fmt.Errorf("Missing API Key for Rackspace provider.")
+		}
 	}
 
 	auth := gophercloud.AuthOptions{
-		Username:    u.User.Username(),
+		Username:    username,
 		ApiKey:      apiKey,
 		AllowReauth: true}
 
