@@ -265,6 +265,7 @@ func (p *ReverseProxy) proxyRequest(
 
 	p.metrics.RequestBodySize.Update(requestLength)
 	req.Body = body
+	defer body.Close()
 
 	for i := 0; i < len(endpoints); i++ {
 		_, err := body.Seek(0, 0)

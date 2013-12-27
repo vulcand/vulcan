@@ -123,6 +123,8 @@ func NewBodyBuffer(input io.Reader) (*multiReaderSeek, error) {
 			return nil, err
 		}
 
+		os.Remove(f.Name())
+
 		_, err = io.Copy(f, input)
 		if err != nil {
 			return nil, err
@@ -133,7 +135,6 @@ func NewBodyBuffer(input io.Reader) (*multiReaderSeek, error) {
 
 	mrs := MultiReaderSeeker(func() error {
 		if f != nil {
-			os.Remove(f.Name())
 			f.Close()
 		}
 		return nil
