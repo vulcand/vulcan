@@ -30,6 +30,7 @@ func parseOptions() (*serviceOptions, error) {
 
 	flag.DurationVar(&options.cleanupPeriod, "logcleanup", time.Duration(24)*time.Hour, "How often should we remove unused golang logs (e.g. 24h, 1h, 7h)")
 
+	flag.StringVar(&options.discovery, "discovery", "disabled", "Discovery Backend e.g. 'disabled', 'rackspace://${USERNAME}:${API_KEY}', or 'etcd")
 	flag.Var(&options.etcdEndpoints, "etcd", "Etcd discovery service API endpoints")
 
 	flag.StringVar(&options.sslCertFile, "sslcert", "", "File containing SSL Certificates")
@@ -55,6 +56,7 @@ type serviceOptions struct {
 	sslCertFile string
 	sslKeyFile  string
 
+	discovery  string
 	cpuProfile string
 
 	// Host and port to bind to
