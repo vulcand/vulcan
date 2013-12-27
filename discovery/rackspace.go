@@ -23,7 +23,6 @@ type Rackspace struct {
 	protocol       string
 	port           string
 	region         string
-	metadataKey    string
 }
 
 const DEFAULT_REGION = "dfw"
@@ -35,7 +34,6 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	var port = DEFAULT_PORT
 	var region = DEFAULT_REGION
 	var protocol = DEFAULT_PROTOCOL
-	var metadataKey = DEFAULT_METADATA_KEY
 	var username = ""
 	var apiKey = ""
 
@@ -55,10 +53,6 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 
 	if qs.Get("region") != "" {
 		region = strings.ToLower(qs.Get("region"))
-	}
-
-	if qs.Get("metadatakey") != "" {
-		metadataKey = qs.Get("metadatakey")
 	}
 
 	if os.Getenv("OS_USERNAME") != "" {
@@ -101,11 +95,10 @@ func NewRackspaceFromUrl(u *url.URL) (*Rackspace, error) {
 	}
 
 	r := &Rackspace{accessProvider: ap,
-		region:      region,
-		port:        port,
-		protocol:    protocol,
-		metadataKey: metadataKey,
-		backoff:     timeutils.NewBackoffTimer(30.0, 1800.0),
+		region:   region,
+		port:     port,
+		protocol: protocol,
+		backoff:  timeutils.NewBackoffTimer(30.0, 1800.0),
 	}
 
 	err = r.UpdateCache()
@@ -138,10 +131,10 @@ func (r *Rackspace) UpdateCache() error {
 		return err
 	}
 	h := md5.New()
-	for _, s := range r.servers {
+	for _, s := range servers {
 		h.Write([]byte(s.Id))
 		h.Write([]byte(s.Status))
-		h.Write([]byte(s.Metadata[r.metadataKey]))
+		h.Write([]byte(fmt.Sprint("%s", s.Metadata)))
 	}
 
 	serverHash := hex.EncodeToString(h.Sum(nil))
@@ -183,6 +176,18 @@ func (r *Rackspace) serverToUrl(s gophercloud.Server) string {
 func (r *Rackspace) Get(serviceName string) ([]string, error) {
 	var out = []string{}
 
+	var metadataKey = DEFAULT_METADATA_KEY
+
+	if strings.Contains(serviceName, "=") {
+		sts := strings.SplitN(serviceName, "=", 2)
+		fmt.Printf("%s\n", sts)
+		if len(sts) == 2 {
+			metadataKey = sts[0]
+			serviceName = sts[1]
+			println(sts)
+		}
+	}
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -190,7 +195,7 @@ func (r *Rackspace) Get(serviceName string) ([]string, error) {
 		if s.Status != "ACTIVE" {
 			continue
 		}
-		if val, ok := s.Metadata[r.metadataKey]; ok {
+		if val, ok := s.Metadata[metadataKey]; ok {
 			if strings.Contains(val, serviceName) {
 				us := r.serverToUrl(s)
 				out = append(out, us)
