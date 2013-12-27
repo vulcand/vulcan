@@ -11,13 +11,13 @@ type Service interface {
 	Get(key string) ([]string, error)
 }
 
-type DisabledDiscovery struct{}
+type NoopDiscovery struct{}
 
-func NewDisabledDiscovery() *DisabledDiscovery {
-	return &DisabledDiscovery{}
+func NewNoopDiscovery() *NoopDiscovery {
+	return &NoopDiscovery{}
 }
 
-func (d *DisabledDiscovery) Get(serviceName string) ([]string, error) {
+func (d *NoopDiscovery) Get(serviceName string) ([]string, error) {
 	return []string{}, nil
 }
 
@@ -34,8 +34,10 @@ func New(discoveryUrl string) (Service, error) {
 	}
 
 	switch u.Scheme {
+	case "noop":
+		return NewNoopDiscovery(), nil
 	case "disabled":
-		return NewDisabledDiscovery(), nil
+		return NewNoopDiscovery(), nil
 	case "rackspace":
 		return NewRackspaceFromUrl(u)
 	case "etcd":
