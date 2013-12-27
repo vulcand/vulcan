@@ -257,14 +257,13 @@ func (p *ReverseProxy) proxyRequest(
 		return 0, netutils.NewHttpError(http.StatusBadRequest)
 	}
 
-	l, err := body.Len()
+	requestLength, err := body.Len()
 	if err != nil {
 		glog.Errorf("Failed to read stored body length: %s", err)
 		return 0, netutils.NewHttpError(http.StatusInternalServerError)
 	}
 
-	p.metrics.RequestBodySize.Update(l)
-	requestLength := l
+	p.metrics.RequestBodySize.Update(requestLength)
 	req.Body = body
 
 	for i := 0; i < len(endpoints); i++ {
