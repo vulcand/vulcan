@@ -8,8 +8,7 @@ import (
 	"os"
 )
 
-// TODO: make configurable
-const MEMORY_BUFFER_LIMIT = 1024 * 1024 * 1024
+const MEMORY_BUFFER_LIMIT = 1048576
 
 // Constraints:
 //  - Implements io.Reader
@@ -47,7 +46,9 @@ func (mr *multiReaderSeek) Read(p []byte) (n int, err error) {
 	return mr.mr.Read(p)
 }
 
-func (mr *multiReaderSeek) Len() (int64, error) {
+func (mr *multiReaderSeek) TotalSize() (int64, error) {
+	// Unlike traditional .Len() this calcculates the total size of the reader,
+	// not the length remaining.
 	if mr.length >= 0 {
 		return mr.length, nil
 	}
@@ -57,7 +58,11 @@ func (mr *multiReaderSeek) Len() (int64, error) {
 		switch reader.(type) {
 		case *bytes.Reader:
 			b := reader.(*bytes.Reader)
+			// grab current position, seek back to zero, then return to old position.
+			cur, _ := b.Seek(0, 1)
+			b.Seek(0, 0)
 			totalLen += int64(b.Len())
+			b.Seek(cur, 0)
 		case *os.File:
 			// STAT
 			f := reader.(*os.File)
