@@ -208,11 +208,11 @@ func (p *ReverseProxy) rateLimit(cmd *command.Forward) (int, error) {
 	return retrySeconds, err
 }
 
-func (p *ReverseProxy) updateRates(requestBytes int, cmd *command.Forward) {
+func (p *ReverseProxy) updateRates(requestBytes int64, cmd *command.Forward) {
 	if p.rateLimiter == nil || cmd.Rates == nil {
 		return
 	}
-	err := p.rateLimiter.UpdateStats(int64(requestBytes), cmd.Rates)
+	err := p.rateLimiter.UpdateStats(requestBytes, cmd.Rates)
 	if err != nil {
 		glog.Errorf("RateLimiter update stats failire: %s, ignoring error", err)
 	}
@@ -247,23 +247,28 @@ func (p *ReverseProxy) nextEndpoint(endpoints []loadbalance.Endpoint) (*command.
 func (p *ReverseProxy) proxyRequest(
 	w http.ResponseWriter, req *http.Request,
 	cmd *command.Forward,
-	endpoints []loadbalance.Endpoint) (int, error) {
+	endpoints []loadbalance.Endpoint) (int64, error) {
 
 	// We are allowed to fallback in case of upstream failure,
 	// record the request body so we can replay it on errors.
-	buffer, err := ioutil.ReadAll(req.Body)
+	body, err := netutils.NewBodyBuffer(req.Body)
 	if err != nil {
 		glog.Errorf("Request read error %s", err)
 		return 0, netutils.NewHttpError(http.StatusBadRequest)
 	}
 
-	p.metrics.RequestBodySize.Update(int64(len(buffer)))
-	reader := &Buffer{bytes.NewReader(buffer)}
-	requestLength := reader.Len()
-	req.Body = reader
+	l, err := body.Len()
+	if err != nil {
+		glog.Errorf("Failed to read stored body length: %s", err)
+		return 0, netutils.NewHttpError(http.StatusInternalServerError)
+	}
+
+	p.metrics.RequestBodySize.Update(l)
+	requestLength := l
+	req.Body = body
 
 	for i := 0; i < len(endpoints); i++ {
-		_, err := reader.Seek(0, 0)
+		_, err := body.Seek(0, 0)
 		if err != nil {
 			return 0, err
 		}
