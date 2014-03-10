@@ -1,7 +1,6 @@
 package vulcan
 
 import (
-	"encoding/json"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/netutils"
@@ -67,15 +66,6 @@ type WebHandler func(http.ResponseWriter, *http.Request)
 
 func (s *ProxySuite) newServer(handler WebHandler) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
-}
-
-func (s *ProxySuite) loadJson(bytes []byte) map[string]interface{} {
-	var replyObject interface{}
-	err := json.Unmarshal(bytes, &replyObject)
-	if err != nil {
-		panic(err)
-	}
-	return replyObject.(map[string]interface{})
 }
 
 func (s *ProxySuite) newProxyWithTimeouts(
