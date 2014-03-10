@@ -3,6 +3,7 @@ test: clean
 
 deps:
 	go get -v -u launchpad.net/gocheck
+	go get -v -u github.com/mailgun/gotools-log
 
 clean:
 	find . -name flymake_* -delete
