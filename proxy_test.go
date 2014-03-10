@@ -1,7 +1,6 @@
 package vulcan
 
 import (
-	"encoding/json"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/netutils"
