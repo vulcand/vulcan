@@ -1,58 +1,60 @@
-/* Implements round robin load balancing algorithm.
-
-* As long as vulcan does not have static endpoints configurations most of the time,
-it keeps track of the endpoints that were used recently and keeps cursor for these endpoints for a while.
-
-* Unused cursors are being expired and removed from the map if they have not been used
-for 60 seconds.
-
-* If the load balancer can find matching cursor for the given endpoints, algo simply advances to the next one,
-taking into consideration endpoint availability.
-*/
 package roundrobin
 
 import (
 	"fmt"
 	"github.com/mailgun/vulcan/loadbalance"
-	"github.com/mailgun/vulcan/timeutils"
+	"net/http"
 	"sync"
 )
 
 type RoundRobin struct {
-	// time provider (mostly for testing as we need to override time
-	timeProvider timeutils.TimeProvider
-
-	// keep in mind that load balancer used by different endpoints
-	mutex *sync.Mutex
-
-	// collection of cursors
-	cursors *cursorMap
+	mutex  *sync.Mutex
+	groups map[string]*group
+	router loadbalance.Router
 }
 
-func NewRoundRobin(timeProvider timeutils.TimeProvider) *RoundRobin {
-
+func NewRoundRobin(router loadbalance.Router) *RoundRobin {
 	return &RoundRobin{
-		timeProvider: timeProvider,
-		cursors:      newCursorMap(),
-		mutex:        &sync.Mutex{},
+		router: router,
+		groups: make(map[string]*group),
+		mutex:  &sync.Mutex{},
 	}
 }
 
-const ExpirySeconds = 60
-
-func (r *RoundRobin) NextEndpoint(endpoints []loadbalance.Endpoint) (loadbalance.Endpoint, error) {
-	if len(endpoints) == 0 {
-		return nil, fmt.Errorf("Need some endpoints")
-	}
+func (r *RoundRobin) NextUpstream(req *http.Request) (loadbalance.Upstream, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	r.cursors.deleteExpiredCursors(int(r.timeProvider.UtcNow().Unix()))
-
+	groupId, err := r.router.Route(req)
+	if err != nil {
+		return nil, err
+	}
 	// Get existing cursor or create new cursor
-	expirySeconds := int(r.timeProvider.UtcNow().Unix()) + ExpirySeconds
-	c := r.cursors.upsertCursor(endpoints, expirySeconds)
+	group, exists := r.groups[groupId]
+	if !exists {
+		return nil, fmt.Errorf("Upstream group(%s) not found", groupId)
+	}
+	return group.next()
+}
 
-	// Return the next endpoint referred by this cursor
-	return c.next(endpoints)
+func (r *RoundRobin) AddUpstreams(groupId string, upstreams ...loadbalance.Upstream) error {
+	group, exists := r.groups[groupId]
+	if !exists {
+		group = newGroup()
+		r.groups[groupId] = group
+	}
+	group.addUpstreams(upstreams)
+	return nil
+}
+
+func (r *RoundRobin) RemoveUpstreams(groupId string, upstreams ...loadbalance.Upstream) error {
+	group, exists := r.groups[groupId]
+	if !exists {
+		return nil
+	}
+	group.removeUpstreams(upstreams)
+	return nil
+}
+
+func (r *RoundRobin) ReportFailure(u loadbalance.Upstream, err error) {
 }
