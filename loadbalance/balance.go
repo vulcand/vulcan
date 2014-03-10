@@ -1,10 +1,10 @@
 package loadbalance
 
-type Endpoint interface {
-	Id() string
-	IsActive() bool
-}
+import (
+	"net/http"
+)
 
-type Balancer interface {
-	NextEndpoint([]Endpoint) (Endpoint, error)
+type LoadBalancer interface {
+	NextUpstream(req *http.Request) (Upstream, error)
+	ReportFailure(u Upstream, err error)
 }
