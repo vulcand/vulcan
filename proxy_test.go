@@ -4,6 +4,8 @@ import (
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/netutils"
+	. "github.com/mailgun/vulcan/route"
+	. "github.com/mailgun/vulcan/upstream"
 	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"net/http"

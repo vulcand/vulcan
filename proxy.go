@@ -11,6 +11,8 @@ import (
 	"github.com/mailgun/vulcan/headers"
 	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/netutils"
+	. "github.com/mailgun/vulcan/upstream"
+	. "github.com/mailgun/vulcan/watch"
 	"io"
 	"io/ioutil"
 	"net"
@@ -38,16 +40,16 @@ type ProxySettings struct {
 	Before callbacks.Before
 	// Callback executed after proxy received response from the upstream
 	After callbacks.After
+	// Watcher can be executed to watch the request to
+	Watcher RequestWatcher
 }
 
-// This is a reverse proxy, not meant to be created directly,
-// use NewReverseProxy function instead
 type ReverseProxy struct {
 	// Customized transport with dial and read timeouts set
 	httpTransport *http.Transport
 	// Client that uses customized transport
 	httpClient *http.Client
-	// Remember the settings to use later
+	// Connection settings, load balancing algo to use, callbacks and watchers
 	settings ProxySettings
 }
 
@@ -159,10 +161,15 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *http.Request) er
 func (p *ReverseProxy) proxyToUpstream(
 	w http.ResponseWriter,
 	req *http.Request,
-	upstream loadbalance.Upstream) error {
+	upstream Upstream) error {
 
 	// Rewrites the request: adds headers, changes urls etc.
 	outReq := p.rewriteRequest(req, upstream)
+
+	// Notify watcher that request is about to start
+	if p.settings.Watcher != nil {
+		p.settings.Watcher.RequestStarted(req)
+	}
 
 	// Forward the reuest and mirror the response
 	res, err := p.httpTransport.RoundTrip(outReq)
@@ -170,6 +177,12 @@ func (p *ReverseProxy) proxyToUpstream(
 		return err
 	}
 	defer res.Body.Close()
+
+	// Notify watcher that request has ended and supply all the info
+	// about the response
+	if p.settings.Watcher != nil {
+		p.settings.Watcher.RequestEnded(req, res, err)
+	}
 
 	if p.settings.After != nil {
 		err := p.settings.After.After(upstream, req, res)
@@ -186,7 +199,7 @@ func (p *ReverseProxy) proxyToUpstream(
 
 // This function alters the original request - adds/removes headers, removes hop headers,
 // changes the request path.
-func (p *ReverseProxy) rewriteRequest(req *http.Request, upstream loadbalance.Upstream) *http.Request {
+func (p *ReverseProxy) rewriteRequest(req *http.Request, upstream Upstream) *http.Request {
 	outReq := new(http.Request)
 	*outReq = *req // includes shallow copies of maps, but we handle this below
 
