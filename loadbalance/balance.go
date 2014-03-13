@@ -1,6 +1,7 @@
 package loadbalance
 
 import (
+	. "github.com/mailgun/vulcan/upstream"
 	"net/http"
 )
 

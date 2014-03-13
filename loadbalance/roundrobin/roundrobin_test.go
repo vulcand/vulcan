@@ -1,7 +1,7 @@
 package roundrobin
 
 import (
-	. "github.com/mailgun/vulcan/loadbalance"
+	. "github.com/mailgun/vulcan/route"
 	. "launchpad.net/gocheck"
 	"testing"
 )

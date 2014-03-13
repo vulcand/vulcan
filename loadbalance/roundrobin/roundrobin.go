@@ -2,7 +2,8 @@ package roundrobin
 
 import (
 	"fmt"
-	"github.com/mailgun/vulcan/loadbalance"
+	"github.com/mailgun/vulcan/route"
+	. "github.com/mailgun/vulcan/upstream"
 	"net/http"
 	"sync"
 )
@@ -10,10 +11,10 @@ import (
 type RoundRobin struct {
 	mutex  *sync.Mutex
 	groups map[string]*group
-	router loadbalance.Router
+	router route.Router
 }
 
-func NewRoundRobin(router loadbalance.Router) *RoundRobin {
+func NewRoundRobin(router route.Router) *RoundRobin {
 	return &RoundRobin{
 		router: router,
 		groups: make(map[string]*group),
@@ -21,7 +22,7 @@ func NewRoundRobin(router loadbalance.Router) *RoundRobin {
 	}
 }
 
-func (r *RoundRobin) NextUpstream(req *http.Request) (loadbalance.Upstream, error) {
+func (r *RoundRobin) NextUpstream(req *http.Request) (Upstream, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -37,7 +38,7 @@ func (r *RoundRobin) NextUpstream(req *http.Request) (loadbalance.Upstream, erro
 	return group.next()
 }
 
-func (r *RoundRobin) AddUpstreams(groupId string, upstreams ...loadbalance.Upstream) error {
+func (r *RoundRobin) AddUpstreams(groupId string, upstreams ...Upstream) error {
 	group, exists := r.groups[groupId]
 	if !exists {
 		group = newGroup()
@@ -47,7 +48,7 @@ func (r *RoundRobin) AddUpstreams(groupId string, upstreams ...loadbalance.Upstr
 	return nil
 }
 
-func (r *RoundRobin) RemoveUpstreams(groupId string, upstreams ...loadbalance.Upstream) error {
+func (r *RoundRobin) RemoveUpstreams(groupId string, upstreams ...Upstream) error {
 	group, exists := r.groups[groupId]
 	if !exists {
 		return nil
@@ -56,5 +57,5 @@ func (r *RoundRobin) RemoveUpstreams(groupId string, upstreams ...loadbalance.Up
 	return nil
 }
 
-func (r *RoundRobin) ReportFailure(u loadbalance.Upstream, err error) {
+func (r *RoundRobin) ReportFailure(u Upstream, err error) {
 }
