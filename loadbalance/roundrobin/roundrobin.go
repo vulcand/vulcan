@@ -2,60 +2,77 @@ package roundrobin
 
 import (
 	"fmt"
-	"github.com/mailgun/vulcan/route"
+	. "github.com/mailgun/vulcan/request"
 	. "github.com/mailgun/vulcan/upstream"
 	"net/http"
 	"sync"
 )
 
 type RoundRobin struct {
-	mutex  *sync.Mutex
-	groups map[string]*group
-	router route.Router
+	mutex     *sync.Mutex
+	index     int
+	upstreams []Upstream
 }
 
-func NewRoundRobin(router route.Router) *RoundRobin {
+func NewRoundRobin() *RoundRobin {
 	return &RoundRobin{
-		router: router,
-		groups: make(map[string]*group),
-		mutex:  &sync.Mutex{},
+		mutex: &sync.Mutex{},
 	}
 }
 
-func (r *RoundRobin) NextUpstream(req *http.Request) (Upstream, error) {
+func (rr *RoundRobin) NextUpstream(req Request) (Upstream, error) {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+
+	for i := 0; i < len(rr.upstreams); i++ {
+		u := rr.upstreams[rr.index]
+		rr.index = (rr.index + 1) % len(rr.upstreams)
+		return u, nil
+	}
+	// We did full circle and found nothing
+	return nil, fmt.Errorf("No available endpoints!")
+}
+
+func (r *RoundRobin) AddUpstreams(upstreams ...Upstream) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-
-	groupId, err := r.router.Route(req)
-	if err != nil {
-		return nil, err
-	}
-	// Get existing cursor or create new cursor
-	group, exists := r.groups[groupId]
-	if !exists {
-		return nil, fmt.Errorf("Upstream group(%s) not found", groupId)
-	}
-	return group.next()
-}
-
-func (r *RoundRobin) AddUpstreams(groupId string, upstreams ...Upstream) error {
-	group, exists := r.groups[groupId]
-	if !exists {
-		group = newGroup()
-		r.groups[groupId] = group
-	}
-	group.addUpstreams(upstreams)
+	r.upstreams = append(r.upstreams, upstreams...)
 	return nil
 }
 
-func (r *RoundRobin) RemoveUpstreams(groupId string, upstreams ...Upstream) error {
-	group, exists := r.groups[groupId]
-	if !exists {
-		return nil
+func (rr *RoundRobin) RemoveUpstreams(upstreams ...Upstream) error {
+	rr.mutex.Lock()
+	defer rr.mutex.Unlock()
+
+	// Collect upstreams to remove
+	indexes := make(map[int]bool)
+	for _, r := range upstreams {
+		for i, u := range rr.upstreams {
+			if u.GetId() == r.GetId() {
+				indexes[i] = true
+			}
+		}
 	}
-	group.removeUpstreams(upstreams)
+
+	// Iterate over upstreams and remove the indexes marked for deletion
+	idx := 0
+	newUpstreams := make([]Upstream, len(rr.upstreams)-len(indexes))
+	for i, u := range rr.upstreams {
+		if !indexes[i] {
+			newUpstreams[idx] = u
+			idx += 1
+		}
+	}
+	rr.upstreams = newUpstreams
+	// Reset the index because it's obviously invalid now
+	rr.index = 0
 	return nil
 }
 
-func (r *RoundRobin) ReportFailure(u Upstream, err error) {
+func (r *RoundRobin) Before(Request) (*http.Response, error) {
+	return nil, nil
+}
+
+func (r *RoundRobin) After(Request, *http.Response, error) error {
+	return nil
 }

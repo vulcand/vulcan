@@ -1,11 +1,13 @@
 package loadbalance
 
 import (
+	. "github.com/mailgun/vulcan/callback"
+	. "github.com/mailgun/vulcan/request"
 	. "github.com/mailgun/vulcan/upstream"
-	"net/http"
 )
 
 type LoadBalancer interface {
-	NextUpstream(req *http.Request) (Upstream, error)
-	ReportFailure(u Upstream, err error)
+	NextUpstream(req Request) (Upstream, error)
+	Before
+	After
 }
