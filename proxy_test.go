@@ -76,7 +76,7 @@ func (s *ProxySuite) newProxyWithTimeouts(
 	dialTimeout time.Duration) *httptest.Server {
 
 	proxySettings := ProxySettings{
-		LoadBalancer:    l,
+		Router:          &MatchAll{Balancer: l},
 		HttpReadTimeout: readTimeout,
 		HttpDialTimeout: dialTimeout,
 	}
@@ -107,8 +107,8 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer upstream.Close()
 
-	lb := NewRoundRobin(&MatchAll{Group: "*"})
-	lb.AddUpstreams("*", s.newUpstream(upstream.URL))
+	lb := NewRoundRobin()
+	lb.AddUpstreams(s.newUpstream(upstream.URL))
 	proxy := s.newProxy(lb)
 	defer proxy.Close()
 

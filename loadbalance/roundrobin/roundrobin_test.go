@@ -1,7 +1,6 @@
 package roundrobin
 
 import (
-	. "github.com/mailgun/vulcan/route"
 	. "launchpad.net/gocheck"
 	"testing"
 )
@@ -17,7 +16,7 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 }
 
 func (s *RoundRobinSuite) TestNoUpstreams(c *C) {
-	r := NewRoundRobin(&MatchAll{Group: "*"})
+	r := NewRoundRobin()
 	_, err := r.NextUpstream(nil)
 	c.Assert(err, NotNil)
 }
