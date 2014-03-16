@@ -3,7 +3,6 @@
 package vulcan
 
 import (
-	"bytes"
 	"fmt"
 	log "github.com/mailgun/gotools-log"
 	"github.com/mailgun/vulcan/callback"
@@ -111,16 +110,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if p.settings.Watcher != nil {
 		p.settings.Watcher.RequestEnded(request, response, err)
 	}
-}
-
-// We need this struct to add a Close method and comply with io.ReadCloser
-type Buffer struct {
-	*bytes.Reader
-}
-
-func (*Buffer) Close() error {
-	// Does nothing, created to comply with io.ReadCloser requirements
-	return nil
 }
 
 // Round trips the request to one of the upstreams, returns the streamed
