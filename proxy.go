@@ -8,12 +8,10 @@ import (
 	"github.com/mailgun/vulcan/callback"
 	"github.com/mailgun/vulcan/errors"
 	"github.com/mailgun/vulcan/headers"
-	"github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/request"
 	"github.com/mailgun/vulcan/route"
 	. "github.com/mailgun/vulcan/upstream"
-	. "github.com/mailgun/vulcan/watch"
 	"io"
 	"io/ioutil"
 	"net"
@@ -43,8 +41,6 @@ type ProxySettings struct {
 	Before callback.Before
 	// Callback executed after proxy received response from the upstream
 	After callback.After
-	// Watchers observe the request for recording purposes and can't interfere with it
-	Watcher RequestWatcher
 }
 
 type ReverseProxy struct {
@@ -93,22 +89,15 @@ func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
 // proxies back the response.
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Infof("Serving Request %s %s", req.Method, req.RequestURI)
-
 	// Wrap the original request into wrapper with more detailed information available
 	request := &request.BaseRequest{
 		HttpRequest: req,
 		Id:          atomic.AddInt64(&p.lastRequestId, 1),
 	}
-	if p.settings.Watcher != nil {
-		p.settings.Watcher.RequestStarted(request)
-	}
-	response, err := p.proxyRequest(w, request)
+	_, err := p.proxyRequest(w, request)
 	if err != nil {
 		log.Errorf("Failed to proxy to all upstreams:", err)
 		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, req)
-	}
-	if p.settings.Watcher != nil {
-		p.settings.Watcher.RequestEnded(request, response, err)
 	}
 }
 
@@ -127,7 +116,7 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 	request.HttpRequest.Body = body
 	defer body.Close()
 
-	loadBalancer, err := p.settings.Router.Route(request)
+	location, err := p.settings.Router.Route(request)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +126,7 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 		if err != nil {
 			return nil, err
 		}
-		upstream, err := loadBalancer.NextUpstream(request)
+		upstream, err := location.GetLoadBalancer().NextUpstream(request)
 		if err != nil {
 			log.Errorf("Load Balancer failure: %s", err)
 			return nil, err
@@ -145,12 +134,23 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 		request.CurrentUpstream = upstream
 		// Rewrites the request: adds headers, changes urls
 		request.HttpRequest = p.rewriteRequest(request.HttpRequest, request.CurrentUpstream)
-
 		log.Infof("Proxy to upstream: %s", upstream)
+
+		if location.GetLimiter() != nil {
+			delay, err := location.GetLimiter().Accept(request)
+			if err != nil {
+				log.Errorf("Limiter rejects request: %s", err)
+				return nil, err
+			}
+			if delay > 0 {
+				log.Infof("Limiter delays request by %s", delay)
+				time.Sleep(delay)
+			}
+		}
 
 		// In case if error is not nil, we allow load balancer to choose the next upstream
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
-		response, err := p.proxyToUpstream(w, loadBalancer, request)
+		response, err := p.proxyToUpstream(w, location, request)
 		if err == nil {
 			return response, err
 		}
@@ -165,10 +165,16 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 // that upstream is shutting down and is not willing to accept new requests.
 func (p *ReverseProxy) proxyToUpstream(
 	w http.ResponseWriter,
-	loadBalancer loadbalance.LoadBalancer,
+	location route.Location,
 	request *request.BaseRequest) (*http.Response, error) {
 
-	for _, cb := range []callback.Before{p.settings.Before, loadBalancer} {
+	before := []callback.Before{
+		p.settings.Before,
+		location.GetLoadBalancer(),
+		location.GetLimiter(),
+	}
+
+	for _, cb := range before {
 		if cb != nil {
 			response, err := cb.Before(request)
 			// In case if error is not nil, return this error to the client
@@ -195,12 +201,18 @@ func (p *ReverseProxy) proxyToUpstream(
 	}
 	defer res.Body.Close()
 
+	after := []callback.After{
+		p.settings.After,
+		location.GetLoadBalancer(),
+		location.GetLimiter(),
+	}
+
 	// This gives a chance for callbacks to change the response
-	for _, cb := range []callback.After{p.settings.After, loadBalancer} {
+	for _, cb := range after {
 		if cb != nil {
 			err := cb.After(request, res, err)
 			if err != nil {
-				log.Errorf("After returned error: %s", err)
+				log.Errorf("After returned error and intercepts the response: %s", err)
 				return nil, err
 			}
 		}

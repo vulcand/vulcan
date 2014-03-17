@@ -1,17 +1,18 @@
 package limit
 
 import (
-	. "github.com/mailgun/vulcan/watch"
-	"net/http"
+	. "github.com/mailgun/vulcan/callback"
+	. "github.com/mailgun/vulcan/request"
 	"time"
 )
 
 // Limiter is an interface for request limiters (e.g. rate/connection) limiters
 type Limiter interface {
-	// returns time after what this request can proceed
-	// in case if request is allowed to go right away, returns 0
-	Accept(r *http.Request) (time.Duration, error)
-	// Allows Limiter to watch requests stats so it can make
-	// limiting decisions based off that (e.g. request size/ip), etc.
-	RequestWatcher
+	// In case if limiter wants to reject request, it should return an error, this error
+	// will be proxied to the client.
+	// In case if lmimiter wants to delay request, it should return duration > 0
+	// Otherwise limiter should return (0, nil) to allow request to proceed
+	Accept(r Request) (time.Duration, error)
+	Before
+	After
 }

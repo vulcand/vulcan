@@ -76,7 +76,9 @@ func (s *ProxySuite) newProxyWithTimeouts(
 	dialTimeout time.Duration) *httptest.Server {
 
 	proxySettings := ProxySettings{
-		Router:          &MatchAll{Balancer: l},
+		Router: &MatchAll{
+			Location: &BaseLocation{LoadBalancer: l},
+		},
 		HttpReadTimeout: readTimeout,
 		HttpDialTimeout: dialTimeout,
 	}

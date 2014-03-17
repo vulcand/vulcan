@@ -1,23 +1,42 @@
 package route
 
 import (
+	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/request"
 )
 
-// Router is the interface for routing incoming requests
-// It takes incoming request as a parameter and returns load balancer that provides
-// access to upstreams
+// Router matches incoming request to a specific location
 type Router interface {
-	// Matches request to a group of upstreams identified by string
-	Route(req Request) (LoadBalancer, error)
+	// if error is not nil, the request wll be aborted
+	// and error will be proxied to client
+	Route(req Request) (Location, error)
+}
+
+// Location defines the load balancer and limiter
+type Location interface {
+	GetLoadBalancer() LoadBalancer
+	GetLimiter() Limiter
+}
+
+type BaseLocation struct {
+	LoadBalancer LoadBalancer
+	Limiter      Limiter
+}
+
+func (b *BaseLocation) GetLoadBalancer() LoadBalancer {
+	return b.LoadBalancer
+}
+
+func (b *BaseLocation) GetLimiter() Limiter {
+	return b.Limiter
 }
 
 // Helper router that always returns the same load balancer
 type MatchAll struct {
-	Balancer LoadBalancer
+	Location Location
 }
 
-func (m *MatchAll) Route(req Request) (LoadBalancer, error) {
-	return m.Balancer, nil
+func (m *MatchAll) Route(req Request) (Location, error) {
+	return m.Location, nil
 }
