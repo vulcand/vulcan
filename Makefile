@@ -5,6 +5,7 @@ deps:
 
 	go get -v -u launchpad.net/gocheck
 	go get -v -u github.com/mailgun/gotools-log
+	go get -v -u github.com/mailgun/gotools-time
 
 clean:
 	find . -name flymake_* -delete
