@@ -14,10 +14,12 @@ type RoundRobin struct {
 	upstreams []Upstream
 }
 
-func NewRoundRobin() *RoundRobin {
-	return &RoundRobin{
+func NewRoundRobin(upstreams ...Upstream) *RoundRobin {
+	rr := &RoundRobin{
 		mutex: &sync.Mutex{},
 	}
+	rr.AddUpstreams(upstreams...)
+	return rr
 }
 
 func (rr *RoundRobin) NextUpstream(req Request) (Upstream, error) {

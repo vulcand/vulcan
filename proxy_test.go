@@ -1,6 +1,7 @@
 package vulcan
 
 import (
+	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/netutils"
@@ -70,14 +71,15 @@ func (s *ProxySuite) newServer(handler WebHandler) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
 
-func (s *ProxySuite) newProxyWithTimeouts(
+func (s *ProxySuite) newProxyWithParams(
 	l LoadBalancer,
+	r Limiter,
 	readTimeout time.Duration,
 	dialTimeout time.Duration) *httptest.Server {
 
 	proxySettings := ProxySettings{
 		Router: &MatchAll{
-			Location: &BaseLocation{LoadBalancer: l},
+			Location: &BaseLocation{LoadBalancer: l, Limiter: r},
 		},
 		HttpReadTimeout: readTimeout,
 		HttpDialTimeout: dialTimeout,
@@ -90,8 +92,8 @@ func (s *ProxySuite) newProxyWithTimeouts(
 	return httptest.NewServer(proxy)
 }
 
-func (s *ProxySuite) newProxy(l LoadBalancer) *httptest.Server {
-	return s.newProxyWithTimeouts(l, time.Duration(0), time.Duration(0))
+func (s *ProxySuite) newProxy(l LoadBalancer, r Limiter) *httptest.Server {
+	return s.newProxyWithParams(l, r, time.Duration(0), time.Duration(0))
 }
 
 func (s *ProxySuite) newUpstream(url string) Upstream {
@@ -109,9 +111,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer upstream.Close()
 
-	lb := NewRoundRobin()
-	lb.AddUpstreams(s.newUpstream(upstream.URL))
-	proxy := s.newProxy(lb)
+	proxy := s.newProxy(NewRoundRobin(s.newUpstream(upstream.URL)), nil)
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")

@@ -12,7 +12,7 @@ type Limiter interface {
 	// will be proxied to the client.
 	// In case if lmimiter wants to delay request, it should return duration > 0
 	// Otherwise limiter should return (0, nil) to allow request to proceed
-	Accept(r Request) (time.Duration, error)
+	Limit(r Request) (time.Duration, error)
 	Before
 	After
 }

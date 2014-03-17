@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+type SleepFn func(time.Duration)
+
 // Reverse proxy settings, what loadbalancing algo to use,
 // timeouts, rate limiting backend
 type ProxySettings struct {
@@ -41,6 +43,8 @@ type ProxySettings struct {
 	Before callback.Before
 	// Callback executed after proxy received response from the upstream
 	After callback.After
+	// Option to override sleep function (useful for testing purposes)
+	SleepFn SleepFn
 }
 
 type ReverseProxy struct {
@@ -50,7 +54,6 @@ type ReverseProxy struct {
 	httpClient *http.Client
 	// Connection settings, load balancing algo to use, callbacks and watchers
 	settings ProxySettings
-
 	// Counter that is used to provide unique identifiers for requests
 	lastRequestId int64
 }
@@ -137,14 +140,18 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 		log.Infof("Proxy to upstream: %s", upstream)
 
 		if location.GetLimiter() != nil {
-			delay, err := location.GetLimiter().Accept(request)
+			delay, err := location.GetLimiter().Limit(request)
 			if err != nil {
 				log.Errorf("Limiter rejects request: %s", err)
 				return nil, err
 			}
 			if delay > 0 {
 				log.Infof("Limiter delays request by %s", delay)
-				time.Sleep(delay)
+				if p.settings.SleepFn != nil {
+					p.settings.SleepFn(delay)
+				} else {
+					time.Sleep(delay)
+				}
 			}
 		}
 
