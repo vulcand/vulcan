@@ -17,7 +17,7 @@ It does not provide any simplified config file format or running program and ser
 Example
 -----------
 
-```golang
+```go
 
 // Set load balancer and two upstreams
 loadBalancer := NewRoundRobin(NewUpstreamFromString("http://localhost:5000", "http://localhost:5001"))
