@@ -3,16 +3,16 @@ package tokenbucket
 import (
 	"fmt"
 	"github.com/mailgun/gotools-time"
-	. "github.com/mailgun/vulcan/request"
-	"net/http"
 	"time"
 )
 
 type Rate struct {
-	Requests int64
-	Period   time.Duration
+	Tokens int64
+	Period time.Duration
 }
 
+// Implements token bucket rate limiting algorithm (http://en.wikipedia.org/wiki/Token_bucket)
+// and is used by rate limiters to implement various rate limiting strategies
 type TokenBucket struct {
 	// Maximum amount of tokens available at given time (controls burst rate)
 	maxTokens int64
@@ -27,7 +27,7 @@ type TokenBucket struct {
 
 func NewTokenBucket(rate Rate, maxBurst int64, timeProvider timetools.TimeProvider) (*TokenBucket, error) {
 	return &TokenBucket{
-		refillPeriod: time.Duration(int64(rate.Period) / rate.Requests),
+		refillPeriod: time.Duration(int64(rate.Period) / rate.Tokens),
 		maxTokens:    maxBurst,
 		timeProvider: timeProvider,
 		lastRefill:   timeProvider.UtcNow(),
@@ -35,31 +35,33 @@ func NewTokenBucket(rate Rate, maxBurst int64, timeProvider timetools.TimeProvid
 	}, nil
 }
 
-func (tb *TokenBucket) Limit(r Request) (time.Duration, error) {
+// In case if there's enough tokens, consumes tokens and returns 0, nil
+// In case if tokens to consume is larger than max burst returns -1, error
+// In case if there's not enough tokens, returns time to wait till refill
+func (tb *TokenBucket) Consume(tokens int64) (time.Duration, error) {
 	tb.refill()
-	if tb.tokens < 1 {
-		return 0, fmt.Errorf("Rate limit reached")
+	if tokens > tb.maxTokens {
+		return -1, fmt.Errorf("Requested tokens larger than max tokens")
 	}
-	tb.tokens -= 1
+	if tb.tokens < tokens {
+		return tb.timeToRefill(tokens), nil
+	}
+	tb.tokens -= tokens
 	return 0, nil
+}
+
+// Returns the time after the capacity of tokens will reach the
+func (tb *TokenBucket) timeToRefill(tokens int64) time.Duration {
+	missingTokens := tokens - tb.tokens
+	return time.Duration(missingTokens) * tb.refillPeriod
 }
 
 func (tb *TokenBucket) refill() {
 	now := tb.timeProvider.UtcNow()
 	timePassed := now.Sub(tb.lastRefill)
-	newTokens := tb.tokens + int64(timePassed/tb.refillPeriod)
-	if newTokens > tb.maxTokens {
+	tb.tokens = tb.tokens + int64(timePassed/tb.refillPeriod)
+	if tb.tokens > tb.maxTokens {
 		tb.tokens = tb.maxTokens
-	} else {
-		tb.tokens = newTokens
 	}
 	tb.lastRefill = now
-}
-
-func (tb *TokenBucket) Before(r Request) (*http.Response, error) {
-	return nil, nil
-}
-
-func (tb *TokenBucket) After(r Request, response *http.Response, err error) error {
-	return nil
 }
