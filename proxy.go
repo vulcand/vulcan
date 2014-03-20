@@ -90,36 +90,36 @@ func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
 
 // Main request handler, accepts requests, round trips it to the upstream
 // proxies back the response.
-func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	log.Infof("Serving Request %s %s", req.Method, req.RequestURI)
+func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Infof("Serving Request %s %s", r.Method, r.RequestURI)
 	// Wrap the original request into wrapper with more detailed information available
-	request := &request.BaseRequest{
-		HttpRequest: req,
+	req := &request.BaseRequest{
+		HttpRequest: r,
 		Id:          atomic.AddInt64(&p.lastRequestId, 1),
 	}
-	_, err := p.proxyRequest(w, request)
+	_, err := p.proxyRequest(w, req)
 	if err != nil {
 		log.Errorf("Failed to proxy to all upstreams:", err)
-		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, req)
+		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
 
 // Round trips the request to one of the upstreams, returns the streamed
 // request body length in bytes and the upstream reply.
-func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.BaseRequest) (*http.Response, error) {
+func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) (*http.Response, error) {
 
 	// We are allowed to fallback in case of upstream failure,
 	// record the request body so we can replay it on errors.
-	body, err := netutils.NewBodyBuffer(request.HttpRequest.Body)
+	body, err := netutils.NewBodyBuffer(req.HttpRequest.Body)
 	if err != nil {
 		log.Errorf("Request read error %s", err)
 		return nil, p.settings.ErrorFormatter.FromStatus(http.StatusBadRequest)
 	}
 
-	request.HttpRequest.Body = body
+	req.HttpRequest.Body = body
 	defer body.Close()
 
-	location, err := p.settings.Router.Route(request)
+	location, err := p.settings.Router.Route(req)
 	if err != nil {
 		return nil, err
 	}
@@ -129,18 +129,18 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 		if err != nil {
 			return nil, err
 		}
-		upstream, err := location.GetLoadBalancer().NextUpstream(request)
+		upstream, err := location.GetLoadBalancer().NextUpstream(req)
 		if err != nil {
 			log.Errorf("Load Balancer failure: %s", err)
 			return nil, err
 		}
-		request.CurrentUpstream = upstream
+		req.CurrentUpstream = upstream
 		// Rewrites the request: adds headers, changes urls
-		request.HttpRequest = p.rewriteRequest(request.HttpRequest, request.CurrentUpstream)
+		req.HttpRequest = p.rewriteRequest(req.HttpRequest, req.CurrentUpstream)
 		log.Infof("Proxy to upstream: %s", upstream)
 
 		if location.GetLimiter() != nil {
-			delay, err := location.GetLimiter().Limit(request)
+			delay, err := location.GetLimiter().Limit(req)
 			if err != nil {
 				log.Errorf("Limiter rejects request: %s", err)
 				return nil, err
@@ -157,9 +157,11 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, request *request.Base
 
 		// In case if error is not nil, we allow load balancer to choose the next upstream
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
-		response, err := p.proxyToUpstream(w, location, request)
+		response, err := p.proxyToUpstream(w, location, req)
 		if err == nil {
 			return response, err
+		} else {
+			req.AddAttempt(request.Attempt{Upstream: req.CurrentUpstream, Error: err})
 		}
 	}
 	log.Errorf("All upstreams failed!")

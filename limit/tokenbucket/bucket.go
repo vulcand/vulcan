@@ -7,7 +7,7 @@ import (
 )
 
 type Rate struct {
-	Tokens int64
+	Units  int64
 	Period time.Duration
 }
 
@@ -15,30 +15,39 @@ type Rate struct {
 // and is used by rate limiters to implement various rate limiting strategies
 type TokenBucket struct {
 	// Maximum amount of tokens available at given time (controls burst rate)
-	maxTokens int64
+	maxTokens int
 	// Specifies the period of the rate
 	refillPeriod time.Duration
 	// Current value of tokens
-	tokens int64
+	tokens int
 	// Interface that gives current time (so tests can override)
 	timeProvider timetools.TimeProvider
 	lastRefill   time.Time
 }
 
-func NewTokenBucket(rate Rate, maxBurst int64, timeProvider timetools.TimeProvider) (*TokenBucket, error) {
+func NewTokenBucket(rate Rate, maxTokens int, timeProvider timetools.TimeProvider) (*TokenBucket, error) {
+	if rate.Period == 0 || rate.Units == 0 {
+		return nil, fmt.Errorf("Invalid rate: %v", rate)
+	}
+	if maxTokens <= 0 {
+		return nil, fmt.Errorf("Invalid maxTokens, should be >0: %d", maxTokens)
+	}
+	if timeProvider == nil {
+		return nil, fmt.Errorf("Supply time provider")
+	}
 	return &TokenBucket{
-		refillPeriod: time.Duration(int64(rate.Period) / rate.Tokens),
-		maxTokens:    maxBurst,
+		refillPeriod: time.Duration(int64(rate.Period) / rate.Units),
+		maxTokens:    maxTokens, // in case of maxBurst is 0, maxTokens available at should be 1
 		timeProvider: timeProvider,
 		lastRefill:   timeProvider.UtcNow(),
-		tokens:       maxBurst,
+		tokens:       maxTokens,
 	}, nil
 }
 
 // In case if there's enough tokens, consumes tokens and returns 0, nil
 // In case if tokens to consume is larger than max burst returns -1, error
 // In case if there's not enough tokens, returns time to wait till refill
-func (tb *TokenBucket) Consume(tokens int64) (time.Duration, error) {
+func (tb *TokenBucket) Consume(tokens int) (time.Duration, error) {
 	tb.refill()
 	if tokens > tb.maxTokens {
 		return -1, fmt.Errorf("Requested tokens larger than max tokens")
@@ -51,7 +60,7 @@ func (tb *TokenBucket) Consume(tokens int64) (time.Duration, error) {
 }
 
 // Returns the time after the capacity of tokens will reach the
-func (tb *TokenBucket) timeToRefill(tokens int64) time.Duration {
+func (tb *TokenBucket) timeToRefill(tokens int) time.Duration {
 	missingTokens := tokens - tb.tokens
 	return time.Duration(missingTokens) * tb.refillPeriod
 }
@@ -59,7 +68,7 @@ func (tb *TokenBucket) timeToRefill(tokens int64) time.Duration {
 func (tb *TokenBucket) refill() {
 	now := tb.timeProvider.UtcNow()
 	timePassed := now.Sub(tb.lastRefill)
-	tb.tokens = tb.tokens + int64(timePassed/tb.refillPeriod)
+	tb.tokens = tb.tokens + int(timePassed/tb.refillPeriod)
 	if tb.tokens > tb.maxTokens {
 		tb.tokens = tb.maxTokens
 	}

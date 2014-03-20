@@ -11,7 +11,7 @@ type Request interface {
 	GetCurrentUpstream() upstream.Upstream // Returns upstream assigned to the reuqest by load balancer if any, can be nil
 	GetHttpRequest() *http.Request         // Original http request
 	GetId() int64                          // Request id that is unique to this running process
-	GetHistory() []Attempt                 // History of attempts to proxy the request, can be empty
+	GetAttempts() []Attempt                // History of attempts to proxy the request, can be empty
 }
 
 // Provides information about attempts to proxy the request to upstream
@@ -40,6 +40,10 @@ func (br *BaseRequest) GetId() int64 {
 	return br.Id
 }
 
-func (br *BaseRequest) GetHistory() []Attempt {
+func (br *BaseRequest) GetAttempts() []Attempt {
 	return br.History
+}
+
+func (br *BaseRequest) AddAttempt(a Attempt) {
+	br.History = append(br.History, a)
 }

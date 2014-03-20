@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+func TestBucket(t *testing.T) { TestingT(t) }
 
 type BucketSuite struct {
 	tm *timetools.FreezedTime
@@ -127,4 +127,18 @@ func (s *BucketSuite) TestConsumeEstimate(c *C) {
 	delay, err = l.Consume(4)
 	c.Assert(err, Equals, nil)
 	c.Assert(delay, Equals, time.Duration(2)*time.Second)
+}
+
+func (s *BucketSuite) TestInvalidParams(c *C) {
+	// Invalid rate
+	_, err := NewTokenBucket(Rate{0, 0}, 1, s.tm)
+	c.Assert(err, Not(Equals), nil)
+
+	// Invalid max tokens
+	_, err = NewTokenBucket(Rate{2, time.Second}, 0, s.tm)
+	c.Assert(err, Not(Equals), nil)
+
+	// Invalid time provider
+	_, err = NewTokenBucket(Rate{2, time.Second}, 1, nil)
+	c.Assert(err, Not(Equals), nil)
 }
