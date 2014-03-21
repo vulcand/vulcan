@@ -96,14 +96,6 @@ func (s *ProxySuite) newProxy(l LoadBalancer, r Limiter) *httptest.Server {
 	return s.newProxyWithParams(l, r, time.Duration(0), time.Duration(0))
 }
 
-func (s *ProxySuite) newUpstream(url string) Upstream {
-	u, err := NewUpstreamFromString(url)
-	if err != nil {
-		panic(err)
-	}
-	return u
-}
-
 // Success, make sure we've successfully proxied the response
 func (s *ProxySuite) TestSuccess(c *C) {
 	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +103,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer upstream.Close()
 
-	proxy := s.newProxy(NewRoundRobin(s.newUpstream(upstream.URL)), nil)
+	proxy := s.newProxy(NewRoundRobin(MustParseUpstream(upstream.URL)), nil)
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
