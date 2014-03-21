@@ -62,7 +62,6 @@ func (s *RoundRobinSuite) TestMultipleUpstreams(c *C) {
 // Make sure that adding upstreams during load balancing works fine
 func (s *RoundRobinSuite) TestAddUpstreams(c *C) {
 	r := NewRoundRobin()
-	return
 
 	uA := MustParseUpstream("http://localhost:5000")
 	uB := MustParseUpstream("http://localhost:5001")
