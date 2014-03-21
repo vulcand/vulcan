@@ -16,12 +16,20 @@ type UrlUpstream struct {
 	id  string
 }
 
-func NewUpstreamFromString(in string) (*UrlUpstream, error) {
+func ParseUpstream(in string) (*UrlUpstream, error) {
 	url, err := netutils.ParseUrl(in)
 	if err != nil {
 		return nil, err
 	}
 	return &UrlUpstream{url: url, id: fmt.Sprintf("%s://%s", url.Scheme, url.Host)}, nil
+}
+
+func MustParseUpstream(in string) *UrlUpstream {
+	u, err := ParseUpstream(in)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }
 
 func NewUpstream(in *url.URL) (*UrlUpstream, error) {

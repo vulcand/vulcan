@@ -39,6 +39,7 @@ func (r *RoundRobin) AddUpstreams(upstreams ...Upstream) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	r.upstreams = append(r.upstreams, upstreams...)
+	r.index = 0
 	return nil
 }
 
