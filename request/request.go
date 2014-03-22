@@ -1,35 +1,35 @@
 package request
 
 import (
-	"github.com/mailgun/vulcan/upstream"
+	"github.com/mailgun/vulcan/endpoint"
 	"net/http"
 	"time"
 )
 
 // Wrapper around http request that provides more info about http.Request
 type Request interface {
-	GetCurrentUpstream() upstream.Upstream // Returns upstream assigned to the reuqest by load balancer if any, can be nil
+	GetCurrentEndpoint() endpoint.Endpoint // Returns endpoint assigned to the reuqest by load balancer if any, can be nil
 	GetHttpRequest() *http.Request         // Original http request
 	GetId() int64                          // Request id that is unique to this running process
 	GetAttempts() []Attempt                // History of attempts to proxy the request, can be empty
 }
 
-// Provides information about attempts to proxy the request to upstream
+// Provides information about attempts to proxy the request to endpoint
 type Attempt struct {
-	Upstream upstream.Upstream // Upstream used for proxying
+	Endpoint endpoint.Endpoint // Endpoint used for proxying
 	Error    error             // Error (can be nil)
 	Duration time.Duration     // Recorded duration of the request
 }
 
 type BaseRequest struct {
-	CurrentUpstream upstream.Upstream
+	CurrentEndpoint endpoint.Endpoint
 	HttpRequest     *http.Request
 	Id              int64
 	History         []Attempt
 }
 
-func (br *BaseRequest) GetCurrentUpstream() upstream.Upstream {
-	return br.CurrentUpstream
+func (br *BaseRequest) GetCurrentEndpoint() endpoint.Endpoint {
+	return br.CurrentEndpoint
 }
 
 func (br *BaseRequest) GetHttpRequest() *http.Request {

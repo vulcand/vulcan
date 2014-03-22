@@ -2,8 +2,8 @@ package roundrobin
 
 import (
 	"fmt"
+	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/request"
-	. "github.com/mailgun/vulcan/upstream"
 	"net/http"
 	"sync"
 )
@@ -11,62 +11,62 @@ import (
 type RoundRobin struct {
 	mutex     *sync.Mutex
 	index     int
-	upstreams []Upstream
+	endpoints []Endpoint
 }
 
-func NewRoundRobin(upstreams ...Upstream) *RoundRobin {
+func NewRoundRobin(endpoints ...Endpoint) *RoundRobin {
 	rr := &RoundRobin{
 		mutex: &sync.Mutex{},
 	}
-	rr.AddUpstreams(upstreams...)
+	rr.AddEndpoints(endpoints...)
 	return rr
 }
 
-func (rr *RoundRobin) NextUpstream(req Request) (Upstream, error) {
+func (rr *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 
-	for i := 0; i < len(rr.upstreams); i++ {
-		u := rr.upstreams[rr.index]
-		rr.index = (rr.index + 1) % len(rr.upstreams)
+	for i := 0; i < len(rr.endpoints); i++ {
+		u := rr.endpoints[rr.index]
+		rr.index = (rr.index + 1) % len(rr.endpoints)
 		return u, nil
 	}
 	// We did full circle and found nothing
 	return nil, fmt.Errorf("No available endpoints!")
 }
 
-func (r *RoundRobin) AddUpstreams(upstreams ...Upstream) error {
+func (r *RoundRobin) AddEndpoints(endpoints ...Endpoint) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.upstreams = append(r.upstreams, upstreams...)
+	r.endpoints = append(r.endpoints, endpoints...)
 	r.index = 0
 	return nil
 }
 
-func (rr *RoundRobin) RemoveUpstreams(upstreams ...Upstream) error {
+func (rr *RoundRobin) RemoveEndpoints(endpoints ...Endpoint) error {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 
-	// Collect upstreams to remove
+	// Collect endpoints to remove
 	indexes := make(map[int]bool)
-	for _, r := range upstreams {
-		for i, u := range rr.upstreams {
+	for _, r := range endpoints {
+		for i, u := range rr.endpoints {
 			if u.GetId() == r.GetId() {
 				indexes[i] = true
 			}
 		}
 	}
 
-	// Iterate over upstreams and remove the indexes marked for deletion
+	// Iterate over endpoints and remove the indexes marked for deletion
 	idx := 0
-	newUpstreams := make([]Upstream, len(rr.upstreams)-len(indexes))
-	for i, u := range rr.upstreams {
+	newEndpoints := make([]Endpoint, len(rr.endpoints)-len(indexes))
+	for i, u := range rr.endpoints {
 		if !indexes[i] {
-			newUpstreams[idx] = u
+			newEndpoints[idx] = u
 			idx += 1
 		}
 	}
-	rr.upstreams = newUpstreams
+	rr.endpoints = newEndpoints
 	// Reset the index because it's obviously invalid now
 	rr.index = 0
 	return nil

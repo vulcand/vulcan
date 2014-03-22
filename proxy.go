@@ -6,12 +6,13 @@ import (
 	"fmt"
 	log "github.com/mailgun/gotools-log"
 	"github.com/mailgun/vulcan/callback"
+	. "github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/errors"
 	"github.com/mailgun/vulcan/headers"
+	"github.com/mailgun/vulcan/location"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/request"
 	"github.com/mailgun/vulcan/route"
-	. "github.com/mailgun/vulcan/upstream"
 	"io"
 	"io/ioutil"
 	"net"
@@ -30,39 +31,25 @@ type ProxySettings struct {
 	ErrorFormatter errors.Formatter
 	// Router decides where does the request go and what load balancer handles it
 	Router route.Router
-	// How long would proxy wait for upstream response
-	HttpReadTimeout time.Duration
-	// How long would proxy try to dial the upstream
-	HttpDialTimeout time.Duration
 	// Used to set forwarding headers
 	Hostname string
 	// In this case appends new forward info to the existing header
 	TrustForwardHeader bool
-	// Before callback executed before request gets routed to the upstream
+	// Before callback executed before request gets routed to the endpoint
 	// and can intervene during the request lifetime
 	Before callback.Before
-	// Callback executed after proxy received response from the upstream
+	// Callback executed after proxy received response from the endpoint
 	After callback.After
 	// Option to override sleep function (useful for testing purposes)
 	SleepFn SleepFn
 }
 
 type ReverseProxy struct {
-	// Customized transport with dial and read timeouts set
-	httpTransport *http.Transport
-	// Client that uses customized transport
-	httpClient *http.Client
 	// Connection settings, load balancing algo to use, callbacks and watchers
 	settings ProxySettings
 	// Counter that is used to provide unique identifiers for requests
 	lastRequestId int64
 }
-
-// Standard dial and read timeouts, can be overriden when supplying proxy settings
-const (
-	DefaultHttpReadTimeout = time.Duration(10) * time.Second
-	DefaultHttpDialTimeout = time.Duration(10) * time.Second
-)
 
 // Creates reverse proxy that acts like http server.
 func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
@@ -71,24 +58,13 @@ func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
 		return nil, err
 	}
 
-	transport := &http.Transport{
-		Dial: func(network, addr string) (net.Conn, error) {
-			return net.DialTimeout(network, addr, s.HttpDialTimeout)
-		},
-		ResponseHeaderTimeout: s.HttpReadTimeout,
-	}
-
 	p := &ReverseProxy{
-		settings:      s,
-		httpTransport: transport,
-		httpClient: &http.Client{
-			Transport: transport,
-		},
+		settings: s,
 	}
 	return p, nil
 }
 
-// Main request handler, accepts requests, round trips it to the upstream
+// Main request handler, accepts requests, round trips it to the endpoint
 // proxies back the response.
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Serving Request %s %s", r.Method, r.RequestURI)
@@ -99,16 +75,16 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err := p.proxyRequest(w, req)
 	if err != nil {
-		log.Errorf("Failed to proxy to all upstreams:", err)
+		log.Errorf("Failed to proxy to all endpoints:", err)
 		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
 
-// Round trips the request to one of the upstreams, returns the streamed
-// request body length in bytes and the upstream reply.
+// Round trips the request to one of the endpoints, returns the streamed
+// request body length in bytes and the endpoint reply.
 func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) (*http.Response, error) {
 
-	// We are allowed to fallback in case of upstream failure,
+	// We are allowed to fallback in case of endpoint failure,
 	// record the request body so we can replay it on errors.
 	body, err := netutils.NewBodyBuffer(req.HttpRequest.Body)
 	if err != nil {
@@ -123,21 +99,21 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequ
 	if err != nil {
 		return nil, err
 	}
-
 	for {
 		_, err := body.Seek(0, 0)
 		if err != nil {
 			return nil, err
 		}
-		upstream, err := location.GetLoadBalancer().NextUpstream(req)
+
+		endpoint, err := location.GetLoadBalancer().NextEndpoint(req)
 		if err != nil {
 			log.Errorf("Load Balancer failure: %s", err)
 			return nil, err
 		}
-		req.CurrentUpstream = upstream
+		req.CurrentEndpoint = endpoint
 		// Rewrites the request: adds headers, changes urls
-		req.HttpRequest = p.rewriteRequest(req.HttpRequest, req.CurrentUpstream)
-		log.Infof("Proxy to upstream: %s", upstream)
+		req.HttpRequest = p.rewriteRequest(req.HttpRequest, req.CurrentEndpoint)
+		log.Infof("Proxy to endpoint: %s", endpoint)
 
 		if location.GetLimiter() != nil {
 			delay, err := location.GetLimiter().Limit(req)
@@ -155,37 +131,37 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequ
 			}
 		}
 
-		// In case if error is not nil, we allow load balancer to choose the next upstream
+		// In case if error is not nil, we allow load balancer to choose the next endpoint
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
-		response, err := p.proxyToUpstream(w, location, req)
+		response, err := p.proxyToEndpoint(w, location, req)
 		if err == nil {
 			return response, err
 		} else {
-			req.AddAttempt(request.Attempt{Upstream: req.CurrentUpstream, Error: err})
+			req.AddAttempt(request.Attempt{Endpoint: req.CurrentEndpoint, Error: err})
 		}
 	}
-	log.Errorf("All upstreams failed!")
+	log.Errorf("All endpoints failed!")
 	return nil, p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway)
 }
 
-// Proxy the request to the given upstream, in case if upstream is down
+// Proxy the request to the given endpoint, in case if endpoint is down
 // or failover code sequence has been recorded as the reply, return the error.
-// Failover sequence - is a special response code from the upstream that indicates
-// that upstream is shutting down and is not willing to accept new requests.
-func (p *ReverseProxy) proxyToUpstream(
+// Failover sequence - is a special response code from the endpoint that indicates
+// that endpoint is shutting down and is not willing to accept new requests.
+func (p *ReverseProxy) proxyToEndpoint(
 	w http.ResponseWriter,
-	location route.Location,
-	request *request.BaseRequest) (*http.Response, error) {
+	loc location.Location,
+	req *request.BaseRequest) (*http.Response, error) {
 
 	before := []callback.Before{
 		p.settings.Before,
-		location.GetLoadBalancer(),
-		location.GetLimiter(),
+		loc.GetLoadBalancer(),
+		loc.GetLimiter(),
 	}
 
 	for _, cb := range before {
 		if cb != nil {
-			response, err := cb.Before(request)
+			response, err := cb.Before(req)
 			// In case if error is not nil, return this error to the client
 			// and interrupt the callback chain
 			if err != nil {
@@ -204,7 +180,7 @@ func (p *ReverseProxy) proxyToUpstream(
 	}
 
 	// Forward the reuest and mirror the response
-	res, err := p.httpTransport.RoundTrip(request.HttpRequest)
+	res, err := loc.GetTransport().RoundTrip(req.HttpRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -212,14 +188,14 @@ func (p *ReverseProxy) proxyToUpstream(
 
 	after := []callback.After{
 		p.settings.After,
-		location.GetLoadBalancer(),
-		location.GetLimiter(),
+		loc.GetLoadBalancer(),
+		loc.GetLimiter(),
 	}
 
 	// This gives a chance for callbacks to change the response
 	for _, cb := range after {
 		if cb != nil {
-			err := cb.After(request, res, err)
+			err := cb.After(req, res, err)
 			if err != nil {
 				log.Errorf("After returned error and intercepts the response: %s", err)
 				return nil, err
@@ -235,12 +211,12 @@ func (p *ReverseProxy) proxyToUpstream(
 
 // This function alters the original request - adds/removes headers, removes hop headers,
 // changes the request path.
-func (p *ReverseProxy) rewriteRequest(req *http.Request, upstream Upstream) *http.Request {
+func (p *ReverseProxy) rewriteRequest(req *http.Request, endpoint Endpoint) *http.Request {
 	outReq := new(http.Request)
 	*outReq = *req // includes shallow copies of maps, but we handle this below
 
-	outReq.URL.Scheme = upstream.GetUrl().Scheme
-	outReq.URL.Host = upstream.GetUrl().Host
+	outReq.URL.Scheme = endpoint.GetUrl().Scheme
+	outReq.URL.Host = endpoint.GetUrl().Host
 	outReq.URL.RawQuery = req.URL.RawQuery
 
 	outReq.Proto = "HTTP/1.1"
@@ -292,12 +268,6 @@ func (p *ReverseProxy) replyError(err errors.HttpError, w http.ResponseWriter, r
 func validateProxySettings(s ProxySettings) (ProxySettings, error) {
 	if s.Router == nil {
 		return s, fmt.Errorf("Router can not be nil")
-	}
-	if s.HttpReadTimeout == time.Duration(0) {
-		s.HttpReadTimeout = DefaultHttpReadTimeout
-	}
-	if s.HttpReadTimeout == time.Duration(0) {
-		s.HttpDialTimeout = DefaultHttpDialTimeout
 	}
 	return s, nil
 }

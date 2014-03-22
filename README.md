@@ -22,11 +22,11 @@ Example
 // Set load balancer and two upstreams
 loadBalancer := NewRoundRobin(NewUpstreamFromString("http://localhost:5000", "http://localhost:5001"))
 
-// Set up rate limiter with 1 request per second with bursts up to 5 requests per second
-rateLimiter := NewTokenBucket(Rate{1, time.Second}, 5)
+// Set up rate limiter with 1 request per second with bursts up to 5 requests per second per client ip
+rateLimiter := NewClientIpLimiter(Rate{1, time.Second}, 5)
 
 // Set up location with load balancer and rate limiter created above
-location := &BaseLocation{LoadBalancer: loadBalancer, Limiter: rateLimiter}
+location := &Location{LoadBalancer: loadBalancer, Limiter: rateLimiter}
 
 // Route all requests to this location
 router := &MatchAll{Location: location}

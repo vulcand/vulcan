@@ -1,12 +1,13 @@
 package vulcan
 
 import (
+	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
+	. "github.com/mailgun/vulcan/location"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/route"
-	. "github.com/mailgun/vulcan/upstream"
 	"io/ioutil"
 	. "launchpad.net/gocheck"
 	"net/http"
@@ -77,12 +78,14 @@ func (s *ProxySuite) newProxyWithParams(
 	readTimeout time.Duration,
 	dialTimeout time.Duration) *httptest.Server {
 
+	location, err := NewHttpLocation(HttpLocationSettings{LoadBalancer: l, Limiter: r})
+	if err != nil {
+		panic(err)
+	}
 	proxySettings := ProxySettings{
 		Router: &MatchAll{
-			Location: &BaseLocation{LoadBalancer: l, Limiter: r},
+			Location: location,
 		},
-		HttpReadTimeout: readTimeout,
-		HttpDialTimeout: dialTimeout,
 	}
 
 	proxy, err := NewReverseProxy(proxySettings)
@@ -98,15 +101,15 @@ func (s *ProxySuite) newProxy(l LoadBalancer, r Limiter) *httptest.Server {
 
 // Success, make sure we've successfully proxied the response
 func (s *ProxySuite) TestSuccess(c *C) {
-	upstream := s.newServer(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hi, I'm upstream"))
+	server := s.newServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm endpoint"))
 	})
-	defer upstream.Close()
+	defer server.Close()
 
-	proxy := s.newProxy(NewRoundRobin(MustParseUpstream(upstream.URL)), nil)
+	proxy := s.newProxy(NewRoundRobin(MustParseUrl(server.URL)), nil)
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	c.Assert(string(bodyBytes), Equals, "Hi, I'm upstream")
+	c.Assert(string(bodyBytes), Equals, "Hi, I'm endpoint")
 }
