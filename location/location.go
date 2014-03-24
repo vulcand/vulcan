@@ -1,14 +1,11 @@
 package location
 
 import (
-	. "github.com/mailgun/vulcan/limit"
-	. "github.com/mailgun/vulcan/loadbalance"
+	. "github.com/mailgun/vulcan/request"
 	"net/http"
 )
 
-// Location defines the load balancer and limiter
+// Location accepts proxy request and returns response or results in error
 type Location interface {
-	GetLoadBalancer() LoadBalancer // Load balancer provides upstreams
-	GetLimiter() Limiter           // Custom rate limiter, may be null
-	GetTransport() *http.Transport // Transport that provides customized timeout and connection settings
+	RoundTrip(Request) (*http.Response, error)
 }

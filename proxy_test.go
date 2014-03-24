@@ -5,7 +5,7 @@ import (
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
-	. "github.com/mailgun/vulcan/location"
+	. "github.com/mailgun/vulcan/location/httploc"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/route"
 	"io/ioutil"

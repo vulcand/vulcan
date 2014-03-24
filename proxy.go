@@ -5,24 +5,15 @@ package vulcan
 import (
 	"fmt"
 	log "github.com/mailgun/gotools-log"
-	"github.com/mailgun/vulcan/callback"
-	. "github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/errors"
-	"github.com/mailgun/vulcan/headers"
-	"github.com/mailgun/vulcan/location"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/request"
 	"github.com/mailgun/vulcan/route"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
-	"strings"
 	"sync/atomic"
-	"time"
 )
-
-type SleepFn func(time.Duration)
 
 // Reverse proxy settings, what loadbalancing algo to use,
 // timeouts, rate limiting backend
@@ -31,17 +22,6 @@ type ProxySettings struct {
 	ErrorFormatter errors.Formatter
 	// Router decides where does the request go and what load balancer handles it
 	Router route.Router
-	// Used to set forwarding headers
-	Hostname string
-	// In this case appends new forward info to the existing header
-	TrustForwardHeader bool
-	// Before callback executed before request gets routed to the endpoint
-	// and can intervene during the request lifetime
-	Before callback.Before
-	// Callback executed after proxy received response from the endpoint
-	After callback.After
-	// Option to override sleep function (useful for testing purposes)
-	SleepFn SleepFn
 }
 
 type ReverseProxy struct {
@@ -64,194 +44,53 @@ func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
 	return p, nil
 }
 
-// Main request handler, accepts requests, round trips it to the endpoint
-// proxies back the response.
+// Main request handler, accepts requests, round trips it to the endpoint and writes backe the response.
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Serving Request %s %s", r.Method, r.RequestURI)
+
+	// We are allowed to fallback in case of endpoint failure,
+	// record the request body so we can replay it on errors.
+	body, err := netutils.NewBodyBuffer(r.Body)
+	if err != nil {
+		log.Errorf("Request read error %s", err)
+		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadRequest), w, r)
+	}
+	defer body.Close()
+	r.Body = body
+
 	// Wrap the original request into wrapper with more detailed information available
 	req := &request.BaseRequest{
 		HttpRequest: r,
 		Id:          atomic.AddInt64(&p.lastRequestId, 1),
+		Body:        body,
 	}
-	_, err := p.proxyRequest(w, req)
+
+	err = p.proxyRequest(w, req)
 	if err != nil {
-		log.Errorf("Failed to proxy to all endpoints:", err)
+		log.Errorf("Failed to proxy request:", err)
 		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
 
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
-func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) (*http.Response, error) {
-
-	// We are allowed to fallback in case of endpoint failure,
-	// record the request body so we can replay it on errors.
-	body, err := netutils.NewBodyBuffer(req.HttpRequest.Body)
-	if err != nil {
-		log.Errorf("Request read error %s", err)
-		return nil, p.settings.ErrorFormatter.FromStatus(http.StatusBadRequest)
-	}
-
-	req.HttpRequest.Body = body
-	defer body.Close()
+func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
 
 	location, err := p.settings.Router.Route(req)
 	if err != nil {
-		return nil, err
-	}
-	for {
-		_, err := body.Seek(0, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		endpoint, err := location.GetLoadBalancer().NextEndpoint(req)
-		if err != nil {
-			log.Errorf("Load Balancer failure: %s", err)
-			return nil, err
-		}
-		req.CurrentEndpoint = endpoint
-		// Rewrites the request: adds headers, changes urls
-		req.HttpRequest = p.rewriteRequest(req.HttpRequest, req.CurrentEndpoint)
-		log.Infof("Proxy to endpoint: %s", endpoint)
-
-		if location.GetLimiter() != nil {
-			delay, err := location.GetLimiter().Limit(req)
-			if err != nil {
-				log.Errorf("Limiter rejects request: %s", err)
-				return nil, err
-			}
-			if delay > 0 {
-				log.Infof("Limiter delays request by %s", delay)
-				if p.settings.SleepFn != nil {
-					p.settings.SleepFn(delay)
-				} else {
-					time.Sleep(delay)
-				}
-			}
-		}
-
-		// In case if error is not nil, we allow load balancer to choose the next endpoint
-		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
-		response, err := p.proxyToEndpoint(w, location, req)
-		if err == nil {
-			return response, err
-		} else {
-			req.AddAttempt(request.Attempt{Endpoint: req.CurrentEndpoint, Error: err})
-		}
-	}
-	log.Errorf("All endpoints failed!")
-	return nil, p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway)
-}
-
-// Proxy the request to the given endpoint, in case if endpoint is down
-// or failover code sequence has been recorded as the reply, return the error.
-// Failover sequence - is a special response code from the endpoint that indicates
-// that endpoint is shutting down and is not willing to accept new requests.
-func (p *ReverseProxy) proxyToEndpoint(
-	w http.ResponseWriter,
-	loc location.Location,
-	req *request.BaseRequest) (*http.Response, error) {
-
-	before := []callback.Before{
-		p.settings.Before,
-		loc.GetLoadBalancer(),
-		loc.GetLimiter(),
+		return err
 	}
 
-	for _, cb := range before {
-		if cb != nil {
-			response, err := cb.Before(req)
-			// In case if error is not nil, return this error to the client
-			// and interrupt the callback chain
-			if err != nil {
-				log.Errorf("Callback says error: %s", err)
-				return nil, err
-			}
-			// If response is present that means that callback wants to proxy
-			// this response to the client
-			if response != nil {
-				netutils.CopyHeaders(w.Header(), response.Header)
-				w.WriteHeader(response.StatusCode)
-				io.Copy(w, response.Body)
-				return response, nil
-			}
-		}
-	}
-
-	// Forward the reuest and mirror the response
-	res, err := loc.GetTransport().RoundTrip(req.HttpRequest)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	after := []callback.After{
-		p.settings.After,
-		loc.GetLoadBalancer(),
-		loc.GetLimiter(),
-	}
-
-	// This gives a chance for callbacks to change the response
-	for _, cb := range after {
-		if cb != nil {
-			err := cb.After(req, res, err)
-			if err != nil {
-				log.Errorf("After returned error and intercepts the response: %s", err)
-				return nil, err
-			}
-		}
-	}
-
-	netutils.CopyHeaders(w.Header(), res.Header)
-	w.WriteHeader(res.StatusCode)
-	io.Copy(w, res.Body)
-	return res, nil
-}
-
-// This function alters the original request - adds/removes headers, removes hop headers,
-// changes the request path.
-func (p *ReverseProxy) rewriteRequest(req *http.Request, endpoint Endpoint) *http.Request {
-	outReq := new(http.Request)
-	*outReq = *req // includes shallow copies of maps, but we handle this below
-
-	outReq.URL.Scheme = endpoint.GetUrl().Scheme
-	outReq.URL.Host = endpoint.GetUrl().Host
-	outReq.URL.RawQuery = req.URL.RawQuery
-
-	outReq.Proto = "HTTP/1.1"
-	outReq.ProtoMajor = 1
-	outReq.ProtoMinor = 1
-	outReq.Close = false
-
-	log.Infof("Proxying request to: %v", outReq)
-
-	outReq.Header = make(http.Header)
-	netutils.CopyHeaders(outReq.Header, req.Header)
-
-	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-		if p.settings.TrustForwardHeader {
-			if prior, ok := outReq.Header[headers.XForwardedFor]; ok {
-				clientIP = strings.Join(prior, ", ") + ", " + clientIP
-			}
-		}
-		outReq.Header.Set(headers.XForwardedFor, clientIP)
-	}
-	if req.TLS != nil {
-		outReq.Header.Set(headers.XForwardedProto, "https")
+	response, err := location.RoundTrip(req)
+	if response != nil {
+		netutils.CopyHeaders(w.Header(), response.Header)
+		w.WriteHeader(response.StatusCode)
+		io.Copy(w, response.Body)
+		defer response.Body.Close()
+		return nil
 	} else {
-		outReq.Header.Set(headers.XForwardedProto, "http")
+		return err
 	}
-	if req.Host != "" {
-		outReq.Header.Set(headers.XForwardedHost, req.Host)
-	}
-	outReq.Header.Set(headers.XForwardedServer, p.settings.Hostname)
-
-	// Remove hop-by-hop headers to the backend.  Especially
-	// important is "Connection" because we want a persistent
-	// connection, regardless of what the client sent to us.
-	netutils.RemoveHeaders(headers.HopHeaders, outReq.Header)
-	return outReq
 }
 
 // Helper function to reply with http errors
