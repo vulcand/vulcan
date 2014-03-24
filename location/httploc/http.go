@@ -3,8 +3,10 @@ package location
 import (
 	"fmt"
 	log "github.com/mailgun/gotools-log"
+	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/callback"
 	. "github.com/mailgun/vulcan/endpoint"
+	"github.com/mailgun/vulcan/failover"
 	"github.com/mailgun/vulcan/headers"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
@@ -30,8 +32,9 @@ type HttpLocationSettings struct {
 		Read time.Duration // Socket read timeout (before we receive the first reply header)
 		Dial time.Duration // Socket connect timeout
 	}
-	LoadBalancer LoadBalancer // Load balancing algorithm
-	Limiter      Limiter      // Rate limiting algorithm
+	ShouldFailover failover.Predicate // Predicate that defines when requests are allowed to failover
+	LoadBalancer   LoadBalancer       // Load balancing algorithm
+	Limiter        Limiter            // Rate limiting algorithm
 	// Before callback executed before request gets routed to the endpoint
 	// and can intervene during the request lifetime
 	Before Before
@@ -43,6 +46,8 @@ type HttpLocationSettings struct {
 	TrustForwardHeader bool
 	// Option to override sleep function (useful for testing purposes)
 	SleepFn SleepFn
+	// Time provider (useful for testing purposes)
+	TimeProvider timetools.TimeProvider
 }
 
 func NewHttpLocation(s HttpLocationSettings) (*HttpLocation, error) {
@@ -215,6 +220,13 @@ func parseSettings(s HttpLocationSettings) (HttpLocationSettings, error) {
 		if err != nil {
 			s.Hostname = h
 		}
+	}
+	if s.TimeProvider == nil {
+		s.TimeProvider = &timetools.RealTime{}
+	}
+	if s.ShouldFailover == nil {
+		// Failover on erros for 2 times maximum on GET requests only.
+		s.ShouldFailover = failover.And(failover.MaxAttempts(2), failover.OnErrors, failover.OnGets)
 	}
 	return s, nil
 }
