@@ -99,7 +99,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 
 		// In case if error is not nil, we allow load balancer to choose the next endpoint
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
-		response, err := l.proxyToEndpoint(req, newRequest)
+		response, err := l.proxyToEndpoint(endpoint, req, newRequest)
 		if err == nil {
 			return response, err
 		}
@@ -112,7 +112,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 // or failover code sequence has been recorded as the reply, return the error.
 // Failover sequence - is a special response code from the endpoint that indicates
 // that endpoint is shutting down and is not willing to accept new requests.
-func (l *HttpLocation) proxyToEndpoint(req Request, httpReq *http.Request) (*http.Response, error) {
+func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
 	before := []Before{l.settings.Before, l.settings.LoadBalancer, l.settings.Limiter}
 	for _, cb := range before {
@@ -133,7 +133,13 @@ func (l *HttpLocation) proxyToEndpoint(req Request, httpReq *http.Request) (*htt
 	}
 
 	// Forward the reuest and mirror the response
+	start := l.settings.TimeProvider.UtcNow()
 	res, err := l.transport.RoundTrip(httpReq)
+	diff := l.settings.TimeProvider.UtcNow().Sub(start)
+
+	// Record attempt
+	req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
+	// Return the error in case if there's no response
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +148,7 @@ func (l *HttpLocation) proxyToEndpoint(req Request, httpReq *http.Request) (*htt
 	after := []After{l.settings.After, l.settings.LoadBalancer, l.settings.Limiter}
 	for _, cb := range after {
 		if cb != nil {
-			err := cb.After(req, res, err)
+			err := cb.After(req)
 			if err != nil {
 				log.Errorf("After returned error and intercepts the response: %s", err)
 				return nil, err
