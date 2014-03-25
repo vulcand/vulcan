@@ -76,6 +76,6 @@ func (r *RoundRobin) Before(Request) (*http.Response, error) {
 	return nil, nil
 }
 
-func (r *RoundRobin) After(Request, *http.Response, error) error {
+func (r *RoundRobin) After(Request) error {
 	return nil
 }

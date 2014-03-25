@@ -23,5 +23,5 @@ type After interface {
 	// In case if after callback returns error, this error will be streamed
 	// to the client instead of the response or any other error and no other
 	// callbacks will be executed
-	After(r Request, response *http.Response, err error) error
+	After(r Request) error
 }

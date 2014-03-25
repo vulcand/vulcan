@@ -1,6 +1,7 @@
 package request
 
 import (
+	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/netutils"
 	"net/http"
 	"time"
@@ -13,18 +14,21 @@ type Request interface {
 	GetBody() netutils.MultiReader // Request body fully read and stored in effective manner (buffered to disk for large requests)
 	AddAttempt(Attempt)            // Add last proxy attempt to the request
 	GetAttempts() []Attempt        // Returns last attempts to proxy request, may be nil if there are no attempts
+	GetLastAttempt() Attempt       // Convenience method returning the last attempt, may be nil if there are no attempts
 }
 
 type Attempt interface {
 	GetError() error
 	GetDuration() time.Duration
 	GetResponse() *http.Response
+	GetEndpoint() endpoint.Endpoint
 }
 
 type BaseAttempt struct {
 	Error    error
 	Duration time.Duration
 	Response *http.Response
+	Endpoint endpoint.Endpoint
 }
 
 func (ba *BaseAttempt) GetResponse() *http.Response {
@@ -37,6 +41,10 @@ func (ba *BaseAttempt) GetError() error {
 
 func (ba *BaseAttempt) GetDuration() time.Duration {
 	return ba.Duration
+}
+
+func (ba *BaseAttempt) GetEndpoint() endpoint.Endpoint {
+	return ba.Endpoint
 }
 
 type BaseRequest struct {
@@ -64,4 +72,11 @@ func (br *BaseRequest) AddAttempt(a Attempt) {
 
 func (br *BaseRequest) GetAttempts() []Attempt {
 	return br.Attempts
+}
+
+func (br *BaseRequest) GetLastAttempt() Attempt {
+	if len(br.Attempts) == 0 {
+		return nil
+	}
+	return br.Attempts[len(br.Attempts)-1]
 }
