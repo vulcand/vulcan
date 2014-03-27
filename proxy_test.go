@@ -1,6 +1,7 @@
 package vulcan
 
 import (
+	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
@@ -19,13 +20,20 @@ import (
 
 type ProxySuite struct {
 	authHeaders http.Header
+	tm          *timetools.FreezedTime
 }
 
 var _ = Suite(&ProxySuite{
 	authHeaders: http.Header{
-		"Authorization": []string{"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="}}})
+		"Authorization": []string{"Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="},
+	},
+	tm: &timetools.FreezedTime{
+		CurrentTime: time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC),
+	},
+})
 
 func (s *ProxySuite) SetUpTest(c *C) {
+
 }
 
 func (s *ProxySuite) Get(c *C, requestUrl string, header http.Header, body string) (*http.Response, []byte) {
@@ -72,6 +80,17 @@ func (s *ProxySuite) newServer(handler WebHandler) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
 
+func (s *ProxySuite) newRoundRobin(endpoints ...string) LoadBalancer {
+	rr, err := NewRoundRobinWithOptions(s.tm, nil)
+	if err != nil {
+		panic(err)
+	}
+	for _, e := range endpoints {
+		rr.AddEndpoint(MustParseUrl(e))
+	}
+	return rr
+}
+
 func (s *ProxySuite) newProxyWithParams(
 	l LoadBalancer,
 	r Limiter,
@@ -106,7 +125,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer server.Close()
 
-	proxy := s.newProxy(NewRoundRobin(MustParseUrl(server.URL)), nil)
+	proxy := s.newProxy(s.newRoundRobin(server.URL), nil)
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")

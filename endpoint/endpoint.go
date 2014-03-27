@@ -19,7 +19,7 @@ type HttpEndpoint struct {
 	id  string
 }
 
-func ParseUrl(in string) (Endpoint, error) {
+func ParseUrl(in string) (*HttpEndpoint, error) {
 	url, err := netutils.ParseUrl(in)
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func ParseUrl(in string) (Endpoint, error) {
 	return &HttpEndpoint{url: url, id: fmt.Sprintf("%s://%s", url.Scheme, url.Host)}, nil
 }
 
-func MustParseUrl(in string) Endpoint {
+func MustParseUrl(in string) *HttpEndpoint {
 	u, err := ParseUrl(in)
 	if err != nil {
 		panic(err)

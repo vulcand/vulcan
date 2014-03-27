@@ -3,11 +3,18 @@ package metrics
 import (
 	"fmt"
 	timetools "github.com/mailgun/gotools-time"
+	. "github.com/mailgun/vulcan/callback"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
 	"time"
 )
+
+type FailRateGetter interface {
+	GetRate() float64
+	Before
+	After
+}
 
 // Predicate that helps to see if the attempt resulted in error
 type FailPredicate func(Attempt) bool
