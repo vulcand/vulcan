@@ -4,7 +4,9 @@
 
 Status
 =======
-Don't use it in production, early adopters and hackers are welcome
+
+Refactoring the entire thing based on everyone's feedback: moving fast, breaking things mode.
+Don't use it in production or staging or basically anywhere yet.
 
 
 Reverse proxy library
