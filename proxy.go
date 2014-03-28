@@ -108,5 +108,8 @@ func validateProxySettings(s ProxySettings) (ProxySettings, error) {
 	if s.Router == nil {
 		return s, fmt.Errorf("Router can not be nil")
 	}
+	if s.ErrorFormatter == nil {
+		s.ErrorFormatter = &errors.JsonFormatter{}
+	}
 	return s, nil
 }
