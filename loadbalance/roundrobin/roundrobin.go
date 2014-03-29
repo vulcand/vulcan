@@ -12,35 +12,49 @@ import (
 )
 
 type RoundRobin struct {
-	failureHandler FailureHandler
-	mutex          *sync.Mutex
-	index          int
-	endpoints      []*weightedEndpoint
-	timeProvider   timetools.TimeProvider
-	currentWeight  int
-	weightChanges  int
+	mutex         *sync.Mutex
+	index         int
+	endpoints     []*weightedEndpoint
+	currentWeight int
+	weightChanges int
+	options       Options
 }
 
-type RoundRobinOptions struct {
-	TimeProvider timetools.TimeProvider
+type Options struct {
+	TimeProvider   timetools.TimeProvider
+	FailureHandler FailureHandler
 }
 
 func NewRoundRobin() (*RoundRobin, error) {
-	failureHandler, err := NewFSMHandler()
+	return NewRoundRobinWithOptions(Options{})
+}
+
+func NewRoundRobinWithOptions(o Options) (*RoundRobin, error) {
+	o, err := validateOptions(o)
 	if err != nil {
 		return nil, err
 	}
-	return NewRoundRobinWithOptions(&timetools.RealTime{}, failureHandler)
-}
-
-func NewRoundRobinWithOptions(timeProvider timetools.TimeProvider, failureHandler FailureHandler) (*RoundRobin, error) {
 	rr := &RoundRobin{
-		failureHandler: failureHandler,
-		index:          -1,
-		mutex:          &sync.Mutex{},
-		timeProvider:   timeProvider,
+		options: o,
+		index:   -1,
+		mutex:   &sync.Mutex{},
 	}
 	return rr, nil
+}
+
+func validateOptions(o Options) (Options, error) {
+	if o.TimeProvider == nil {
+		o.TimeProvider = &timetools.RealTime{}
+	}
+
+	if o.FailureHandler == nil {
+		failureHandler, err := NewFSMHandler()
+		if err != nil {
+			return o, err
+		}
+		o.FailureHandler = failureHandler
+	}
+	return o, nil
 }
 
 func (r *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
@@ -51,9 +65,9 @@ func (r *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
 		return nil, fmt.Errorf("All endpoints are disabled")
 	}
 
-	if r.failureHandler != nil {
+	if r.options.FailureHandler != nil {
 		weightChangesBefore := r.weightChanges
-		r.failureHandler.updateWeights(r.endpoints)
+		r.options.FailureHandler.updateWeights(r.endpoints)
 		if weightChangesBefore != r.weightChanges {
 			r.resetIterator()
 		}
@@ -91,8 +105,8 @@ func (r *RoundRobin) resetIterator() {
 
 func (r *RoundRobin) resetState() {
 	r.resetIterator()
-	if r.failureHandler != nil {
-		r.failureHandler.reset()
+	if r.options.FailureHandler != nil {
+		r.options.FailureHandler.reset()
 	}
 }
 
@@ -152,7 +166,8 @@ func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOpt
 		return nil, fmt.Errorf("Weight should be >=0")
 	}
 
-	meter, err := NewFailRateMeter(endpoint, 10, time.Second, rr.timeProvider, IsNetworkError)
+	meter, err := NewFailRateMeter(
+		endpoint, 10, time.Second, rr.options.TimeProvider, IsNetworkError)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +270,7 @@ type weightedEndpoint struct {
 }
 
 func (we *weightedEndpoint) isDisabled() bool {
-	return we.disabled || we.disabledUntil.After(we.rr.timeProvider.UtcNow())
+	return we.disabled || we.disabledUntil.After(we.rr.options.TimeProvider.UtcNow())
 }
 
 func (we *weightedEndpoint) setEffectiveWeight(w int) {

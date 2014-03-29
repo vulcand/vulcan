@@ -23,7 +23,7 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 }
 
 func (s *RoundRobinSuite) newRR() *RoundRobin {
-	r, err := NewRoundRobinWithOptions(s.tm, nil)
+	r, err := NewRoundRobinWithOptions(Options{TimeProvider: s.tm})
 	if err != nil {
 		panic(err)
 	}

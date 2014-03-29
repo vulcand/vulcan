@@ -3,7 +3,6 @@
 package vulcan
 
 import (
-	"fmt"
 	log "github.com/mailgun/gotools-log"
 	"github.com/mailgun/vulcan/errors"
 	"github.com/mailgun/vulcan/netutils"
@@ -17,35 +16,42 @@ import (
 
 // Reverse proxy settings, what loadbalancing algo to use,
 // timeouts, rate limiting backend
-type ProxySettings struct {
+type Options struct {
 	// Formatter that takes a status code and formats it into proxy response
 	ErrorFormatter errors.Formatter
 	// Router decides where does the request go and what load balancer handles it
 	Router route.Router
 }
 
-type ReverseProxy struct {
+type Proxy struct {
+	// Router defines where does request go
+	router route.Router
 	// Connection settings, load balancing algo to use, callbacks and watchers
-	settings ProxySettings
+	options Options
 	// Counter that is used to provide unique identifiers for requests
 	lastRequestId int64
 }
 
+func NewProxy(router route.Router) (*Proxy, error) {
+	return NewProxyWithOptions(router, Options{})
+}
+
 // Creates reverse proxy that acts like http server.
-func NewReverseProxy(s ProxySettings) (*ReverseProxy, error) {
-	s, err := validateProxySettings(s)
+func NewProxyWithOptions(router route.Router, o Options) (*Proxy, error) {
+	o, err := validateOptions(o)
 	if err != nil {
 		return nil, err
 	}
 
-	p := &ReverseProxy{
-		settings: s,
+	p := &Proxy{
+		options: o,
+		router:  router,
 	}
 	return p, nil
 }
 
 // Main request handler, accepts requests, round trips it to the endpoint and writes backe the response.
-func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Infof("Serving Request %s %s", r.Method, r.RequestURI)
 
 	// We are allowed to fallback in case of endpoint failure,
@@ -53,7 +59,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := netutils.NewBodyBuffer(r.Body)
 	if err != nil {
 		log.Errorf("Request read error %s", err)
-		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadRequest), w, r)
+		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadRequest), w, r)
 	}
 	defer body.Close()
 	r.Body = body
@@ -68,15 +74,15 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err = p.proxyRequest(w, req)
 	if err != nil {
 		log.Errorf("Failed to proxy request:", err)
-		p.replyError(p.settings.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
+		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
 
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
-func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
+func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
 
-	location, err := p.settings.Router.Route(req)
+	location, err := p.router.Route(req)
 	if err != nil {
 		return err
 	}
@@ -94,7 +100,7 @@ func (p *ReverseProxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequ
 }
 
 // Helper function to reply with http errors
-func (p *ReverseProxy) replyError(err errors.HttpError, w http.ResponseWriter, req *http.Request) {
+func (p *Proxy) replyError(err errors.HttpError, w http.ResponseWriter, req *http.Request) {
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection
 	// TODO: actually check this
@@ -104,12 +110,9 @@ func (p *ReverseProxy) replyError(err errors.HttpError, w http.ResponseWriter, r
 	w.Write(err.GetBody())
 }
 
-func validateProxySettings(s ProxySettings) (ProxySettings, error) {
-	if s.Router == nil {
-		return s, fmt.Errorf("Router can not be nil")
+func validateOptions(o Options) (Options, error) {
+	if o.ErrorFormatter == nil {
+		o.ErrorFormatter = &errors.JsonFormatter{}
 	}
-	if s.ErrorFormatter == nil {
-		s.ErrorFormatter = &errors.JsonFormatter{}
-	}
-	return s, nil
+	return o, nil
 }

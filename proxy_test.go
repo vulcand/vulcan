@@ -5,8 +5,8 @@ import (
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
-	. "github.com/mailgun/vulcan/loadbalance/roundrobin"
-	. "github.com/mailgun/vulcan/location/httploc"
+	"github.com/mailgun/vulcan/loadbalance/roundrobin"
+	"github.com/mailgun/vulcan/location/httploc"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/route"
 	"io/ioutil"
@@ -81,7 +81,7 @@ func (s *ProxySuite) newServer(handler WebHandler) *httptest.Server {
 }
 
 func (s *ProxySuite) newRoundRobin(endpoints ...string) LoadBalancer {
-	rr, err := NewRoundRobinWithOptions(s.tm, nil)
+	rr, err := roundrobin.NewRoundRobinWithOptions(roundrobin.Options{TimeProvider: s.tm})
 	if err != nil {
 		panic(err)
 	}
@@ -97,17 +97,13 @@ func (s *ProxySuite) newProxyWithParams(
 	readTimeout time.Duration,
 	dialTimeout time.Duration) *httptest.Server {
 
-	location, err := NewHttpLocation(HttpLocationSettings{LoadBalancer: l, Limiter: r})
+	location, err := httploc.NewLocationWithOptions(l, httploc.Options{Limiter: r})
 	if err != nil {
 		panic(err)
 	}
-	proxySettings := ProxySettings{
-		Router: &MatchAll{
-			Location: location,
-		},
-	}
-
-	proxy, err := NewReverseProxy(proxySettings)
+	proxy, err := NewProxy(&MatchAll{
+		Location: location,
+	})
 	if err != nil {
 		panic(err)
 	}

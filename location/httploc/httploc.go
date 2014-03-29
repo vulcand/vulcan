@@ -1,4 +1,4 @@
-package location
+package httploc
 
 import (
 	"fmt"
@@ -23,17 +23,18 @@ type SleepFn func(time.Duration)
 
 // Location with built in failover and load balancing support
 type HttpLocation struct {
-	transport *http.Transport
-	settings  HttpLocationSettings
+	transport    *http.Transport
+	loadBalancer LoadBalancer // Load balancer controls endpoints in this location
+	options      Options      // Additional parameters
 }
 
-type HttpLocationSettings struct {
+// Additional options to control this location, such as timeouts and so on
+type Options struct {
 	Timeouts struct {
 		Read time.Duration // Socket read timeout (before we receive the first reply header)
 		Dial time.Duration // Socket connect timeout
 	}
 	ShouldFailover failover.Predicate // Predicate that defines when requests are allowed to failover
-	LoadBalancer   LoadBalancer       // Load balancing algorithm
 	Limiter        Limiter            // Rate limiting algorithm
 	// Before callback executed before request gets routed to the endpoint
 	// and can intervene during the request lifetime
@@ -50,19 +51,27 @@ type HttpLocationSettings struct {
 	TimeProvider timetools.TimeProvider
 }
 
-func NewHttpLocation(s HttpLocationSettings) (*HttpLocation, error) {
-	s, err := parseSettings(s)
+func NewLocation(loadBalancer LoadBalancer) (*HttpLocation, error) {
+	return NewLocationWithOptions(loadBalancer, Options{})
+}
+
+func NewLocationWithOptions(loadBalancer LoadBalancer, o Options) (*HttpLocation, error) {
+	if loadBalancer == nil {
+		return nil, fmt.Errorf("Provide load balancer")
+	}
+	o, err := parseOptions(o)
 	if err != nil {
 		return nil, err
 	}
 	return &HttpLocation{
+		loadBalancer: loadBalancer,
 		transport: &http.Transport{
 			Dial: func(network, addr string) (net.Conn, error) {
-				return net.DialTimeout(network, addr, s.Timeouts.Dial)
+				return net.DialTimeout(network, addr, o.Timeouts.Dial)
 			},
-			ResponseHeaderTimeout: s.Timeouts.Read,
+			ResponseHeaderTimeout: o.Timeouts.Read,
 		},
-		settings: s,
+		options: o,
 	}, nil
 }
 
@@ -75,7 +84,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 			return nil, err
 		}
 
-		endpoint, err := l.settings.LoadBalancer.NextEndpoint(req)
+		endpoint, err := l.loadBalancer.NextEndpoint(req)
 		if err != nil {
 			log.Errorf("Load Balancer failure: %s", err)
 			return nil, err
@@ -85,15 +94,15 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 		newRequest := l.rewriteRequest(req.GetHttpRequest(), endpoint)
 		log.Infof("Proxy to endpoint: %s", endpoint)
 
-		if l.settings.Limiter != nil {
-			delay, err := l.settings.Limiter.Limit(req)
+		if l.options.Limiter != nil {
+			delay, err := l.options.Limiter.Limit(req)
 			if err != nil {
 				log.Errorf("Limiter rejects request: %s", err)
 				return nil, err
 			}
 			if delay > 0 {
 				log.Infof("Limiter delays request by %s", delay)
-				l.settings.SleepFn(delay)
+				l.options.SleepFn(delay)
 			}
 		}
 
@@ -114,7 +123,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 // that endpoint is shutting down and is not willing to accept new requests.
 func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
-	before := []Before{l.settings.Before, l.settings.LoadBalancer, l.settings.Limiter}
+	before := []Before{l.options.Before, l.loadBalancer, l.options.Limiter}
 	for _, cb := range before {
 		if cb != nil {
 			response, err := cb.Before(req)
@@ -133,9 +142,9 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 	}
 
 	// Forward the reuest and mirror the response
-	start := l.settings.TimeProvider.UtcNow()
+	start := l.options.TimeProvider.UtcNow()
 	res, err := l.transport.RoundTrip(httpReq)
-	diff := l.settings.TimeProvider.UtcNow().Sub(start)
+	diff := l.options.TimeProvider.UtcNow().Sub(start)
 
 	// Record attempt
 	req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
@@ -145,7 +154,7 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 	}
 
 	// This gives a chance for callbacks to change the response
-	after := []After{l.settings.After, l.settings.LoadBalancer, l.settings.Limiter}
+	after := []After{l.options.After, l.loadBalancer, l.options.Limiter}
 	for _, cb := range after {
 		if cb != nil {
 			err := cb.After(req)
@@ -178,7 +187,7 @@ func (l *HttpLocation) rewriteRequest(req *http.Request, endpoint Endpoint) *htt
 	netutils.CopyHeaders(outReq.Header, req.Header)
 
 	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-		if l.settings.TrustForwardHeader {
+		if l.options.TrustForwardHeader {
 			if prior, ok := outReq.Header[headers.XForwardedFor]; ok {
 				clientIP = strings.Join(prior, ", ") + ", " + clientIP
 			}
@@ -193,7 +202,7 @@ func (l *HttpLocation) rewriteRequest(req *http.Request, endpoint Endpoint) *htt
 	if req.Host != "" {
 		outReq.Header.Set(headers.XForwardedHost, req.Host)
 	}
-	outReq.Header.Set(headers.XForwardedServer, l.settings.Hostname)
+	outReq.Header.Set(headers.XForwardedServer, l.options.Hostname)
 
 	// Remove hop-by-hop headers to the backend.  Especially
 	// important is "Connection" because we want a persistent
@@ -208,31 +217,29 @@ const (
 	DefaultHttpDialTimeout = time.Duration(10) * time.Second
 )
 
-func parseSettings(s HttpLocationSettings) (HttpLocationSettings, error) {
-	if s.Timeouts.Read <= time.Duration(0) {
-		s.Timeouts.Read = DefaultHttpReadTimeout
+func parseOptions(o Options) (Options, error) {
+	if o.Timeouts.Read <= time.Duration(0) {
+		o.Timeouts.Read = DefaultHttpReadTimeout
 	}
-	if s.Timeouts.Dial <= time.Duration(0) {
-		s.Timeouts.Dial = DefaultHttpDialTimeout
+	if o.Timeouts.Dial <= time.Duration(0) {
+		o.Timeouts.Dial = DefaultHttpDialTimeout
 	}
-	if s.LoadBalancer == nil {
-		return s, fmt.Errorf("Provide load balancer")
+
+	if o.SleepFn == nil {
+		o.SleepFn = time.Sleep
 	}
-	if s.SleepFn == nil {
-		s.SleepFn = time.Sleep
-	}
-	if s.Hostname == "" {
+	if o.Hostname == "" {
 		h, err := os.Hostname()
 		if err != nil {
-			s.Hostname = h
+			o.Hostname = h
 		}
 	}
-	if s.TimeProvider == nil {
-		s.TimeProvider = &timetools.RealTime{}
+	if o.TimeProvider == nil {
+		o.TimeProvider = &timetools.RealTime{}
 	}
-	if s.ShouldFailover == nil {
+	if o.ShouldFailover == nil {
 		// Failover on erros for 2 times maximum on GET requests only.
-		s.ShouldFailover = failover.And(failover.MaxAttempts(2), failover.OnErrors, failover.OnGets)
+		o.ShouldFailover = failover.And(failover.MaxAttempts(2), failover.OnErrors, failover.OnGets)
 	}
-	return s, nil
+	return o, nil
 }
