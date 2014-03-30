@@ -7,8 +7,8 @@ import (
 
 // Router matches incoming request to a specific location
 type Router interface {
-	// if error is not nil, the request wll be aborted
-	// and error will be proxied to client
+	// if error is not nil, the request wll be aborted and error will be proxied to client.
+	// if location is nil and error is nil, that means that router did not find any matching location
 	Route(req Request) (Location, error)
 }
 

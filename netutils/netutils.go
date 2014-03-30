@@ -47,6 +47,14 @@ func RemoveHeaders(names []string, headers http.Header) {
 	}
 }
 
+func MustParseUrl(inUrl string) *url.URL {
+	u, err := ParseUrl(inUrl)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 // Standard parse url is very generous,
 // parseUrl wrapper makes it more strict
 // and demands scheme and host to be set

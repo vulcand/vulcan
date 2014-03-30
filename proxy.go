@@ -86,7 +86,10 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) er
 	if err != nil {
 		return err
 	}
-
+	// Router could not find a matching location
+	if location == nil {
+		return p.options.ErrorFormatter.FromStatus(http.StatusBadGateway)
+	}
 	response, err := location.RoundTrip(req)
 	if response != nil {
 		netutils.CopyHeaders(w.Header(), response.Header)
