@@ -101,7 +101,7 @@ func (s *ProxySuite) newProxyWithParams(
 	if err != nil {
 		panic(err)
 	}
-	proxy, err := NewProxy(&MatchAll{
+	proxy, err := NewProxy(&ConstRouter{
 		Location: location,
 	})
 	if err != nil {

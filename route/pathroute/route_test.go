@@ -1,6 +1,7 @@
 package pathmatch
 
 import (
+	. "github.com/mailgun/vulcan/location"
 	. "github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
 	. "launchpad.net/gocheck"
@@ -8,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestPathMatch(t *testing.T) { TestingT(t) }
+func TestPathRoute(t *testing.T) { TestingT(t) }
 
 type MatchSuite struct {
 }
@@ -19,26 +20,26 @@ func (s *MatchSuite) SetUpSuite(c *C) {
 }
 
 func (s *MatchSuite) TestRouteEmpty(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	out, err := m.Route(request("http://google.com/"))
 	c.Assert(err, IsNil)
 	c.Assert(out, Equals, nil)
 }
 
 func (s *MatchSuite) TestRemoveNonExistent(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	c.Assert(m.RemoveLocation("ooo"), Not(Equals), nil)
 }
 
 func (s *MatchSuite) TestAddTwice(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/a", loc), IsNil)
 	c.Assert(m.AddLocation("/a", loc), Not(Equals), nil)
 }
 
 func (s *MatchSuite) TestSingleLocation(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/", loc), IsNil)
 	out, err := m.Route(request("http://google.com/"))
@@ -47,7 +48,7 @@ func (s *MatchSuite) TestSingleLocation(c *C) {
 }
 
 func (s *MatchSuite) TestEmptyPath(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/", loc), IsNil)
 	out, err := m.Route(request("http://google.com"))
@@ -56,7 +57,7 @@ func (s *MatchSuite) TestEmptyPath(c *C) {
 }
 
 func (s *MatchSuite) TestMatchNothing(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/", loc), IsNil)
 	out, err := m.Route(request("http://google.com/hello/there"))
@@ -66,7 +67,7 @@ func (s *MatchSuite) TestMatchNothing(c *C) {
 
 // Make sure we'll match request regardless if it has trailing slash or not
 func (s *MatchSuite) TestTrailingSlashes(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/a/b", loc), IsNil)
 
@@ -81,7 +82,7 @@ func (s *MatchSuite) TestTrailingSlashes(c *C) {
 
 // If users added trailing slashes the request will require them to match request
 func (s *MatchSuite) TestPatternTrailingSlashes(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	loc := &Loc{Name: "a"}
 	c.Assert(m.AddLocation("/a/b/", loc), IsNil)
 
@@ -95,7 +96,7 @@ func (s *MatchSuite) TestPatternTrailingSlashes(c *C) {
 }
 
 func (s *MatchSuite) TestMultipleLocations(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	locA := &Loc{Name: "a"}
 	locB := &Loc{Name: "b"}
 
@@ -112,7 +113,7 @@ func (s *MatchSuite) TestMultipleLocations(c *C) {
 }
 
 func (s *MatchSuite) TestChooseLongest(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	locA := &Loc{Name: "a"}
 	locB := &Loc{Name: "b"}
 
@@ -129,7 +130,7 @@ func (s *MatchSuite) TestChooseLongest(c *C) {
 }
 
 func (s *MatchSuite) TestRemove(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	locA := &Loc{Name: "a"}
 	locB := &Loc{Name: "b"}
 
@@ -157,7 +158,7 @@ func (s *MatchSuite) TestRemove(c *C) {
 }
 
 func (s *MatchSuite) TestAddBad(c *C) {
-	m := NewPathMatcher()
+	m := NewPathRouter()
 	locA := &Loc{Name: "a"}
 	locB := &Loc{Name: "b"}
 
@@ -172,15 +173,6 @@ func (s *MatchSuite) TestAddBad(c *C) {
 	out, err = m.Route(request("http://google.com/a/there"))
 	c.Assert(err, IsNil)
 	c.Assert(out, Equals, locA)
-}
-
-// Implements test location
-type Loc struct {
-	Name string
-}
-
-func (*Loc) RoundTrip(Request) (*http.Response, error) {
-	return nil, nil
 }
 
 func request(url string) Request {

@@ -29,8 +29,8 @@ rr.AddEndpoint(MustParseUrl("http://localhost:5001"))
 // Create http location with the round robin load balancer and two upstreams above
 location, _ := httploc.NewLocation(rr)
 
-// Create a proxy handler
-proxy := vulcan.NewProxy(&route.MatchAll{
+// Create a proxy handler that routes all requests to the same location
+proxy := vulcan.NewProxy(&route.ConstRouter{
     Location: location,
 })
 

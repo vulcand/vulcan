@@ -12,11 +12,11 @@ type Router interface {
 	Route(req Request) (Location, error)
 }
 
-// Helper router that always returns the same load balancer
-type MatchAll struct {
+// Helper router that always the same location
+type ConstRouter struct {
 	Location Location
 }
 
-func (m *MatchAll) Route(req Request) (Location, error) {
+func (m *ConstRouter) Route(req Request) (Location, error) {
 	return m.Location, nil
 }

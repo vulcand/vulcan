@@ -13,7 +13,7 @@ import (
 
 // Matches the location by path regular expression.
 // Out of two paths will select the one with the longer regular expression
-type PathMatcher struct {
+type PathRouter struct {
 	locations  []locPair
 	expression *regexp.Regexp
 	mutex      *sync.Mutex
@@ -30,13 +30,13 @@ func (a ByPattern) Len() int           { return len(a) }
 func (a ByPattern) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByPattern) Less(i, j int) bool { return len(a[i].pattern) > len(a[j].pattern) }
 
-func NewPathMatcher() *PathMatcher {
-	return &PathMatcher{
+func NewPathRouter() *PathRouter {
+	return &PathRouter{
 		mutex: &sync.Mutex{},
 	}
 }
 
-func (m *PathMatcher) Route(req Request) (Location, error) {
+func (m *PathRouter) Route(req Request) (Location, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -64,7 +64,7 @@ func (m *PathMatcher) Route(req Request) (Location, error) {
 	return nil, nil
 }
 
-func (m *PathMatcher) AddLocation(pattern string, location Location) error {
+func (m *PathRouter) AddLocation(pattern string, location Location) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -93,7 +93,7 @@ func (m *PathMatcher) AddLocation(pattern string, location Location) error {
 	return nil
 }
 
-func (m *PathMatcher) RemoveLocation(pattern string) error {
+func (m *PathRouter) RemoveLocation(pattern string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 

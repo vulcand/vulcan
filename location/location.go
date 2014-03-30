@@ -9,3 +9,12 @@ import (
 type Location interface {
 	RoundTrip(Request) (*http.Response, error)
 }
+
+// Lcation used in tests
+type Loc struct {
+	Name string
+}
+
+func (*Loc) RoundTrip(Request) (*http.Response, error) {
+	return nil, nil
+}
