@@ -1,4 +1,4 @@
-package pathmatch
+package hostroute
 
 import (
 	. "github.com/mailgun/vulcan/location"

@@ -1,5 +1,5 @@
 /*Defines router that matches incoming requests by matching incoming paths to regular expressions */
-package pathmatch
+package pathroute
 
 import (
 	"bytes"
