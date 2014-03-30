@@ -21,20 +21,18 @@ Example
 
 ```go
 
-// Set load balancer and two upstreams
-loadBalancer := NewRoundRobin(NewUpstreamFromString("http://localhost:5000", "http://localhost:5001"))
+// Create a round robin load balancer and add two upstreams
+rr, _ := roundrobin.NewRoundRobin()
+rr.AddEndpoint(MustParseUrl("http://localhost:5000"))
+rr.AddEndpoint(MustParseUrl("http://localhost:5001"))
 
-// Set up rate limiter with 1 request per second with bursts up to 5 requests per second per client ip
-rateLimiter := NewClientIpLimiter(Rate{1, time.Second}, 5)
+// Create http location with the round robin load balancer and two upstreams above
+location, _ := httploc.NewLocation(rr)
 
-// Set up location with load balancer and rate limiter created above
-location := &Location{LoadBalancer: loadBalancer, Limiter: rateLimiter}
-
-// Route all requests to this location
-router := &MatchAll{Location: location}
-
-// Create proxy
-proxy, err := NewReverseProxy(ProxySettings{Router: router})
+// Create a proxy handler
+proxy := vulcan.NewProxy(&route.MatchAll{
+    Location: location,
+})
 
 // Start serving requests using proxy as a handler
 server := &http.Server{
