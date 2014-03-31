@@ -52,8 +52,6 @@ func NewProxyWithOptions(router route.Router, o Options) (*Proxy, error) {
 
 // Main request handler, accepts requests, round trips it to the endpoint and writes backe the response.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Infof("Serving Request %s %s", r.Method, r.RequestURI)
-
 	// We are allowed to fallback in case of endpoint failure,
 	// record the request body so we can replay it on errors.
 	body, err := netutils.NewBodyBuffer(r.Body)
@@ -73,7 +71,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = p.proxyRequest(w, req)
 	if err != nil {
-		log.Errorf("Failed to proxy request: %s", err)
+		log.Errorf("%s failed: %s", req, err)
 		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
@@ -81,13 +79,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
 func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
+	log.Infof("%s start", req)
+
 	location, err := p.router.Route(req)
 	if err != nil {
 		return err
 	}
 	// Router could not find a matching location
 	if location == nil {
-		log.Errorf("Failed to match request(%s) to location", req.GetHttpRequest().URL.String())
+		log.Errorf("%s failed to route", req)
 		return p.options.ErrorFormatter.FromStatus(http.StatusBadGateway)
 	}
 	response, err := location.RoundTrip(req)

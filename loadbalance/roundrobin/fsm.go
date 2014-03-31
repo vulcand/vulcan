@@ -2,6 +2,7 @@ package roundrobin
 
 import (
 	"fmt"
+	log "github.com/mailgun/gotools-log"
 	timetools "github.com/mailgun/gotools-time"
 	"math"
 	"time"
@@ -14,6 +15,10 @@ const (
 	FSMProbing  = iota // fsm is trying some theory
 	FSMRollback = iota // fsm is rolling back
 	FSMRevert   = iota // fsm is getting back to the original state
+)
+
+const (
+	FSMMaxWeight = 16384
 )
 
 // This is the tiny DFA that tries to play with weights to improve over the overall error rate
@@ -79,21 +84,26 @@ func (fsm *FSMHandler) setWeight(e *weightedEndpoint, weight int) {
 }
 
 func (fsm *FSMHandler) onStart(endpoints []*weightedEndpoint) error {
+	failRate := avgFailRate(endpoints)
 	// No errors, so let's see if we can recover weights of previosly changed endpoints to the original state
-	if avgFailRate(endpoints) == 0 {
+	if failRate == 0 {
 		// If we have previoulsy changed endpoints try to restore weights to the original state
 		for _, e := range endpoints {
 			if e.effectiveWeight != e.weight {
 				// Adjust effective weight back to the original weight in stages
-				e.setEffectiveWeight(adjust(e.getOriginalWeight(), e.getEffectiveWeight()))
+				e.setEffectiveWeight(decrease(e.getOriginalWeight(), e.getEffectiveWeight()))
+				log.Infof("FSMHandler RESTORE %s", e)
 				fsm.setTimer()
 				fsm.state = FSMRevert
 			}
 		}
 		return nil
 	} else {
+		log.Infof("FSMHanlder reports average fail rate %f", failRate)
 		// Select endpoints with highest error rates and lower their weight
 		good, bad := splitEndpoints(endpoints)
+		log.Infof("FSMHandler good endpoints: %s", good)
+		log.Infof("FSMHandler bad endpoints: %s", bad)
 		// No endpoints that are different by their quality
 		if len(bad) == 0 || len(good) == 0 {
 			return nil
@@ -122,6 +132,7 @@ func (fsm *FSMHandler) onProbing(endpoints []*weightedEndpoint) error {
 			return nil
 		}
 	}
+	log.Infof("FSMHandler probing successfull, COMMITING the new rates")
 	// We have not made the situation worse, so
 	// go back to the starting point and continue the cycle
 	fsm.state = FSMStart
@@ -167,6 +178,10 @@ func adjustWeights(good, bad []*weightedEndpoint) []*changedEndpoint {
 			endpoint:        e,
 		}
 		changedEndpoints[i] = changed
+		if increase(e.getEffectiveWeight()) < FSMMaxWeight {
+			e.setEffectiveWeight(increase(e.getEffectiveWeight()))
+			log.Infof("FSMHandler updated weight %s", e)
+		}
 	}
 	return changedEndpoints
 }
@@ -179,17 +194,23 @@ func greater(a, b float64) bool {
 func avgFailRate(endpoints []*weightedEndpoint) float64 {
 	r := float64(0)
 	for _, e := range endpoints {
-		r += e.failRateMeter.GetRate()
+		eRate := e.failRateMeter.GetRate()
+		r += eRate
+		log.Infof("FailRate(%s)=%f", e.endpoint.String(), eRate)
 	}
 	return r / float64(len(endpoints))
 }
 
-func adjust(target, current int) int {
-	diff := target - current
-	if abs(diff/2) > 0 {
-		return target + diff
-	} else {
+func increase(weight int) int {
+	return weight * 2
+}
+
+func decrease(target, current int) int {
+	adjusted := current / 2
+	if adjusted < target {
 		return target
+	} else {
+		return adjusted
 	}
 }
 

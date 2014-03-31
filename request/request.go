@@ -1,6 +1,7 @@
 package request
 
 import (
+	"fmt"
 	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/netutils"
 	"net/http"
@@ -15,6 +16,7 @@ type Request interface {
 	AddAttempt(Attempt)            // Add last proxy attempt to the request
 	GetAttempts() []Attempt        // Returns last attempts to proxy request, may be nil if there are no attempts
 	GetLastAttempt() Attempt       // Convenience method returning the last attempt, may be nil if there are no attempts
+	String() string                // Debugging string representation of the request
 }
 
 type Attempt interface {
@@ -52,6 +54,10 @@ type BaseRequest struct {
 	Id          int64
 	Body        netutils.MultiReader
 	Attempts    []Attempt
+}
+
+func (br *BaseRequest) String() string {
+	return fmt.Sprintf("Request(id=%d, method=%s, url=%s, attempts=%d)", br.Id, br.HttpRequest.Method, br.HttpRequest.URL.String(), len(br.Attempts))
 }
 
 func (br *BaseRequest) GetHttpRequest() *http.Request {

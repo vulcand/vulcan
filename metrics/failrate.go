@@ -78,6 +78,10 @@ func (em *FailRateMeter) IsReady() bool {
 }
 
 func (em *FailRateMeter) GetRate() float64 {
+	// Cleanup the data that was here in case if endpoint has been inactive for some time
+	em.cleanup(em.failure)
+	em.cleanup(em.success)
+
 	success := em.sum(em.success)
 	failure := em.sum(em.failure)
 	// No data, return ok

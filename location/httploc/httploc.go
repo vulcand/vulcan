@@ -92,7 +92,6 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 
 		// Rewrites the request: adds headers, changes urls
 		newRequest := l.rewriteRequest(req.GetHttpRequest(), endpoint)
-		log.Infof("Proxy to endpoint: %s", endpoint)
 
 		if l.options.Limiter != nil {
 			delay, err := l.options.Limiter.Limit(req)
@@ -110,7 +109,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
 		response, err := l.proxyToEndpoint(endpoint, req, newRequest)
 		if l.options.ShouldFailover(req) {
-			log.Infof("Predicate initiated request failover")
+			log.Errorf("Request(%s) failover", req)
 			continue
 		} else {
 			return response, err
@@ -151,10 +150,6 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 
 	// Record attempt
 	req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
-	// Return the error in case if there's no response
-	if err != nil {
-		return nil, err
-	}
 
 	// This gives a chance for callbacks to change the response
 	after := []After{l.options.After, l.loadBalancer, l.options.Limiter}
@@ -162,12 +157,12 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 		if cb != nil {
 			err := cb.After(req)
 			if err != nil {
-				log.Errorf("After returned error and intercepts the response: %s", err)
+				log.Errorf("After callback returns error and intercepts the response: %s", err)
 				return nil, err
 			}
 		}
 	}
-	return res, nil
+	return res, err
 }
 
 // This function alters the original request - adds/removes headers, removes hop headers, changes the request path.
@@ -183,8 +178,6 @@ func (l *HttpLocation) rewriteRequest(req *http.Request, endpoint Endpoint) *htt
 	outReq.ProtoMajor = 1
 	outReq.ProtoMinor = 1
 	outReq.Close = false
-
-	log.Infof("Proxying request to: %s", endpoint.String())
 
 	outReq.Header = make(http.Header)
 	netutils.CopyHeaders(outReq.Header, req.Header)

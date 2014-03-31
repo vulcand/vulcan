@@ -2,6 +2,7 @@ package roundrobin
 
 import (
 	"fmt"
+	log "github.com/mailgun/gotools-log"
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/metrics"
@@ -69,6 +70,7 @@ func (r *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
 		weightChangesBefore := r.weightChanges
 		r.options.FailureHandler.updateWeights(r.endpoints)
 		if weightChangesBefore != r.weightChanges {
+			log.Infof("Failure handler updated weights")
 			r.resetIterator()
 		}
 	}
@@ -267,6 +269,10 @@ type weightedEndpoint struct {
 	disabled        bool
 	disabledUntil   time.Time
 	rr              *RoundRobin
+}
+
+func (we *weightedEndpoint) String() string {
+	return fmt.Sprintf("WeightedEndpoint(e=%s, w=%d, ew=%d failRate=%f)", we.endpoint, we.weight, we.effectiveWeight, we.failRateMeter.GetRate())
 }
 
 func (we *weightedEndpoint) isDisabled() bool {
