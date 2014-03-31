@@ -79,7 +79,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
 func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
-	log.Infof("%s start", req)
 
 	location, err := p.router.Route(req)
 	if err != nil {

@@ -196,7 +196,6 @@ func avgFailRate(endpoints []*weightedEndpoint) float64 {
 	for _, e := range endpoints {
 		eRate := e.failRateMeter.GetRate()
 		r += eRate
-		log.Infof("FailRate(%s)=%f", e.endpoint.String(), eRate)
 	}
 	return r / float64(len(endpoints))
 }
