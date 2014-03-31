@@ -87,8 +87,7 @@ func (s *HostSuite) TestRemove(c *C) {
 
 func request(hostname, url string) Request {
 	u := MustParseUrl(url)
-	hr := &http.Request{URL: u, Header: make(http.Header)}
-	hr.Header.Set("Hostname", hostname)
+	hr := &http.Request{URL: u, Header: make(http.Header), Host: hostname}
 	return &BaseRequest{
 		HttpRequest: hr,
 	}

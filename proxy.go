@@ -73,7 +73,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	err = p.proxyRequest(w, req)
 	if err != nil {
-		log.Errorf("Failed to proxy request:", err)
+		log.Errorf("Failed to proxy request: %s", err)
 		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
 	}
 }
@@ -81,13 +81,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
 func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
-
 	location, err := p.router.Route(req)
 	if err != nil {
 		return err
 	}
 	// Router could not find a matching location
 	if location == nil {
+		log.Errorf("Failed to match request(%s) to location", req.GetHttpRequest().URL.String())
 		return p.options.ErrorFormatter.FromStatus(http.StatusBadGateway)
 	}
 	response, err := location.RoundTrip(req)

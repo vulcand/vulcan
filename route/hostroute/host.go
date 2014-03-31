@@ -2,6 +2,7 @@ package hostroute
 
 import (
 	"fmt"
+	log "github.com/mailgun/gotools-log"
 	. "github.com/mailgun/vulcan/location"
 	. "github.com/mailgun/vulcan/request"
 	. "github.com/mailgun/vulcan/route"
@@ -27,7 +28,8 @@ func (h *HostRouter) Route(req Request) (Location, error) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	hostname := strings.ToLower(req.GetHttpRequest().Header.Get("Hostname"))
+	hostname := strings.Split(strings.ToLower(req.GetHttpRequest().Host), ":")[0]
+	log.Infof("HostRouter matching %s", hostname)
 	matcher, exists := h.routers[hostname]
 	if !exists {
 		return nil, nil

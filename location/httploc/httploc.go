@@ -109,7 +109,10 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 		// In case if error is not nil, we allow load balancer to choose the next endpoint
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
 		response, err := l.proxyToEndpoint(endpoint, req, newRequest)
-		if err == nil {
+		if l.options.ShouldFailover(req) {
+			log.Infof("Predicate initiated request failover")
+			continue
+		} else {
 			return response, err
 		}
 	}
@@ -181,7 +184,7 @@ func (l *HttpLocation) rewriteRequest(req *http.Request, endpoint Endpoint) *htt
 	outReq.ProtoMinor = 1
 	outReq.Close = false
 
-	log.Infof("Proxying request to: %v", outReq)
+	log.Infof("Proxying request to: %s", endpoint.String())
 
 	outReq.Header = make(http.Header)
 	netutils.CopyHeaders(outReq.Header, req.Header)

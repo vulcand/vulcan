@@ -12,6 +12,7 @@ import (
 type Endpoint interface {
 	GetId() string
 	GetUrl() *url.URL
+	String() string
 }
 
 type HttpEndpoint struct {
@@ -42,6 +43,10 @@ func NewHttpEndpoint(in *url.URL) (*HttpEndpoint, error) {
 	return &HttpEndpoint{
 		url: netutils.CopyUrl(in),
 		id:  fmt.Sprintf("%s://%s", in.Scheme, in.Host)}, nil
+}
+
+func (e *HttpEndpoint) String() string {
+	return e.url.String()
 }
 
 func (e *HttpEndpoint) GetId() string {
