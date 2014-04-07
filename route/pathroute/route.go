@@ -93,12 +93,36 @@ func (m *PathRouter) AddLocation(pattern string, location Location) error {
 	return nil
 }
 
-func (m *PathRouter) RemoveLocation(pattern string) error {
+func (m *PathRouter) GetLocationByPattern(pattern string) Location {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for _, p := range m.locations {
+		if p.pattern == pattern {
+			return p.location
+		}
+	}
+	return nil
+}
+
+func (m *PathRouter) GetLocationById(id string) Location {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for _, p := range m.locations {
+		if p.location.GetId() == id {
+			return p.location
+		}
+	}
+	return nil
+}
+
+func (m *PathRouter) RemoveLocation(location Location) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	for i, p := range m.locations {
-		if p.pattern == pattern {
+		if p.location == location {
 			// Note this is safe due to the way go does range iterations by snapshotting the ranged list
 			m.locations = append(m.locations[:i], m.locations[i+1:]...)
 			break

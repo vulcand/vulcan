@@ -23,6 +23,7 @@ type SleepFn func(time.Duration)
 
 // Location with built in failover and load balancing support
 type HttpLocation struct {
+	id           string
 	transport    *http.Transport
 	loadBalancer LoadBalancer // Load balancer controls endpoints in this location
 	options      Options      // Additional parameters
@@ -51,11 +52,11 @@ type Options struct {
 	TimeProvider timetools.TimeProvider
 }
 
-func NewLocation(loadBalancer LoadBalancer) (*HttpLocation, error) {
-	return NewLocationWithOptions(loadBalancer, Options{})
+func NewLocation(id string, loadBalancer LoadBalancer) (*HttpLocation, error) {
+	return NewLocationWithOptions(id, loadBalancer, Options{})
 }
 
-func NewLocationWithOptions(loadBalancer LoadBalancer, o Options) (*HttpLocation, error) {
+func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*HttpLocation, error) {
 	if loadBalancer == nil {
 		return nil, fmt.Errorf("Provide load balancer")
 	}
@@ -64,6 +65,7 @@ func NewLocationWithOptions(loadBalancer LoadBalancer, o Options) (*HttpLocation
 		return nil, err
 	}
 	return &HttpLocation{
+		id:           id,
 		loadBalancer: loadBalancer,
 		transport: &http.Transport{
 			Dial: func(network, addr string) (net.Conn, error) {
@@ -117,6 +119,14 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 	}
 	log.Errorf("All endpoints failed!")
 	return nil, fmt.Errorf("All endpoints failed")
+}
+
+func (l *HttpLocation) GetLoadBalancer() LoadBalancer {
+	return l.loadBalancer
+}
+
+func (l *HttpLocation) GetId() string {
+	return l.id
 }
 
 // Proxy the request to the given endpoint, in case if endpoint is down

@@ -28,7 +28,7 @@ func (s *MatchSuite) TestRouteEmpty(c *C) {
 
 func (s *MatchSuite) TestRemoveNonExistent(c *C) {
 	m := NewPathRouter()
-	c.Assert(m.RemoveLocation("ooo"), Not(Equals), nil)
+	c.Assert(m.RemoveLocation(m.GetLocationByPattern("ooo")), Not(Equals), nil)
 }
 
 func (s *MatchSuite) TestAddTwice(c *C) {
@@ -146,7 +146,7 @@ func (s *MatchSuite) TestRemove(c *C) {
 	c.Assert(out, Equals, locB)
 
 	// Remove the location and make sure the matcher is still valid
-	c.Assert(m.RemoveLocation("/b"), IsNil)
+	c.Assert(m.RemoveLocation(m.GetLocationByPattern("/b")), IsNil)
 
 	out, err = m.Route(request("http://google.com/a"))
 	c.Assert(err, IsNil)

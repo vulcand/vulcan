@@ -97,7 +97,7 @@ func (s *ProxySuite) newProxyWithParams(
 	readTimeout time.Duration,
 	dialTimeout time.Duration) *httptest.Server {
 
-	location, err := httploc.NewLocationWithOptions(l, httploc.Options{Limiter: r})
+	location, err := httploc.NewLocationWithOptions("dummy", l, httploc.Options{Limiter: r})
 	if err != nil {
 		panic(err)
 	}

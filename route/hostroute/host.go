@@ -47,6 +47,14 @@ func (h *HostRouter) SetRouter(hostname string, router Router) error {
 	return nil
 }
 
+func (h *HostRouter) GetRouter(hostname string) Router {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	router := h.routers[hostname]
+	return router
+}
+
 func (h *HostRouter) RemoveRouter(hostname string) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
