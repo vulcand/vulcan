@@ -35,9 +35,10 @@ func NewRoundRobinWithOptions(o Options) (*RoundRobin, error) {
 		return nil, err
 	}
 	rr := &RoundRobin{
-		options: o,
-		index:   -1,
-		mutex:   &sync.Mutex{},
+		options:   o,
+		index:     -1,
+		mutex:     &sync.Mutex{},
+		endpoints: []*weightedEndpoint{},
 	}
 	return rr, nil
 }
@@ -128,6 +129,14 @@ func (r *RoundRobin) findEndpoint(endpoint Endpoint) (*weightedEndpoint, int) {
 		}
 	}
 	return nil, -1
+}
+
+func (r *RoundRobin) GetEndpoints() []Endpoint {
+	out := make([]Endpoint, len(r.endpoints))
+	for i, we := range r.endpoints {
+		out[i] = we.endpoint
+	}
+	return out
 }
 
 func (rr *RoundRobin) AddEndpoint(endpoint Endpoint) error {
