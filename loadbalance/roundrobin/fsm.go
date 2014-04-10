@@ -34,7 +34,7 @@ type FSMHandler struct {
 
 type changedEndpoint struct {
 	failRatioBefore float64
-	endpoint        *weightedEndpoint
+	endpoint        *WeightedEndpoint
 	weightBefore    int
 }
 
@@ -62,7 +62,7 @@ func (fsm *FSMHandler) reset() {
 	fsm.weightChanges = 0
 }
 
-func (fsm *FSMHandler) updateWeights(endpoints []*weightedEndpoint) error {
+func (fsm *FSMHandler) updateWeights(endpoints []*WeightedEndpoint) error {
 	if len(endpoints) == 0 {
 		fmt.Errorf("No endpoints supplied")
 	}
@@ -79,11 +79,7 @@ func (fsm *FSMHandler) updateWeights(endpoints []*weightedEndpoint) error {
 	return fmt.Errorf("Invalid state I am in")
 }
 
-func (fsm *FSMHandler) setWeight(e *weightedEndpoint, weight int) {
-	e.effectiveWeight = weight
-}
-
-func (fsm *FSMHandler) onStart(endpoints []*weightedEndpoint) error {
+func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) error {
 	failRate := avgFailRate(endpoints)
 	// No errors, so let's see if we can recover weights of previosly changed endpoints to the original state
 	if failRate == 0 {
@@ -91,7 +87,7 @@ func (fsm *FSMHandler) onStart(endpoints []*weightedEndpoint) error {
 		for _, e := range endpoints {
 			if e.effectiveWeight != e.weight {
 				// Adjust effective weight back to the original weight in stages
-				e.setEffectiveWeight(decrease(e.getOriginalWeight(), e.getEffectiveWeight()))
+				e.setEffectiveWeight(decrease(e.GetOriginalWeight(), e.GetEffectiveWeight()))
 				log.Infof("FSMHandler RESTORE %s", e)
 				fsm.setTimer()
 				fsm.state = FSMRevert
@@ -115,7 +111,7 @@ func (fsm *FSMHandler) onStart(endpoints []*weightedEndpoint) error {
 	}
 }
 
-func (fsm *FSMHandler) onProbing(endpoints []*weightedEndpoint) error {
+func (fsm *FSMHandler) onProbing(endpoints []*WeightedEndpoint) error {
 	if !fsm.timerExpired() {
 		return nil
 	}
@@ -139,7 +135,7 @@ func (fsm *FSMHandler) onProbing(endpoints []*weightedEndpoint) error {
 	return nil
 }
 
-func (fsm *FSMHandler) onRollback(endpoints []*weightedEndpoint) error {
+func (fsm *FSMHandler) onRollback(endpoints []*WeightedEndpoint) error {
 	if !fsm.timerExpired() {
 		return nil
 	}
@@ -157,7 +153,7 @@ func (fsm *FSMHandler) timerExpired() bool {
 
 // Splits endpoint into two groups of endpoints with bad performance and good performance. It does compare relative
 // performances of the endpoints though, so if all endpoints have the same performance,
-func splitEndpoints(endpoints []*weightedEndpoint) (good []*weightedEndpoint, bad []*weightedEndpoint) {
+func splitEndpoints(endpoints []*WeightedEndpoint) (good []*WeightedEndpoint, bad []*WeightedEndpoint) {
 	avg := avgFailRate(endpoints)
 	for _, e := range endpoints {
 		if greater(e.failRateMeter.GetRate(), avg) {
@@ -169,17 +165,17 @@ func splitEndpoints(endpoints []*weightedEndpoint) (good []*weightedEndpoint, ba
 	return good, bad
 }
 
-func adjustWeights(good, bad []*weightedEndpoint) []*changedEndpoint {
+func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
 	changedEndpoints := make([]*changedEndpoint, len(good))
 	for i, e := range good {
 		changed := &changedEndpoint{
-			weightBefore:    e.getEffectiveWeight(),
+			weightBefore:    e.GetEffectiveWeight(),
 			failRatioBefore: e.failRateMeter.GetRate(),
 			endpoint:        e,
 		}
 		changedEndpoints[i] = changed
-		if increase(e.getEffectiveWeight()) < FSMMaxWeight {
-			e.setEffectiveWeight(increase(e.getEffectiveWeight()))
+		if increase(e.GetEffectiveWeight()) < FSMMaxWeight {
+			e.setEffectiveWeight(increase(e.GetEffectiveWeight()))
 			log.Infof("FSMHandler updated weight %s", e)
 		}
 	}
@@ -191,7 +187,7 @@ func greater(a, b float64) bool {
 	return math.Floor(a*100) > math.Floor(b*100)
 }
 
-func avgFailRate(endpoints []*weightedEndpoint) float64 {
+func avgFailRate(endpoints []*WeightedEndpoint) float64 {
 	r := float64(0)
 	for _, e := range endpoints {
 		eRate := e.failRateMeter.GetRate()

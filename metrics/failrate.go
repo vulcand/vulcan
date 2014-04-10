@@ -77,13 +77,27 @@ func (em *FailRateMeter) IsReady() bool {
 	return em.countedBuckets >= em.buckets
 }
 
-func (em *FailRateMeter) GetRate() float64 {
-	// Cleanup the data that was here in case if endpoint has been inactive for some time
-	em.cleanup(em.failure)
+func (em *FailRateMeter) SuccessCount() int64 {
 	em.cleanup(em.success)
+	return em.sum(em.success)
+}
 
-	success := em.sum(em.success)
-	failure := em.sum(em.failure)
+func (em *FailRateMeter) FailureCount() int64 {
+	em.cleanup(em.failure)
+	return em.sum(em.failure)
+}
+
+func (em *FailRateMeter) Resolution() time.Duration {
+	return em.resolution
+}
+
+func (em *FailRateMeter) ProcessedCount() int64 {
+	return em.SuccessCount() + em.FailureCount()
+}
+
+func (em *FailRateMeter) GetRate() float64 {
+	success := em.SuccessCount()
+	failure := em.FailureCount()
 	// No data, return ok
 	if success+failure == 0 {
 		return 0

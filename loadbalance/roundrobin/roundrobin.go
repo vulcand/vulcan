@@ -7,6 +7,7 @@ import (
 	. "github.com/mailgun/vulcan/metrics"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 )
@@ -14,7 +15,7 @@ import (
 type RoundRobin struct {
 	mutex         *sync.Mutex
 	index         int
-	endpoints     []*weightedEndpoint
+	endpoints     []*WeightedEndpoint
 	currentWeight int
 	weightChanges int
 	options       Options
@@ -38,7 +39,7 @@ func NewRoundRobinWithOptions(o Options) (*RoundRobin, error) {
 		options:   o,
 		index:     -1,
 		mutex:     &sync.Mutex{},
-		endpoints: []*weightedEndpoint{},
+		endpoints: []*WeightedEndpoint{},
 	}
 	return rr, nil
 }
@@ -115,28 +116,32 @@ func (r *RoundRobin) FindEndpoint(endpoint Endpoint) Endpoint {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	e, _ := r.findEndpoint(endpoint)
-	return e.endpoint
+	e, _ := r.findEndpointById(endpoint.GetId())
+	return e
 }
 
-func (r *RoundRobin) findEndpoint(endpoint Endpoint) (*weightedEndpoint, int) {
+func (r *RoundRobin) FindEndpointById(endpointId string) Endpoint {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	e, _ := r.findEndpointById(endpointId)
+	return e
+}
+
+func (r *RoundRobin) findEndpointById(endpointId string) (*WeightedEndpoint, int) {
 	if len(r.endpoints) == 0 {
 		return nil, -1
 	}
 	for i, e := range r.endpoints {
-		if e.endpoint.GetId() == endpoint.GetId() {
+		if e.endpoint.GetId() == endpointId {
 			return e, i
 		}
 	}
 	return nil, -1
 }
 
-func (r *RoundRobin) GetEndpoints() []Endpoint {
-	out := make([]Endpoint, len(r.endpoints))
-	for i, we := range r.endpoints {
-		out[i] = we.endpoint
-	}
-	return out
+func (r *RoundRobin) GetEndpoints() []*WeightedEndpoint {
+	return r.endpoints
 }
 
 func (rr *RoundRobin) AddEndpoint(endpoint Endpoint) error {
@@ -152,7 +157,7 @@ func (r *RoundRobin) AddEndpointWithOptions(endpoint Endpoint, options EndpointO
 		return fmt.Errorf("Endpoint can't be nil")
 	}
 
-	if e, _ := r.findEndpoint(endpoint); e != nil {
+	if e, _ := r.findEndpointById(endpoint.GetId()); e != nil {
 		return fmt.Errorf("Endpoint already exists")
 	}
 
@@ -166,7 +171,7 @@ func (r *RoundRobin) AddEndpointWithOptions(endpoint Endpoint, options EndpointO
 	return nil
 }
 
-func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOptions) (*weightedEndpoint, error) {
+func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOptions) (*WeightedEndpoint, error) {
 	// Treat weight 0 as a default value passed by customer
 	if options.Weight == 0 {
 		options.Weight = 1
@@ -181,7 +186,7 @@ func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOpt
 		return nil, err
 	}
 
-	return &weightedEndpoint{
+	return &WeightedEndpoint{
 		failRateMeter:   meter,
 		endpoint:        endpoint,
 		weight:          options.Weight,
@@ -195,7 +200,7 @@ func (r *RoundRobin) RemoveEndpoint(endpoint Endpoint) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	e, index := r.findEndpoint(endpoint)
+	e, index := r.findEndpointById(endpoint.GetId())
 	if e == nil {
 		return fmt.Errorf("Endpoint not found")
 	}
@@ -213,7 +218,11 @@ func (rr *RoundRobin) After(req Request) error {
 	defer rr.mutex.Unlock()
 
 	// Update stats for the endpoint after the request was done
-	we, _ := rr.findEndpoint(req.GetLastAttempt().GetEndpoint())
+	endpoint := req.GetLastAttempt().GetEndpoint()
+	if endpoint == nil {
+		return nil
+	}
+	we, _ := rr.findEndpointById(endpoint.GetId())
 	if we == nil {
 		return nil
 	}
@@ -268,8 +277,8 @@ type EndpointOptions struct {
 	Disabled bool // Whether this endpoint is disabled
 }
 
-type weightedEndpoint struct {
-	failRateMeter   FailRateGetter
+type WeightedEndpoint struct {
+	failRateMeter   *FailRateMeter
 	endpoint        Endpoint
 	weight          int
 	effectiveWeight int
@@ -278,23 +287,36 @@ type weightedEndpoint struct {
 	rr              *RoundRobin
 }
 
-func (we *weightedEndpoint) String() string {
-	return fmt.Sprintf("WeightedEndpoint(e=%s, w=%d, ew=%d failRate=%f)", we.endpoint, we.weight, we.effectiveWeight, we.failRateMeter.GetRate())
+func (we *WeightedEndpoint) String() string {
+	return fmt.Sprintf("WeightedEndpoint(id=%s, url=%s, weight=%d, effectiveWeight=%d, failRate=%f)",
+		we.GetId(), we.GetUrl(), we.weight, we.effectiveWeight, we.failRateMeter.GetRate())
 }
 
-func (we *weightedEndpoint) isDisabled() bool {
+func (we *WeightedEndpoint) GetId() string {
+	return we.endpoint.GetId()
+}
+
+func (we *WeightedEndpoint) GetUrl() *url.URL {
+	return we.endpoint.GetUrl()
+}
+
+func (we *WeightedEndpoint) isDisabled() bool {
 	return we.disabled || we.disabledUntil.After(we.rr.options.TimeProvider.UtcNow())
 }
 
-func (we *weightedEndpoint) setEffectiveWeight(w int) {
+func (we *WeightedEndpoint) setEffectiveWeight(w int) {
 	we.rr.weightChanges += 1
 	we.effectiveWeight = w
 }
 
-func (we *weightedEndpoint) getOriginalWeight() int {
+func (we *WeightedEndpoint) GetOriginalWeight() int {
 	return we.weight
 }
 
-func (we *weightedEndpoint) getEffectiveWeight() int {
+func (we *WeightedEndpoint) GetEffectiveWeight() int {
 	return we.effectiveWeight
+}
+
+func (we *WeightedEndpoint) GetMetrics() *FailRateMeter {
+	return we.failRateMeter
 }

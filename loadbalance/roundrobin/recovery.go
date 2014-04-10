@@ -6,7 +6,7 @@ type FailureHandler interface {
 	// returns true in case if any of the endpoints weights have been updated, false otherwise
 
 	// returns error if something bad happened
-	updateWeights(endpoints []*weightedEndpoint) error
+	updateWeights(endpoints []*WeightedEndpoint) error
 	// Should provide an ability to reset itself
 	reset()
 }
