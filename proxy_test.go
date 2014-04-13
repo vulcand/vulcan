@@ -3,7 +3,6 @@ package vulcan
 import (
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
-	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/loadbalance/roundrobin"
 	"github.com/mailgun/vulcan/location/httploc"
@@ -93,11 +92,10 @@ func (s *ProxySuite) newRoundRobin(endpoints ...string) LoadBalancer {
 
 func (s *ProxySuite) newProxyWithParams(
 	l LoadBalancer,
-	r Limiter,
 	readTimeout time.Duration,
 	dialTimeout time.Duration) *httptest.Server {
 
-	location, err := httploc.NewLocationWithOptions("dummy", l, httploc.Options{Limiter: r})
+	location, err := httploc.NewLocationWithOptions("dummy", l, httploc.Options{})
 	if err != nil {
 		panic(err)
 	}
@@ -110,8 +108,8 @@ func (s *ProxySuite) newProxyWithParams(
 	return httptest.NewServer(proxy)
 }
 
-func (s *ProxySuite) newProxy(l LoadBalancer, r Limiter) *httptest.Server {
-	return s.newProxyWithParams(l, r, time.Duration(0), time.Duration(0))
+func (s *ProxySuite) newProxy(l LoadBalancer) *httptest.Server {
+	return s.newProxyWithParams(l, time.Duration(0), time.Duration(0))
 }
 
 // Success, make sure we've successfully proxied the response
@@ -121,7 +119,7 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	})
 	defer server.Close()
 
-	proxy := s.newProxy(s.newRoundRobin(server.URL), nil)
+	proxy := s.newProxy(s.newRoundRobin(server.URL))
 	defer proxy.Close()
 
 	response, bodyBytes := s.Get(c, proxy.URL, s.authHeaders, "hello!")

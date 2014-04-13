@@ -4,18 +4,12 @@ import (
 	"fmt"
 	"github.com/mailgun/gotools-time"
 	"github.com/mailgun/ttlmap"
+	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/request"
-	"strings"
+	"net/http"
 	"sync"
 	"time"
 )
-
-// Mapper function takes the request and returns token that corresponds to this request
-// and the amount of tokens this request is going to consume, e.g.
-// * Client ip rate limiter - token is a client ip, amount is 1 request
-// * Client ip memory limiter - token is a client ip, amount is number of bytes to consume
-// In case of error returns non nil error, in this case rate limiter will reject the request.
-type MapperFn func(r Request) (token string, amount int, err error)
 
 type TokenLimiter struct {
 	buckets  *ttlmap.TtlMap
@@ -29,7 +23,6 @@ type Settings struct {
 	Capacity     int  // Overall capacity (maximum sumultaneuously active tokens)
 	Mapper       MapperFn
 	TimeProvider timetools.TimeProvider
-	Delay        bool // Whether to delay requests
 }
 
 // Rate limits requests based on client ip
@@ -55,21 +48,20 @@ func NewTokenLimiter(s Settings) (*TokenLimiter, error) {
 	}, nil
 }
 
-// Existing implementation does not support delays and either rejects request right away or allows it to proceed
-func (tl *TokenLimiter) Limit(r Request) (time.Duration, error) {
+func (tl *TokenLimiter) Before(r Request) (*http.Response, error) {
 	tl.mutex.Lock()
 	defer tl.mutex.Unlock()
 
 	token, amount, err := tl.settings.Mapper(r)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
 	bucketI, exists := tl.buckets.Get(token)
 	if !exists {
 		bucketI, err = NewTokenBucket(tl.settings.Rate, tl.settings.MaxTokens, tl.settings.TimeProvider)
 		if err != nil {
-			return -1, err
+			return nil, err
 		}
 		// We set ttl as 10 times rate period. E.g. if rate is 100 requests/second per client ip
 		// the counters for this ip will expire after 10 seconds of inactivity
@@ -78,12 +70,16 @@ func (tl *TokenLimiter) Limit(r Request) (time.Duration, error) {
 	bucket := bucketI.(*TokenBucket)
 	delay, err := bucket.Consume(amount)
 	if err != nil {
-		return delay, err
+		return nil, err
 	}
 	if delay > 0 {
-		return -1, fmt.Errorf("Rate limit reached")
+		return nil, fmt.Errorf("Rate limit reached")
 	}
-	return 0, nil
+	return nil, nil
+}
+
+func (tl *TokenLimiter) After(r Request) error {
+	return nil
 }
 
 // Check arguments and initialize defaults
@@ -104,13 +100,3 @@ func parseSettings(s Settings) (Settings, error) {
 }
 
 const DefaultCapacity = 32768
-
-// This function maps the request to it's client ip. Rate limiter using this mapper
-// function will do rate limiting based on the client ip.
-func MapClientIp(req Request) (string, int, error) {
-	vals := strings.SplitN(req.GetHttpRequest().RemoteAddr, ":", 2)
-	if len(vals[0]) == 0 {
-		return "", -1, fmt.Errorf("Failed to parse client ip")
-	}
-	return vals[0], 1, nil
-}

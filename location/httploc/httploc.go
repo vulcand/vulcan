@@ -8,7 +8,6 @@ import (
 	. "github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/failover"
 	"github.com/mailgun/vulcan/headers"
-	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/loadbalance"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
@@ -18,8 +17,6 @@ import (
 	"strings"
 	"time"
 )
-
-type SleepFn func(time.Duration)
 
 // Location with built in failover and load balancing support
 type HttpLocation struct {
@@ -36,7 +33,6 @@ type Options struct {
 		Dial time.Duration // Socket connect timeout
 	}
 	ShouldFailover failover.Predicate // Predicate that defines when requests are allowed to failover
-	Limiter        Limiter            // Rate limiting algorithm
 	// Before callback executed before request gets routed to the endpoint
 	// and can intervene during the request lifetime
 	Before Before
@@ -46,8 +42,7 @@ type Options struct {
 	Hostname string
 	// In this case appends new forward info to the existing header
 	TrustForwardHeader bool
-	// Option to override sleep function (useful for testing purposes)
-	SleepFn SleepFn
+
 	// Time provider (useful for testing purposes)
 	TimeProvider timetools.TimeProvider
 }
@@ -95,18 +90,6 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 		// Rewrites the request: adds headers, changes urls
 		newRequest := l.rewriteRequest(req.GetHttpRequest(), endpoint)
 
-		if l.options.Limiter != nil {
-			delay, err := l.options.Limiter.Limit(req)
-			if err != nil {
-				log.Errorf("Limiter rejects request: %s", err)
-				return nil, err
-			}
-			if delay > 0 {
-				log.Infof("Limiter delays request by %s", delay)
-				l.options.SleepFn(delay)
-			}
-		}
-
 		// In case if error is not nil, we allow load balancer to choose the next endpoint
 		// e.g. to do request failover. Nil error means that we got proxied the request successfully.
 		response, err := l.proxyToEndpoint(endpoint, req, newRequest)
@@ -135,7 +118,7 @@ func (l *HttpLocation) GetId() string {
 // that endpoint is shutting down and is not willing to accept new requests.
 func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
-	before := []Before{l.options.Before, l.loadBalancer, l.options.Limiter}
+	before := []Before{l.options.Before, l.loadBalancer}
 	for _, cb := range before {
 		if cb != nil {
 			response, err := cb.Before(req)
@@ -162,7 +145,7 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 	req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
 
 	// This gives a chance for callbacks to change the response
-	after := []After{l.options.After, l.loadBalancer, l.options.Limiter}
+	after := []After{l.options.After, l.loadBalancer}
 	for _, cb := range after {
 		if cb != nil {
 			err := cb.After(req)
@@ -231,9 +214,6 @@ func parseOptions(o Options) (Options, error) {
 		o.Timeouts.Dial = DefaultHttpDialTimeout
 	}
 
-	if o.SleepFn == nil {
-		o.SleepFn = time.Sleep
-	}
 	if o.Hostname == "" {
 		h, err := os.Hostname()
 		if err != nil {

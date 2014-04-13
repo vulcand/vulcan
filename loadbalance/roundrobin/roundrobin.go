@@ -23,7 +23,8 @@ type RoundRobin struct {
 
 type Options struct {
 	TimeProvider   timetools.TimeProvider
-	FailureHandler FailureHandler
+	FailureHandler FailureHandler // Algorithm that reacts on the failures, adjusting weights
+
 }
 
 func NewRoundRobin() (*RoundRobin, error) {
