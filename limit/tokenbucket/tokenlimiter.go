@@ -12,39 +12,44 @@ import (
 )
 
 type TokenLimiter struct {
-	buckets  *ttlmap.TtlMap
-	mutex    *sync.Mutex
-	settings Settings
+	buckets *ttlmap.TtlMap
+	mutex   *sync.Mutex
+	options Options
+	mapper  MapperFn
+	rate    Rate
 }
 
-type Settings struct {
+type Options struct {
 	Rate         Rate // Average allowed rate
-	MaxTokens    int  // Maximum tokens (controls burst size)
+	Burst        int  // Burst size
 	Capacity     int  // Overall capacity (maximum sumultaneuously active tokens)
 	Mapper       MapperFn
 	TimeProvider timetools.TimeProvider
 }
 
-// Rate limits requests based on client ip
-func NewClientIpLimiter(s Settings) (*TokenLimiter, error) {
-	s.Mapper = MapClientIp
-	return NewTokenLimiter(s)
+func NewTokenLimiter(mapper MapperFn, rate Rate) (*TokenLimiter, error) {
+	return NewTokenLimiterWithOptions(mapper, rate, Options{})
 }
 
-func NewTokenLimiter(s Settings) (*TokenLimiter, error) {
-	settings, err := parseSettings(s)
+func NewTokenLimiterWithOptions(mapper MapperFn, rate Rate, o Options) (*TokenLimiter, error) {
+	if mapper == nil {
+		return nil, fmt.Errorf("Provide mapper function")
+	}
+	options, err := parseOptions(o)
 	if err != nil {
 		return nil, err
 	}
-	buckets, err := ttlmap.NewMapWithProvider(settings.Capacity, settings.TimeProvider)
+	buckets, err := ttlmap.NewMapWithProvider(options.Capacity, options.TimeProvider)
 	if err != nil {
 		return nil, err
 	}
 
 	return &TokenLimiter{
-		settings: settings,
-		mutex:    &sync.Mutex{},
-		buckets:  buckets,
+		rate:    rate,
+		mapper:  mapper,
+		options: options,
+		mutex:   &sync.Mutex{},
+		buckets: buckets,
 	}, nil
 }
 
@@ -52,20 +57,20 @@ func (tl *TokenLimiter) Before(r Request) (*http.Response, error) {
 	tl.mutex.Lock()
 	defer tl.mutex.Unlock()
 
-	token, amount, err := tl.settings.Mapper(r)
+	token, amount, err := tl.mapper(r)
 	if err != nil {
 		return nil, err
 	}
 
 	bucketI, exists := tl.buckets.Get(token)
 	if !exists {
-		bucketI, err = NewTokenBucket(tl.settings.Rate, tl.settings.MaxTokens, tl.settings.TimeProvider)
+		bucketI, err = NewTokenBucket(tl.rate, tl.options.Burst+1, tl.options.TimeProvider)
 		if err != nil {
 			return nil, err
 		}
 		// We set ttl as 10 times rate period. E.g. if rate is 100 requests/second per client ip
 		// the counters for this ip will expire after 10 seconds of inactivity
-		tl.buckets.Set(token, bucketI, int(tl.settings.Rate.Period/time.Second)*10+1)
+		tl.buckets.Set(token, bucketI, int(tl.rate.Period/time.Second)*10+1)
 	}
 	bucket := bucketI.(*TokenBucket)
 	delay, err := bucket.Consume(amount)
@@ -83,20 +88,14 @@ func (tl *TokenLimiter) After(r Request) error {
 }
 
 // Check arguments and initialize defaults
-func parseSettings(s Settings) (Settings, error) {
-	if s.MaxTokens <= 0 {
-		s.MaxTokens = 1
+func parseOptions(o Options) (Options, error) {
+	if o.Capacity <= 0 {
+		o.Capacity = DefaultCapacity
 	}
-	if s.Capacity <= 0 {
-		s.Capacity = DefaultCapacity
+	if o.TimeProvider == nil {
+		o.TimeProvider = &timetools.RealTime{}
 	}
-	if s.TimeProvider == nil {
-		s.TimeProvider = &timetools.RealTime{}
-	}
-	if s.Mapper == nil {
-		return s, fmt.Errorf("Provide mapper function")
-	}
-	return s, nil
+	return o, nil
 }
 
-const DefaultCapacity = 32768
+const DefaultCapacity = 65536

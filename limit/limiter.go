@@ -33,3 +33,13 @@ func MapClientIp(req Request) (string, int, error) {
 	}
 	return vals[0], 1, nil
 }
+
+func MapRequestHost(req Request) (string, int, error) {
+	return req.GetHttpRequest().Host, 1, nil
+}
+
+func MakeMapRequestHeader(header string) MapperFn {
+	return func(req Request) (string, int, error) {
+		return req.GetHttpRequest().Header.Get(header), 1, nil
+	}
+}
