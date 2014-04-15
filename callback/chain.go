@@ -92,7 +92,6 @@ func newChain() *chain {
 		mutex:     &sync.RWMutex{},
 		callbacks: []*callback{},
 		indexes:   make(map[string]int),
-		iter:      newIter([]*callback{}),
 	}
 }
 
@@ -105,7 +104,6 @@ func (c *chain) add(id string, cb interface{}) error {
 	}
 	c.callbacks = append(c.callbacks, &callback{id, cb})
 	c.indexes[id] = len(c.callbacks) - 1
-	c.iter = newIter(c.callbacks)
 	return nil
 }
 
@@ -118,7 +116,6 @@ func (c *chain) update(id string, cb interface{}) error {
 		return fmt.Errorf("Callback with id: %s not found", id)
 	}
 	c.callbacks[i].cb = cb
-	c.iter = newIter(c.callbacks)
 	return nil
 }
 
@@ -134,7 +131,6 @@ func (c *chain) remove(id string) error {
 	for i, cb := range c.callbacks {
 		c.indexes[cb.id] = i
 	}
-	c.iter = newIter(c.callbacks)
 	return nil
 }
 
@@ -142,22 +138,12 @@ func (c *chain) remove(id string) error {
 func (c *chain) getIter() *iter {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
-	return c.iter
+	return &iter{callbacks: c.callbacks}
 }
 
 type iter struct {
 	index     int
 	callbacks []*callback
-}
-
-func newIter(callbacks []*callback) *iter {
-	out := make([]*callback, len(callbacks))
-	for i, cb := range callbacks {
-		out[i] = cb
-	}
-	return &iter{
-		callbacks: out,
-	}
 }
 
 func (it *iter) next() interface{} {

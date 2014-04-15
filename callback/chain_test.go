@@ -6,6 +6,7 @@ import (
 	. "github.com/mailgun/vulcan/request"
 	. "launchpad.net/gocheck"
 	"net/http"
+	"sync"
 	"testing"
 )
 
@@ -41,6 +42,28 @@ func (s *ChainSuite) TestBeforeChainSingleElement(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(len(cb.Requests), Equals, 1)
+}
+
+func (s *ChainSuite) TestConcurrentConsumption(c *C) {
+	chain := NewBeforeChain()
+
+	cb := &TestBefore{}
+	chain.Add("rate", cb)
+
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < 10; i += 1 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			re, err := chain.Before(nil)
+			c.Assert(re, IsNil)
+			c.Assert(err, IsNil)
+		}()
+	}
+
+	wg.Wait()
+	c.Assert(len(cb.Requests), Equals, 10)
 }
 
 func (s *ChainSuite) TestUpdatePreservesOrder(c *C) {
@@ -211,6 +234,9 @@ func (s *ChainSuite) TestAfterChainReturnError(c *C) {
 }
 
 func (tb *TestBefore) Before(req Request) (*http.Response, error) {
+	tb.mutex.Lock()
+	defer tb.mutex.Unlock()
+
 	tb.Requests = append(tb.Requests, req)
 	if len(tb.Header) != 0 {
 		netutils.CopyHeaders(req.GetHttpRequest().Header, tb.Header)
@@ -223,6 +249,7 @@ type TestBefore struct {
 	Response *http.Response
 	Error    error
 	Header   http.Header
+	mutex    sync.Mutex
 }
 
 type TestAfter struct {
