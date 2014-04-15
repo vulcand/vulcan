@@ -57,7 +57,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := netutils.NewBodyBuffer(r.Body)
 	if err != nil {
 		log.Errorf("Request read error %s", err)
-		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadRequest), w, r)
+		p.replyError(errors.FromStatus(http.StatusBadRequest), w, r)
 	}
 	defer body.Close()
 	r.Body = body
@@ -72,7 +72,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err = p.proxyRequest(w, req)
 	if err != nil {
 		log.Errorf("%s failed: %s", req, err)
-		p.replyError(p.options.ErrorFormatter.FromStatus(http.StatusBadGateway), w, r)
+		p.replyError(err, w, r)
 	}
 }
 
@@ -87,7 +87,7 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) er
 	// Router could not find a matching location
 	if location == nil {
 		log.Errorf("%s failed to route", req)
-		return p.options.ErrorFormatter.FromStatus(http.StatusBadGateway)
+		return errors.FromStatus(http.StatusBadGateway)
 	}
 	response, err := location.RoundTrip(req)
 	if response != nil {
@@ -102,14 +102,20 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) er
 }
 
 // Helper function to reply with http errors
-func (p *Proxy) replyError(err errors.HttpError, w http.ResponseWriter, req *http.Request) {
+func (p *Proxy) replyError(err error, w http.ResponseWriter, req *http.Request) {
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection
 	// TODO: actually check this
+	proxyError, ok := err.(errors.ProxyError)
+	if !ok {
+		proxyError = errors.FromStatus(http.StatusBadGateway)
+	}
+
 	io.Copy(ioutil.Discard, req.Body)
-	w.Header().Set("Content-Type", err.GetContentType())
-	w.WriteHeader(err.GetStatusCode())
-	w.Write(err.GetBody())
+	statusCode, body, contentType := p.options.ErrorFormatter.Format(proxyError)
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(statusCode)
+	w.Write(body)
 }
 
 func validateOptions(o Options) (Options, error) {

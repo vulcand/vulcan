@@ -3,7 +3,9 @@ package tokenbucket
 import (
 	"fmt"
 	"github.com/mailgun/gotools-time"
+
 	"github.com/mailgun/ttlmap"
+	"github.com/mailgun/vulcan/errors"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
@@ -78,7 +80,7 @@ func (tl *TokenLimiter) Before(r Request) (*http.Response, error) {
 		return nil, err
 	}
 	if delay > 0 {
-		return nil, fmt.Errorf("Rate limit reached")
+		return nil, &errors.HttpError{errors.StatusTooManyRequests, "Too many requests"}
 	}
 	return nil, nil
 }

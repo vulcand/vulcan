@@ -2,6 +2,7 @@ package connlimit
 
 import (
 	"fmt"
+	"github.com/mailgun/vulcan/errors"
 	. "github.com/mailgun/vulcan/limit"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
@@ -47,7 +48,10 @@ func (cl *ConnectionLimiter) Before(r Request) (*http.Response, error) {
 
 	connections := cl.connections[token]
 	if connections >= cl.maxConnections {
-		return nil, fmt.Errorf("Connection limit reached. Max is: %d, yours: %d", cl.maxConnections, connections)
+		return nil, &errors.HttpError{
+			errors.StatusTooManyRequests,
+			fmt.Sprintf("Connection limit reached. Max is: %d, yours: %d", cl.maxConnections, connections),
+		}
 	}
 
 	cl.connections[token] += amount

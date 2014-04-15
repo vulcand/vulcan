@@ -2,57 +2,50 @@ package errors
 
 import (
 	"encoding/json"
-	"fmt"
+	log "github.com/mailgun/gotools-log"
 	"net/http"
 )
 
-type HttpError interface {
+const (
+	StatusTooManyRequests = 429
+)
+
+type ProxyError interface {
 	GetStatusCode() int
-	GetBody() []byte
-	GetContentType() string
 	Error() string
 }
 
 type Formatter interface {
-	FromStatus(int) HttpError
+	Format(ProxyError) (statusCode int, body []byte, contentType string)
 }
 
 type JsonFormatter struct {
 }
 
-func (f *JsonFormatter) FromStatus(statusCode int) HttpError {
-	encodedError, err := json.Marshal(map[string]interface{}{
-		"error": http.StatusText(statusCode),
+func (f *JsonFormatter) Format(err ProxyError) (int, []byte, string) {
+	encodedError, e := json.Marshal(map[string]interface{}{
+		"error": string(err.Error()),
 	})
-
-	if err != nil {
-		panic(err)
+	if e != nil {
+		log.Errorf("Failed to serialize: %s", e)
+		encodedError = []byte("{}")
 	}
-
-	return &HttpJsonError{
-		StatusCode: statusCode,
-		Body:       encodedError,
-	}
+	return err.GetStatusCode(), encodedError, "application/json"
 }
 
-type HttpJsonError struct {
+type HttpError struct {
 	StatusCode int
-	Body       []byte
+	Body       string
 }
 
-func (r *HttpJsonError) Error() string {
-	return fmt.Sprintf(
-		"HttpError(code=%d, body=%s)", r.StatusCode, r.Body)
+func FromStatus(statusCode int) *HttpError {
+	return &HttpError{statusCode, http.StatusText(statusCode)}
 }
 
-func (r *HttpJsonError) GetStatusCode() int {
-	return r.StatusCode
-}
-
-func (r *HttpJsonError) GetBody() []byte {
+func (r *HttpError) Error() string {
 	return r.Body
 }
 
-func (r *HttpJsonError) GetContentType() string {
-	return "application/json"
+func (r *HttpError) GetStatusCode() int {
+	return r.StatusCode
 }
