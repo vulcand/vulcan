@@ -21,6 +21,10 @@ func (c *BeforeChain) Add(id string, b Before) error {
 	return c.chain.add(id, b)
 }
 
+func (c *BeforeChain) Upsert(id string, b Before) {
+	c.chain.upsert(id, b)
+}
+
 func (c *BeforeChain) Remove(id string) error {
 	return c.chain.remove(id)
 }
@@ -56,6 +60,10 @@ func (c *AfterChain) Add(id string, a After) error {
 
 func (c *AfterChain) Remove(id string) error {
 	return c.chain.remove(id)
+}
+
+func (c *AfterChain) Upsert(id string, a After) {
+	c.chain.upsert(id, a)
 }
 
 func (c *AfterChain) Update(id string, a After) error {
@@ -117,6 +125,19 @@ func (c *chain) update(id string, cb interface{}) error {
 	}
 	c.callbacks[i].cb = cb
 	return nil
+}
+
+func (c *chain) upsert(id string, cb interface{}) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	i, found := c.indexes[id]
+	if !found {
+		c.callbacks = append(c.callbacks, &callback{id, cb})
+		c.indexes[id] = len(c.callbacks) - 1
+	} else {
+		c.callbacks[i].cb = cb
+	}
 }
 
 func (c *chain) remove(id string) error {

@@ -72,6 +72,14 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 	}, nil
 }
 
+func (l *HttpLocation) GetBefore() Before {
+	return l.options.Before
+}
+
+func (l *HttpLocation) GetAfter() After {
+	return l.options.After
+}
+
 // Round trips the request to one of the endpoints, returns the streamed
 // request body length in bytes and the endpoint reply.
 func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
