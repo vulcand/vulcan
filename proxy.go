@@ -50,6 +50,10 @@ func NewProxyWithOptions(router route.Router, o Options) (*Proxy, error) {
 	return p, nil
 }
 
+func (p *Proxy) GetRouter() route.Router {
+	return p.router
+}
+
 // Main request handler, accepts requests, round trips it to the endpoint and writes backe the response.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// We are allowed to fallback in case of endpoint failure,
