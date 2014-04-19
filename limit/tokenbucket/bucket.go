@@ -68,9 +68,16 @@ func (tb *TokenBucket) timeToRefill(tokens int) time.Duration {
 func (tb *TokenBucket) refill() {
 	now := tb.timeProvider.UtcNow()
 	timePassed := now.Sub(tb.lastRefill)
-	tb.tokens = tb.tokens + int(timePassed/tb.refillPeriod)
+
+	tokens := tb.tokens + int(timePassed/tb.refillPeriod)
+	// If we haven't added any tokens that means that not enough time has passed,
+	// in this case do not adjust last refill checkpoint, otherwise it will be
+	// always moving in time in case of frequent requests that exceed the rate
+	if tokens != tb.tokens {
+		tb.lastRefill = now
+		tb.tokens = tokens
+	}
 	if tb.tokens > tb.maxTokens {
 		tb.tokens = tb.maxTokens
 	}
-	tb.lastRefill = now
 }

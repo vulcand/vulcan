@@ -54,6 +54,34 @@ func (s *BucketSuite) TestConsumeSingleToken(c *C) {
 	c.Assert(delay, Equals, time.Second)
 }
 
+func (s *BucketSuite) TestFastConsumption(c *C) {
+	l, err := NewTokenBucket(Rate{1, time.Second}, 1, s.tm)
+	c.Assert(err, Equals, nil)
+
+	// First request passes
+	delay, err := l.Consume(1)
+	c.Assert(err, Equals, nil)
+	c.Assert(delay, Equals, time.Duration(0))
+
+	// Try 200 ms later
+	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Millisecond * 200)
+	delay, err = l.Consume(1)
+	c.Assert(err, Equals, nil)
+	c.Assert(delay, Equals, time.Second)
+
+	// Try 700 ms later
+	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Millisecond * 700)
+	delay, err = l.Consume(1)
+	c.Assert(err, Equals, nil)
+	c.Assert(delay, Equals, time.Second)
+
+	// Try 100 ms later, success!
+	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Millisecond * 100)
+	delay, err = l.Consume(1)
+	c.Assert(err, Equals, nil)
+	c.Assert(delay, Equals, time.Duration(0))
+}
+
 func (s *BucketSuite) TestConsumeMultipleTokens(c *C) {
 	l, err := NewTokenBucket(Rate{3, time.Second}, 5, s.tm)
 	c.Assert(err, Equals, nil)

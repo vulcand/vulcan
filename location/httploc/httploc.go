@@ -126,6 +126,7 @@ func (l *HttpLocation) GetId() string {
 // that endpoint is shutting down and is not willing to accept new requests.
 func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
+	intercepted := false
 	before := []Before{l.options.Before, l.loadBalancer}
 	for _, cb := range before {
 		if cb != nil {
@@ -134,23 +135,26 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 			// and interrupt the callback chain
 			if err != nil {
 				log.Errorf("Callback says error: %s", err)
-				return nil, err
+				req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Error: err})
+				intercepted = true
 			}
 			// If response is present that means that callback wants to proxy
 			// this response to the client
 			if response != nil {
-				return response, nil
+				req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Response: response})
+				intercepted = true
 			}
 		}
 	}
 
-	// Forward the reuest and mirror the response
-	start := l.options.TimeProvider.UtcNow()
-	res, err := l.transport.RoundTrip(httpReq)
-	diff := l.options.TimeProvider.UtcNow().Sub(start)
-
-	// Record attempt
-	req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
+	if !intercepted {
+		// Forward the request and mirror the response
+		start := l.options.TimeProvider.UtcNow()
+		res, err := l.transport.RoundTrip(httpReq)
+		diff := l.options.TimeProvider.UtcNow().Sub(start)
+		// Record attempt
+		req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
+	}
 
 	// This gives a chance for callbacks to change the response
 	after := []After{l.options.After, l.loadBalancer}
@@ -163,7 +167,7 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *
 			}
 		}
 	}
-	return res, err
+	return req.GetLastAttempt().GetResponse(), req.GetLastAttempt().GetError()
 }
 
 // This function alters the original request - adds/removes headers, removes hop headers, changes the request path.
