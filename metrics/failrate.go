@@ -3,17 +3,15 @@ package metrics
 import (
 	"fmt"
 	timetools "github.com/mailgun/gotools-time"
-	. "github.com/mailgun/vulcan/callback"
 	. "github.com/mailgun/vulcan/endpoint"
+	. "github.com/mailgun/vulcan/middleware"
 	. "github.com/mailgun/vulcan/request"
-	"net/http"
 	"time"
 )
 
 type FailRateGetter interface {
 	GetRate() float64
-	Before
-	After
+	Observer
 }
 
 // Predicate that helps to see if the attempt resulted in error
@@ -105,14 +103,12 @@ func (em *FailRateMeter) GetRate() float64 {
 	return float64(failure) / float64(success+failure)
 }
 
-func (em *FailRateMeter) Before(r Request) (*http.Response, error) {
-	return nil, nil
+func (em *FailRateMeter) ObserveRequest(r Request) {
 }
 
-func (em *FailRateMeter) After(r Request) error {
-	lastAttempt := r.GetLastAttempt()
+func (em *FailRateMeter) ObserveResponse(r Request, lastAttempt Attempt) {
 	if lastAttempt == nil || lastAttempt.GetEndpoint() != em.endpoint {
-		return nil
+		return
 	}
 	// Cleanup the data that was here in case if endpoint has been inactive for some time
 	em.cleanup(em.failure)
@@ -123,7 +119,6 @@ func (em *FailRateMeter) After(r Request) error {
 	} else {
 		em.incBucket(em.success)
 	}
-	return nil
 }
 
 // Returns the number in the moving window bucket that this slot occupies

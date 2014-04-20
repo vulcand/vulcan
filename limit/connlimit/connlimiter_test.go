@@ -24,19 +24,21 @@ func (s *ConnLimiterSuite) TestHitLimitAndRelease(c *C) {
 
 	r := makeRequest("1.2.3.4")
 
-	_, err = l.Before(r)
-	c.Assert(err, Equals, nil)
+	re, err := l.ProcessRequest(r)
+	c.Assert(re, IsNil)
+	c.Assert(err, IsNil)
 
 	// Next request from the same ip hits rate limit, because the active connections > 1
-	_, err = l.Before(r)
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(r)
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 
 	// Once the first request finished, next one succeeds
-	err = l.After(r)
-	c.Assert(err, Equals, nil)
+	l.ProcessResponse(r, nil)
 
-	_, err = l.Before(r)
-	c.Assert(err, Equals, nil)
+	re, err = l.ProcessRequest(r)
+	c.Assert(err, IsNil)
+	c.Assert(re, IsNil)
 }
 
 // Make sure connections are counted independently for different ips
@@ -47,14 +49,17 @@ func (s *ConnLimiterSuite) TestDifferentIps(c *C) {
 	r := makeRequest("1.2.3.4")
 	r2 := makeRequest("1.2.3.5")
 
-	_, err = l.Before(r)
-	c.Assert(err, Equals, nil)
+	re, err := l.ProcessRequest(r)
+	c.Assert(re, IsNil)
+	c.Assert(err, IsNil)
 
-	_, err = l.Before(r)
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(r)
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 
-	_, err = l.Before(r2)
-	c.Assert(err, Equals, nil)
+	re, err = l.ProcessRequest(r2)
+	c.Assert(re, IsNil)
+	c.Assert(err, IsNil)
 }
 
 // Make sure connections are counted independently for different ips
@@ -65,44 +70,46 @@ func (s *ConnLimiterSuite) TestConnectionCount(c *C) {
 	r := makeRequest("1.2.3.4")
 	r2 := makeRequest("1.2.3.5")
 
-	_, err = l.Before(r)
-	c.Assert(err, Equals, nil)
+	re, err := l.ProcessRequest(r)
+	c.Assert(re, IsNil)
+	c.Assert(err, IsNil)
 	c.Assert(l.GetConnectionCount(), Equals, int64(1))
 
-	_, err = l.Before(r)
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(r)
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 	c.Assert(l.GetConnectionCount(), Equals, int64(1))
 
-	_, err = l.Before(r2)
-	c.Assert(err, Equals, nil)
+	re, err = l.ProcessRequest(r2)
+	c.Assert(re, IsNil)
+	c.Assert(err, IsNil)
 	c.Assert(l.GetConnectionCount(), Equals, int64(2))
 
-	err = l.After(r)
-	c.Assert(err, Equals, nil)
+	l.ProcessResponse(r, nil)
 	c.Assert(l.GetConnectionCount(), Equals, int64(1))
 
-	err = l.After(r2)
-	c.Assert(err, Equals, nil)
+	l.ProcessResponse(r2, nil)
 	c.Assert(l.GetConnectionCount(), Equals, int64(0))
 }
 
 // We've failed to extract client ip, everything crashes, bam!
 func (s *ConnLimiterSuite) TestFailure(c *C) {
 	l, err := NewClientIpLimiter(1)
-	c.Assert(err, Equals, nil)
-	_, err = l.Before(makeRequest(""))
-	c.Assert(err, Not(Equals), nil)
+	c.Assert(err, IsNil)
+	re, err := l.ProcessRequest(makeRequest(""))
+	c.Assert(err, NotNil)
+	c.Assert(re, IsNil)
 }
 
 func (s *ConnLimiterSuite) TestWrongParams(c *C) {
 	_, err := NewConnectionLimiter(nil, 1)
-	c.Assert(err, Not(Equals), nil)
+	c.Assert(err, NotNil)
 
 	_, err = NewClientIpLimiter(0)
-	c.Assert(err, Not(Equals), nil)
+	c.Assert(err, NotNil)
 
 	_, err = NewClientIpLimiter(-1)
-	c.Assert(err, Not(Equals), nil)
+	c.Assert(err, NotNil)
 }
 
 func makeRequest(ip string) request.Request {

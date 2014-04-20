@@ -27,16 +27,19 @@ func (s *LimiterSuite) TestHitLimit(c *C) {
 		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
 	c.Assert(err, IsNil)
-	_, err = l.Before(makeRequest("1.2.3.4"))
+	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, IsNil)
 	c.Assert(err, IsNil)
 
 	// Next request from the same ip hits rate limit
-	_, err = l.Before(makeRequest("1.2.3.4"))
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 
 	// Second later, the request from this ip will succeed
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	_, err = l.Before(makeRequest("1.2.3.4"))
+	re, err = l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, IsNil)
 	c.Assert(err, IsNil)
 }
 
@@ -45,7 +48,8 @@ func (s *LimiterSuite) TestFailure(c *C) {
 	l, err := NewTokenLimiterWithOptions(
 		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 	c.Assert(err, IsNil)
-	_, err = l.Before(makeRequest(""))
+
+	_, err = l.ProcessRequest(makeRequest(""))
 	c.Assert(err, NotNil)
 }
 
@@ -60,15 +64,18 @@ func (s *LimiterSuite) TestIsolation(c *C) {
 	l, err := NewTokenLimiterWithOptions(
 		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
-	_, err = l.Before(makeRequest("1.2.3.4"))
+	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
 	c.Assert(err, IsNil)
+	c.Assert(re, IsNil)
 
 	// Next request from the same ip hits rate limit
-	_, err = l.Before(makeRequest("1.2.3.4"))
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 
 	// The request from other ip can proceed
-	_, err = l.Before(makeRequest("1.2.3.5"))
+	re, err = l.ProcessRequest(makeRequest("1.2.3.5"))
+	c.Assert(err, IsNil)
 	c.Assert(err, IsNil)
 }
 
@@ -77,17 +84,20 @@ func (s *LimiterSuite) TestExpiration(c *C) {
 	l, err := NewTokenLimiterWithOptions(
 		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
-	_, err = l.Before(makeRequest("1.2.3.4"))
+	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, IsNil)
 	c.Assert(err, IsNil)
 
 	// Next request from the same ip hits rate limit
-	_, err = l.Before(makeRequest("1.2.3.4"))
-	c.Assert(err, Not(Equals), nil)
+	re, err = l.ProcessRequest(makeRequest("1.2.3.4"))
+	c.Assert(re, NotNil)
+	c.Assert(err, IsNil)
 
 	// 24 hours later, the request from this ip will succeed
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(24 * time.Hour)
-	_, err = l.Before(makeRequest("1.2.3.4"))
+	re, err = l.ProcessRequest(makeRequest("1.2.3.4"))
 	c.Assert(err, IsNil)
+	c.Assert(re, IsNil)
 }
 
 func makeRequest(ip string) request.Request {

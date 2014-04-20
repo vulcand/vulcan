@@ -52,7 +52,7 @@ func (s *FailRateSuite) TestNotReady(c *C) {
 	// Not enough data
 	fr, err = NewFailRateMeter(e, 10, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 	c.Assert(fr.IsReady(), Equals, false)
 }
 
@@ -63,8 +63,8 @@ func (s *FailRateSuite) TestIgnoreOtherEndpoints(c *C) {
 
 	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
-	fr.After(makeFailRequest(e))
-	fr.After(makeOkRequest(e2))
+	fr.ObserveResponse(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e2))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 1.0)
@@ -75,9 +75,8 @@ func (s *FailRateSuite) TestIgnoreRequestsWithoutAttempts(c *C) {
 
 	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
-	fr.After(makeFailRequest(e))
-	fr.After(&BaseRequest{})
-	fr.Before(&BaseRequest{})
+	fr.ObserveResponse(makeFailRequest(e))
+	fr.ObserveResponse(&BaseRequest{}, nil)
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 1.0)
@@ -88,7 +87,7 @@ func (s *FailRateSuite) TestNoSuccesses(c *C) {
 
 	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 1.0)
@@ -99,7 +98,7 @@ func (s *FailRateSuite) TestNoFailures(c *C) {
 
 	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 0.0)
@@ -112,13 +111,13 @@ func (s *FailRateSuite) TestMultipleBuckets(c *C) {
 	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, float64(2)/float64(3))
@@ -132,19 +131,19 @@ func (s *FailRateSuite) TestOverwriteBuckets(c *C) {
 	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	// This time we should overwrite the old data points
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
-	fr.After(makeOkRequest(e))
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, float64(3)/float64(5))
@@ -158,23 +157,23 @@ func (s *FailRateSuite) TestInactiveBuckets(c *C) {
 	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	// This time we should overwrite the old data points with new data
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
-	fr.After(makeOkRequest(e))
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	// Jump to the last bucket and change the data
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second * 2)
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, float64(1)/float64(4))
@@ -186,17 +185,17 @@ func (s *FailRateSuite) TestLongPeriodsOfInactivity(c *C) {
 	fr, err := NewFailRateMeter(e, 2, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
-	fr.After(makeOkRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
 
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 0.5)
 
 	// This time we should overwrite all data points
 	s.tm.CurrentTime = s.tm.CurrentTime.Add(100 * time.Second)
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 	c.Assert(fr.GetRate(), Equals, 1.0)
 }
 
@@ -206,8 +205,8 @@ func (s *FailRateSuite) TestReset(c *C) {
 	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
-	fr.After(makeOkRequest(e))
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeOkRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	c.Assert(fr.IsReady(), Equals, true)
 	c.Assert(fr.GetRate(), Equals, 0.5)
@@ -217,8 +216,8 @@ func (s *FailRateSuite) TestReset(c *C) {
 	c.Assert(fr.IsReady(), Equals, false)
 
 	// Now add some stats
-	fr.After(makeFailRequest(e))
-	fr.After(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
+	fr.ObserveResponse(makeFailRequest(e))
 
 	// We are game again!
 	c.Assert(fr.IsReady(), Equals, true)
@@ -236,10 +235,12 @@ func makeRequest(endpoint Endpoint, err error) Request {
 	}
 }
 
-func makeFailRequest(endpoint Endpoint) Request {
-	return makeRequest(endpoint, fmt.Errorf("Oops"))
+func makeFailRequest(endpoint Endpoint) (Request, Attempt) {
+	r := makeRequest(endpoint, fmt.Errorf("Oops"))
+	return r, r.GetLastAttempt()
 }
 
-func makeOkRequest(endpoint Endpoint) Request {
-	return makeRequest(endpoint, nil)
+func makeOkRequest(endpoint Endpoint) (Request, Attempt) {
+	r := makeRequest(endpoint, nil)
+	return r, r.GetLastAttempt()
 }

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	log "github.com/mailgun/gotools-log"
 	timetools "github.com/mailgun/gotools-time"
-	. "github.com/mailgun/vulcan/callback"
 	. "github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/failover"
 	"github.com/mailgun/vulcan/headers"
 	. "github.com/mailgun/vulcan/loadbalance"
+	. "github.com/mailgun/vulcan/middleware"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
 	"net"
@@ -20,10 +20,12 @@ import (
 
 // Location with built in failover and load balancing support
 type HttpLocation struct {
-	id           string
-	transport    *http.Transport
-	loadBalancer LoadBalancer // Load balancer controls endpoints in this location
-	options      Options      // Additional parameters
+	id              string
+	transport       *http.Transport
+	loadBalancer    LoadBalancer // Load balancer controls endpoints in this location
+	options         Options      // Additional parameters
+	observerChain   *ObserverChain
+	middlewareChain *MiddlewareChain
 }
 
 // Additional options to control this location, such as timeouts and so on
@@ -33,11 +35,7 @@ type Options struct {
 		Dial time.Duration // Socket connect timeout
 	}
 	ShouldFailover failover.Predicate // Predicate that defines when requests are allowed to failover
-	// Before callback executed before request gets routed to the endpoint
-	// and can intervene during the request lifetime
-	Before Before
-	// Callback executed after proxy received response from the endpoint
-	After After
+
 	// Used to set forwarding headers
 	Hostname string
 	// In this case appends new forward info to the existing header
@@ -59,6 +57,13 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 	if err != nil {
 		return nil, err
 	}
+
+	observerChain := NewObserverChain()
+	observerChain.Append(BalancerId, loadBalancer)
+
+	middlewareChain := NewMiddlewareChain()
+	middlewareChain.Append(BalancerId, loadBalancer)
+
 	return &HttpLocation{
 		id:           id,
 		loadBalancer: loadBalancer,
@@ -68,16 +73,18 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 			},
 			ResponseHeaderTimeout: o.Timeouts.Read,
 		},
-		options: o,
+		options:         o,
+		middlewareChain: middlewareChain,
+		observerChain:   observerChain,
 	}, nil
 }
 
-func (l *HttpLocation) GetBefore() Before {
-	return l.options.Before
+func (l *HttpLocation) GetMiddlewareChain() *MiddlewareChain {
+	return l.middlewareChain
 }
 
-func (l *HttpLocation) GetAfter() After {
-	return l.options.After
+func (l *HttpLocation) GetObserverChain() *ObserverChain {
+	return l.observerChain
 }
 
 // Round trips the request to one of the endpoints, returns the streamed
@@ -120,54 +127,40 @@ func (l *HttpLocation) GetId() string {
 	return l.id
 }
 
+func (l *HttpLocation) unwindIter(it *MiddlewareIter, req Request, a Attempt) {
+	for v := it.Prev(); v != nil; v = it.Prev() {
+		v.ProcessResponse(req, a)
+	}
+}
+
 // Proxy the request to the given endpoint, in case if endpoint is down
 // or failover code sequence has been recorded as the reply, return the error.
 // Failover sequence - is a special response code from the endpoint that indicates
 // that endpoint is shutting down and is not willing to accept new requests.
 func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
-	intercepted := false
-	before := []Before{l.options.Before, l.loadBalancer}
-	for _, cb := range before {
-		if cb != nil {
-			response, err := cb.Before(req)
-			// In case if error is not nil, return this error to the client
-			// and interrupt the callback chain
-			if err != nil {
-				log.Errorf("Callback says error: %s", err)
-				req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Error: err})
-				intercepted = true
-			}
-			// If response is present that means that callback wants to proxy
-			// this response to the client
-			if response != nil {
-				req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Response: response})
-				intercepted = true
-			}
+	a := &BaseAttempt{Endpoint: endpoint}
+
+	l.observerChain.ObserveRequest(req)
+	defer l.observerChain.ObserveResponse(req, a)
+	defer req.AddAttempt(a)
+
+	it := l.middlewareChain.GetIter()
+	defer l.unwindIter(it, req, a)
+
+	for v := it.Next(); v != nil; v = it.Next() {
+		a.Response, a.Error = v.ProcessRequest(req)
+		if a.Response != nil || a.Error != nil {
+			log.Errorf("Midleware intercepted request with response=%s, error=%s", a.Response.Status, a.Error)
+			return a.Response, a.Error
 		}
 	}
 
-	if !intercepted {
-		// Forward the request and mirror the response
-		start := l.options.TimeProvider.UtcNow()
-		res, err := l.transport.RoundTrip(httpReq)
-		diff := l.options.TimeProvider.UtcNow().Sub(start)
-		// Record attempt
-		req.AddAttempt(&BaseAttempt{Endpoint: endpoint, Duration: diff, Response: res, Error: err})
-	}
-
-	// This gives a chance for callbacks to change the response
-	after := []After{l.options.After, l.loadBalancer}
-	for _, cb := range after {
-		if cb != nil {
-			err := cb.After(req)
-			if err != nil {
-				log.Errorf("After callback returns error and intercepts the response: %s", err)
-				return nil, err
-			}
-		}
-	}
-	return req.GetLastAttempt().GetResponse(), req.GetLastAttempt().GetError()
+	// Forward the request and mirror the response
+	start := l.options.TimeProvider.UtcNow()
+	a.Response, a.Error = l.transport.RoundTrip(httpReq)
+	a.Duration = l.options.TimeProvider.UtcNow().Sub(start)
+	return a.Response, a.Error
 }
 
 // This function alters the original request - adds/removes headers, removes hop headers, changes the request path.
@@ -241,3 +234,7 @@ func parseOptions(o Options) (Options, error) {
 	}
 	return o, nil
 }
+
+const (
+	BalancerId = "__loadBalancer"
+)

@@ -3,10 +3,10 @@ package tokenbucket
 import (
 	"fmt"
 	"github.com/mailgun/gotools-time"
-
 	"github.com/mailgun/ttlmap"
 	"github.com/mailgun/vulcan/errors"
 	. "github.com/mailgun/vulcan/limit"
+	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
 	"sync"
@@ -55,7 +55,7 @@ func NewTokenLimiterWithOptions(mapper MapperFn, rate Rate, o Options) (*TokenLi
 	}, nil
 }
 
-func (tl *TokenLimiter) Before(r Request) (*http.Response, error) {
+func (tl *TokenLimiter) ProcessRequest(r Request) (*http.Response, error) {
 	tl.mutex.Lock()
 	defer tl.mutex.Unlock()
 
@@ -80,13 +80,12 @@ func (tl *TokenLimiter) Before(r Request) (*http.Response, error) {
 		return nil, err
 	}
 	if delay > 0 {
-		return nil, &errors.HttpError{errors.StatusTooManyRequests, "Too many requests"}
+		return netutils.NewTextResponse(r.GetHttpRequest(), errors.StatusTooManyRequests, "Too many requests"), nil
 	}
 	return nil, nil
 }
 
-func (tl *TokenLimiter) After(r Request) error {
-	return nil
+func (tl *TokenLimiter) ProcessResponse(r Request, a Attempt) {
 }
 
 // Check arguments and initialize defaults

@@ -210,25 +210,30 @@ func (r *RoundRobin) RemoveEndpoint(endpoint Endpoint) error {
 	return nil
 }
 
-func (rr *RoundRobin) Before(Request) (*http.Response, error) {
+func (rr *RoundRobin) ProcessRequest(Request) (*http.Response, error) {
 	return nil, nil
 }
 
-func (rr *RoundRobin) After(req Request) error {
+func (rr *RoundRobin) ProcessResponse(req Request, a Attempt) {
+}
+
+func (rr *RoundRobin) ObserveRequest(Request) {
+}
+
+func (rr *RoundRobin) ObserveResponse(req Request, a Attempt) {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 
 	// Update stats for the endpoint after the request was done
 	endpoint := req.GetLastAttempt().GetEndpoint()
 	if endpoint == nil {
-		return nil
+		return
 	}
 	we, _ := rr.findEndpointById(endpoint.GetId())
 	if we == nil {
-		return nil
+		return
 	}
-	we.failRateMeter.After(req)
-	return nil
+	we.failRateMeter.ObserveResponse(req, a)
 }
 
 func (rr *RoundRobin) allDisabled() bool {
