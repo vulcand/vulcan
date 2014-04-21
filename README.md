@@ -12,7 +12,7 @@ Used by: https://github.com/mailgun/vulcand
 Read the docs: http://mailgun.github.io/vulcan-docs/
 
 Status
-=======
+------
 
 Refactoring the entire thing based on everyone's feedback: moving fast, breaking things mode.
 Don't use it in production or staging or basically anywhere yet.
