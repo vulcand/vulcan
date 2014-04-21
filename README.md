@@ -8,8 +8,9 @@ Reverse proxy library
 
 Vulcan is a low level library that provides reverse proxy functionality to golang programs
 
-Used by: https://github.com/mailgun/vulcand
 Read the docs: http://mailgun.github.io/vulcan-docs/
+
+Used by: https://github.com/mailgun/vulcand
 
 Status
 ------
