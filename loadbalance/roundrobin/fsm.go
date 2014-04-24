@@ -39,7 +39,7 @@ type changedEndpoint struct {
 }
 
 func NewFSMHandler() (*FSMHandler, error) {
-	return NewFSMHandlerWithOptions(&timetools.RealTime{}, 10*time.Second)
+	return NewFSMHandlerWithOptions(&timetools.RealTime{}, 3*time.Second)
 }
 
 func NewFSMHandlerWithOptions(timeProvider timetools.TimeProvider, duration time.Duration) (*FSMHandler, error) {
@@ -96,6 +96,10 @@ func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) error {
 		return nil
 	} else {
 		log.Infof("FSMHanlder reports average fail rate %f", failRate)
+		if !metricsReady(endpoints) {
+			log.Infof("FSMHanlder skip cycle, metrics are not ready yet")
+			return nil
+		}
 		// Select endpoints with highest error rates and lower their weight
 		good, bad := splitEndpoints(endpoints)
 		log.Infof("FSMHandler good endpoints: %s", good)
@@ -165,6 +169,15 @@ func splitEndpoints(endpoints []*WeightedEndpoint) (good []*WeightedEndpoint, ba
 	return good, bad
 }
 
+func metricsReady(endpoints []*WeightedEndpoint) bool {
+	for _, e := range endpoints {
+		if !e.failRateMeter.IsReady() {
+			return false
+		}
+	}
+	return true
+}
+
 func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
 	changedEndpoints := make([]*changedEndpoint, len(good))
 	for i, e := range good {
@@ -184,7 +197,8 @@ func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
 
 // Compare two fail rates by neglecting the insignificant differences
 func greater(a, b float64) bool {
-	return math.Floor(a*100) > math.Floor(b*100)
+	log.Infof("Greater %f %f, %d %d", a, b, math.Floor(a*10), math.Floor(b*10))
+	return math.Floor(a*10) > math.Ceil(b*10)
 }
 
 func avgFailRate(endpoints []*WeightedEndpoint) float64 {
