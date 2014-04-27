@@ -18,7 +18,9 @@ const (
 )
 
 const (
-	FSMMaxWeight = 16384
+	FSMMaxWeight            = 16384
+	FSMGrowFactor           = 8
+	FSMDefaultProbingPeriod = 4 * time.Second
 )
 
 // This is the tiny DFA that tries to play with weights to improve over the overall error rate
@@ -39,7 +41,7 @@ type changedEndpoint struct {
 }
 
 func NewFSMHandler() (*FSMHandler, error) {
-	return NewFSMHandlerWithOptions(&timetools.RealTime{}, 3*time.Second)
+	return NewFSMHandlerWithOptions(&timetools.RealTime{}, FSMDefaultProbingPeriod)
 }
 
 func NewFSMHandlerWithOptions(timeProvider timetools.TimeProvider, duration time.Duration) (*FSMHandler, error) {
@@ -60,6 +62,14 @@ func (fsm *FSMHandler) reset() {
 	fsm.timer = fsm.timeProvider.UtcNow().Add(-1 * time.Second)
 	fsm.probedGoodEndpoints = nil
 	fsm.weightChanges = 0
+}
+
+func (fsm *FSMHandler) String() string {
+	if fsm.timerExpired() {
+		return fmt.Sprintf("FSM(state=%s)", stateToString(fsm.state))
+	} else {
+		return fmt.Sprintf("FSM(state=%s, timer=%s)", stateToString(fsm.state), fsm.timer.Sub(fsm.timeProvider.UtcNow()))
+	}
 }
 
 func (fsm *FSMHandler) updateWeights(endpoints []*WeightedEndpoint) error {
@@ -88,24 +98,25 @@ func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) error {
 			if e.effectiveWeight != e.weight {
 				// Adjust effective weight back to the original weight in stages
 				e.setEffectiveWeight(decrease(e.GetOriginalWeight(), e.GetEffectiveWeight()))
-				log.Infof("FSMHandler RESTORE %s", e)
+				log.Infof("%s RESTORING %s", fsm, e)
 				fsm.setTimer()
 				fsm.state = FSMRevert
 			}
 		}
 		return nil
 	} else {
-		log.Infof("FSMHanlder reports average fail rate %f", failRate)
+		log.Infof("%s reports average fail rate %f", fsm, failRate)
 		if !metricsReady(endpoints) {
-			log.Infof("FSMHanlder skip cycle, metrics are not ready yet")
+			log.Infof("%s skip cycle, metrics are not ready yet", fsm)
 			return nil
 		}
 		// Select endpoints with highest error rates and lower their weight
 		good, bad := splitEndpoints(endpoints)
-		log.Infof("FSMHandler good endpoints: %s", good)
-		log.Infof("FSMHandler bad endpoints: %s", bad)
+		log.Infof("%s better endpoints: %s", fsm, good)
+		log.Infof("%s worse endpoints: %s", fsm, bad)
 		// No endpoints that are different by their quality
 		if len(bad) == 0 || len(good) == 0 {
+			log.Infof("%s all endpoints behave in the same manner, can do nothing", fsm)
 			return nil
 		}
 		fsm.probedGoodEndpoints = adjustWeights(good, bad)
@@ -132,7 +143,7 @@ func (fsm *FSMHandler) onProbing(endpoints []*WeightedEndpoint) error {
 			return nil
 		}
 	}
-	log.Infof("FSMHandler probing successfull, COMMITING the new rates")
+	log.Infof("%s probing successfull, COMMITING the new rates", fsm)
 	// We have not made the situation worse, so
 	// go back to the starting point and continue the cycle
 	fsm.state = FSMStart
@@ -143,6 +154,7 @@ func (fsm *FSMHandler) onRollback(endpoints []*WeightedEndpoint) error {
 	if !fsm.timerExpired() {
 		return nil
 	}
+	log.Infof("%s Timer expired pals", fsm)
 	fsm.state = FSMStart
 	return nil
 }
@@ -189,7 +201,7 @@ func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
 		changedEndpoints[i] = changed
 		if increase(e.GetEffectiveWeight()) < FSMMaxWeight {
 			e.setEffectiveWeight(increase(e.GetEffectiveWeight()))
-			log.Infof("FSMHandler updated weight %s", e)
+			log.Infof("FSM updated weight %s", e)
 		}
 	}
 	return changedEndpoints
@@ -197,7 +209,6 @@ func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
 
 // Compare two fail rates by neglecting the insignificant differences
 func greater(a, b float64) bool {
-	log.Infof("Greater %f %f, %d %d", a, b, math.Floor(a*10), math.Floor(b*10))
 	return math.Floor(a*10) > math.Ceil(b*10)
 }
 
@@ -211,11 +222,11 @@ func avgFailRate(endpoints []*WeightedEndpoint) float64 {
 }
 
 func increase(weight int) int {
-	return weight * 2
+	return weight * FSMGrowFactor
 }
 
 func decrease(target, current int) int {
-	adjusted := current / 2
+	adjusted := current / FSMGrowFactor
 	if adjusted < target {
 		return target
 	} else {
@@ -228,4 +239,18 @@ func abs(a int) int {
 		return a
 	}
 	return -1 * a
+}
+
+func stateToString(state FSMState) string {
+	switch state {
+	case FSMStart:
+		return "START"
+	case FSMProbing:
+		return "PROBING"
+	case FSMRollback:
+		return "ROLLBACK"
+	case FSMRevert:
+		return "REVERT"
+	}
+	return "UNKNOWN"
 }

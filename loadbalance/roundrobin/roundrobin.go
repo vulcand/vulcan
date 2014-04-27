@@ -2,6 +2,7 @@ package roundrobin
 
 import (
 	"fmt"
+	log "github.com/mailgun/gotools-log"
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/metrics"
@@ -61,6 +62,24 @@ func validateOptions(o Options) (Options, error) {
 }
 
 func (r *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
+	e, err := r.nextEndpoint(req)
+	if err != nil {
+		return e, err
+	}
+	// This is the first try
+	lastAttempt := req.GetLastAttempt()
+	if lastAttempt == nil {
+		return e, err
+	}
+	// Try to prevent failover to the same endpoint that we've seen before
+	if lastAttempt.GetEndpoint().GetId() == e.GetId() {
+		log.Infof("Preventing failover to the same endpoint, whoa")
+		return r.nextEndpoint(req)
+	}
+	return e, err
+}
+
+func (r *RoundRobin) nextEndpoint(req Request) (Endpoint, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 

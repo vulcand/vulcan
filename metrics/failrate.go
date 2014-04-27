@@ -89,6 +89,14 @@ func (em *FailRateMeter) Resolution() time.Duration {
 	return em.resolution
 }
 
+func (em *FailRateMeter) Buckets() int {
+	return em.buckets
+}
+
+func (em *FailRateMeter) WindowSize() time.Duration {
+	return time.Duration(em.buckets) * em.resolution
+}
+
 func (em *FailRateMeter) ProcessedCount() int64 {
 	return em.SuccessCount() + em.FailureCount()
 }

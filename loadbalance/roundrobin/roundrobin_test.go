@@ -3,6 +3,7 @@ package roundrobin
 import (
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
+	. "github.com/mailgun/vulcan/request"
 	. "launchpad.net/gocheck"
 	"testing"
 	"time"
@@ -11,7 +12,8 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type RoundRobinSuite struct {
-	tm *timetools.FreezedTime
+	tm  *timetools.FreezedTime
+	req Request
 }
 
 var _ = Suite(&RoundRobinSuite{})
@@ -20,6 +22,7 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 	s.tm = &timetools.FreezedTime{
 		CurrentTime: time.Date(2012, 3, 4, 5, 6, 7, 0, time.UTC),
 	}
+	s.req = &BaseRequest{}
 }
 
 func (s *RoundRobinSuite) newRR() *RoundRobin {
@@ -32,7 +35,7 @@ func (s *RoundRobinSuite) newRR() *RoundRobin {
 
 func (s *RoundRobinSuite) TestNoEndpoints(c *C) {
 	r := s.newRR()
-	_, err := r.NextEndpoint(nil)
+	_, err := r.NextEndpoint(s.req)
 	c.Assert(err, NotNil)
 }
 
@@ -43,11 +46,11 @@ func (s *RoundRobinSuite) TestSingleEndpoint(c *C) {
 	u := MustParseUrl("http://localhost:5000")
 	r.AddEndpoint(u)
 
-	u2, err := r.NextEndpoint(nil)
+	u2, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u2, Equals, u)
 
-	u3, err := r.NextEndpoint(nil)
+	u3, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u3, Equals, u)
 }
@@ -61,15 +64,15 @@ func (s *RoundRobinSuite) TestMultipleEndpoints(c *C) {
 	r.AddEndpoint(uA)
 	r.AddEndpoint(uB)
 
-	u, err := r.NextEndpoint(nil)
+	u, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uB)
 
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 }
@@ -82,18 +85,18 @@ func (s *RoundRobinSuite) TestAddEndpoints(c *C) {
 	uB := MustParseUrl("http://localhost:5001")
 	r.AddEndpoint(uA)
 
-	u, err := r.NextEndpoint(nil)
+	u, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 
 	r.AddEndpoint(uB)
 
 	// index was reset after altering endpoints
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uB)
 }
@@ -107,14 +110,14 @@ func (s *RoundRobinSuite) TestRemoveEndpoint(c *C) {
 	r.AddEndpoint(uA)
 	r.AddEndpoint(uB)
 
-	u, err := r.NextEndpoint(nil)
+	u, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 
 	// Removing endpoint resets the counter
 	r.RemoveEndpoint(uB)
 
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
 }
@@ -130,18 +133,18 @@ func (s *RoundRobinSuite) TestRemoveMultipleEndpoints(c *C) {
 	r.AddEndpoint(uB)
 	r.AddEndpoint(uC)
 
-	u, err := r.NextEndpoint(nil)
+	u, err := r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uC)
 
 	// There's only one endpoint left
 	r.RemoveEndpoint(uA)
 	r.RemoveEndpoint(uB)
-	u, err = r.NextEndpoint(nil)
+	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uC)
 }
