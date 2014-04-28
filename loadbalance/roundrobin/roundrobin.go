@@ -18,14 +18,14 @@ type RoundRobin struct {
 	index         int
 	endpoints     []*WeightedEndpoint
 	currentWeight int
-	weightChanges int
 	options       Options
 }
 
 type Options struct {
-	TimeProvider   timetools.TimeProvider
-	FailureHandler FailureHandler // Algorithm that reacts on the failures, adjusting weights
-
+	// Time provider to control time in tests
+	TimeProvider timetools.TimeProvider
+	// Algorithm that reacts on the failures, adjusting weights
+	FailureHandler FailureHandler
 }
 
 func NewRoundRobin() (*RoundRobin, error) {
@@ -87,10 +87,15 @@ func (r *RoundRobin) nextEndpoint(req Request) (Endpoint, error) {
 		return nil, fmt.Errorf("All endpoints are disabled")
 	}
 
+	// Adjust weights before choosing next endpoint
 	if r.options.FailureHandler != nil {
-		weightChangesBefore := r.weightChanges
-		r.options.FailureHandler.updateWeights(r.endpoints)
-		if weightChangesBefore != r.weightChanges {
+		weights, err := r.options.FailureHandler.AdjustWeights(r.endpoints)
+		if err != nil {
+			log.Errorf("%s returned error: %s", r.options.FailureHandler, err)
+		} else if len(weights) != 0 {
+			for _, w := range weights {
+				w.GetEndpoint().setEffectiveWeight(w.GetWeight())
+			}
 			r.resetIterator()
 		}
 	}
@@ -116,6 +121,7 @@ func (r *RoundRobin) nextEndpoint(req Request) (Endpoint, error) {
 			return e.endpoint, nil
 		}
 	}
+
 	// We did full circle and found nothing
 	return nil, fmt.Errorf("No available endpoints!")
 }
@@ -128,7 +134,7 @@ func (r *RoundRobin) resetIterator() {
 func (r *RoundRobin) resetState() {
 	r.resetIterator()
 	if r.options.FailureHandler != nil {
-		r.options.FailureHandler.reset()
+		r.options.FailureHandler.Reset()
 	}
 }
 
@@ -200,14 +206,17 @@ func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOpt
 		return nil, fmt.Errorf("Weight should be >=0")
 	}
 
-	meter, err := NewFailRateMeter(
-		endpoint, 10, time.Second, rr.options.TimeProvider, IsNetworkError)
-	if err != nil {
-		return nil, err
+	if options.Meter == nil {
+		meter, err := NewRollingMeter(
+			endpoint, 10, time.Second, rr.options.TimeProvider, IsNetworkError)
+		if err != nil {
+			return nil, err
+		}
+		options.Meter = meter
 	}
 
 	return &WeightedEndpoint{
-		failRateMeter:   meter,
+		failRateMeter:   options.Meter,
 		endpoint:        endpoint,
 		weight:          options.Weight,
 		effectiveWeight: options.Weight,
@@ -243,15 +252,14 @@ func (rr *RoundRobin) ObserveResponse(req Request, a Attempt) {
 	rr.mutex.Lock()
 	defer rr.mutex.Unlock()
 
-	// Update stats for the endpoint after the request was done
-	endpoint := req.GetLastAttempt().GetEndpoint()
-	if endpoint == nil {
+	if a == nil || a.GetEndpoint() == nil {
 		return
 	}
-	we, _ := rr.findEndpointById(endpoint.GetId())
+	we, _ := rr.findEndpointById(a.GetEndpoint().GetId())
 	if we == nil {
 		return
 	}
+	// Update stats for the endpoint after the request was done
 	we.failRateMeter.ObserveResponse(req, a)
 }
 
@@ -298,12 +306,13 @@ func gcd(a, b int) int {
 
 // Set additional parameters for the endpoint this load balancer supports
 type EndpointOptions struct {
-	Weight   int  // Relative weight for the enpoint to other enpoints in the load balancer
-	Disabled bool // Whether this endpoint is disabled
+	Weight   int           // Relative weight for the enpoint to other enpoints in the load balancer
+	Disabled bool          // Whether this endpoint is disabled
+	Meter    FailRateMeter // Meter that will determine failures
 }
 
 type WeightedEndpoint struct {
-	failRateMeter   *FailRateMeter
+	failRateMeter   FailRateMeter
 	endpoint        Endpoint
 	weight          int
 	effectiveWeight int
@@ -330,7 +339,7 @@ func (we *WeightedEndpoint) isDisabled() bool {
 }
 
 func (we *WeightedEndpoint) setEffectiveWeight(w int) {
-	we.rr.weightChanges += 1
+	log.Infof("%s SETTING effective weight to: %d", we, w)
 	we.effectiveWeight = w
 }
 
@@ -342,6 +351,6 @@ func (we *WeightedEndpoint) GetEffectiveWeight() int {
 	return we.effectiveWeight
 }
 
-func (we *WeightedEndpoint) GetMetrics() *FailRateMeter {
+func (we *WeightedEndpoint) GetMeter() FailRateMeter {
 	return we.failRateMeter
 }

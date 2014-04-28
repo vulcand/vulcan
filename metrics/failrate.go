@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-type FailRateGetter interface {
+type FailRateMeter interface {
 	GetRate() float64
+	IsReady() bool
 	Observer
 }
 
@@ -21,8 +22,8 @@ func IsNetworkError(attempt Attempt) bool {
 	return attempt != nil && attempt.GetError() != nil
 }
 
-// Calculates in memory failure rate of an endpoint
-type FailRateMeter struct {
+// Calculates in memory failure rate of an endpoint using rolling window of a predefined size
+type RollingMeter struct {
 	lastUpdated    time.Time
 	success        []int
 	failure        []int
@@ -35,7 +36,7 @@ type FailRateMeter struct {
 	lastBucket     int // last recorded bucket
 }
 
-func NewFailRateMeter(endpoint Endpoint, buckets int, resolution time.Duration, timeProvider timetools.TimeProvider, isError FailPredicate) (*FailRateMeter, error) {
+func NewRollingMeter(endpoint Endpoint, buckets int, resolution time.Duration, timeProvider timetools.TimeProvider, isError FailPredicate) (*RollingMeter, error) {
 	if buckets <= 0 {
 		return nil, fmt.Errorf("Buckets should be >= 0")
 	}
@@ -49,7 +50,7 @@ func NewFailRateMeter(endpoint Endpoint, buckets int, resolution time.Duration, 
 		isError = IsNetworkError
 	}
 
-	return &FailRateMeter{
+	return &RollingMeter{
 		endpoint:     endpoint,
 		buckets:      buckets,
 		resolution:   resolution,
@@ -61,7 +62,7 @@ func NewFailRateMeter(endpoint Endpoint, buckets int, resolution time.Duration, 
 	}, nil
 }
 
-func (em *FailRateMeter) Reset() {
+func (em *RollingMeter) Reset() {
 	em.lastBucket = -1
 	em.countedBuckets = 0
 	em.lastUpdated = time.Time{}
@@ -71,37 +72,37 @@ func (em *FailRateMeter) Reset() {
 	}
 }
 
-func (em *FailRateMeter) IsReady() bool {
+func (em *RollingMeter) IsReady() bool {
 	return em.countedBuckets >= em.buckets
 }
 
-func (em *FailRateMeter) SuccessCount() int64 {
+func (em *RollingMeter) SuccessCount() int64 {
 	em.cleanup(em.success)
 	return em.sum(em.success)
 }
 
-func (em *FailRateMeter) FailureCount() int64 {
+func (em *RollingMeter) FailureCount() int64 {
 	em.cleanup(em.failure)
 	return em.sum(em.failure)
 }
 
-func (em *FailRateMeter) Resolution() time.Duration {
+func (em *RollingMeter) Resolution() time.Duration {
 	return em.resolution
 }
 
-func (em *FailRateMeter) Buckets() int {
+func (em *RollingMeter) Buckets() int {
 	return em.buckets
 }
 
-func (em *FailRateMeter) WindowSize() time.Duration {
+func (em *RollingMeter) WindowSize() time.Duration {
 	return time.Duration(em.buckets) * em.resolution
 }
 
-func (em *FailRateMeter) ProcessedCount() int64 {
+func (em *RollingMeter) ProcessedCount() int64 {
 	return em.SuccessCount() + em.FailureCount()
 }
 
-func (em *FailRateMeter) GetRate() float64 {
+func (em *RollingMeter) GetRate() float64 {
 	success := em.SuccessCount()
 	failure := em.FailureCount()
 	// No data, return ok
@@ -111,10 +112,10 @@ func (em *FailRateMeter) GetRate() float64 {
 	return float64(failure) / float64(success+failure)
 }
 
-func (em *FailRateMeter) ObserveRequest(r Request) {
+func (em *RollingMeter) ObserveRequest(r Request) {
 }
 
-func (em *FailRateMeter) ObserveResponse(r Request, lastAttempt Attempt) {
+func (em *RollingMeter) ObserveResponse(r Request, lastAttempt Attempt) {
 	if lastAttempt == nil || lastAttempt.GetEndpoint() != em.endpoint {
 		return
 	}
@@ -130,11 +131,11 @@ func (em *FailRateMeter) ObserveResponse(r Request, lastAttempt Attempt) {
 }
 
 // Returns the number in the moving window bucket that this slot occupies
-func (em *FailRateMeter) getBucket(t time.Time) int {
+func (em *RollingMeter) getBucket(t time.Time) int {
 	return int(t.Truncate(em.resolution).Unix() % int64(em.buckets))
 }
 
-func (em *FailRateMeter) incBucket(buckets []int) {
+func (em *RollingMeter) incBucket(buckets []int) {
 	now := em.timeProvider.UtcNow()
 	bucket := em.getBucket(now)
 	buckets[bucket] += 1
@@ -149,7 +150,7 @@ func (em *FailRateMeter) incBucket(buckets []int) {
 }
 
 // Reset buckets that were not updated
-func (em *FailRateMeter) cleanup(buckets []int) {
+func (em *RollingMeter) cleanup(buckets []int) {
 	now := em.timeProvider.UtcNow()
 	for i := 0; i < em.buckets; i++ {
 		now = now.Add(time.Duration(-1*i) * em.resolution)
@@ -161,10 +162,29 @@ func (em *FailRateMeter) cleanup(buckets []int) {
 	}
 }
 
-func (em *FailRateMeter) sum(buckets []int) int64 {
+func (em *RollingMeter) sum(buckets []int) int64 {
 	out := int64(0)
 	for _, v := range buckets {
 		out += int64(v)
 	}
 	return out
+}
+
+type TestMeter struct {
+	Rate     float64
+	NotReady bool
+}
+
+func (tm *TestMeter) IsReady() bool {
+	return !tm.NotReady
+}
+
+func (tm *TestMeter) GetRate() float64 {
+	return tm.Rate
+}
+
+func (em *TestMeter) ObserveRequest(r Request) {
+}
+
+func (em *TestMeter) ObserveResponse(r Request, lastAttempt Attempt) {
 }

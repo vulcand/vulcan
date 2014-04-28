@@ -28,15 +28,15 @@ func (s *FailRateSuite) TestInvalidParams(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
 	// Invalid endpoint
-	_, err := NewFailRateMeter(nil, 10, time.Second, s.tm, nil)
+	_, err := NewRollingMeter(nil, 10, time.Second, s.tm, nil)
 	c.Assert(err, Not(IsNil))
 
 	// Bad buckets count
-	_, err = NewFailRateMeter(e, 0, time.Second, s.tm, nil)
+	_, err = NewRollingMeter(e, 0, time.Second, s.tm, nil)
 	c.Assert(err, Not(IsNil))
 
 	// Too precise resolution
-	_, err = NewFailRateMeter(e, 10, time.Millisecond, s.tm, nil)
+	_, err = NewRollingMeter(e, 10, time.Millisecond, s.tm, nil)
 	c.Assert(err, Not(IsNil))
 }
 
@@ -44,13 +44,13 @@ func (s *FailRateSuite) TestNotReady(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
 	// No data
-	fr, err := NewFailRateMeter(e, 10, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 10, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	c.Assert(fr.IsReady(), Equals, false)
 	c.Assert(fr.GetRate(), Equals, 0.0)
 
 	// Not enough data
-	fr, err = NewFailRateMeter(e, 10, time.Second, s.tm, nil)
+	fr, err = NewRollingMeter(e, 10, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	fr.ObserveResponse(makeFailRequest(e))
 	c.Assert(fr.IsReady(), Equals, false)
@@ -61,7 +61,7 @@ func (s *FailRateSuite) TestIgnoreOtherEndpoints(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 	e2 := MustParseUrl("http://localhost:5001")
 
-	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	fr.ObserveResponse(makeFailRequest(e))
 	fr.ObserveResponse(makeFailRequest(e2))
@@ -73,7 +73,7 @@ func (s *FailRateSuite) TestIgnoreOtherEndpoints(c *C) {
 func (s *FailRateSuite) TestIgnoreRequestsWithoutAttempts(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	fr.ObserveResponse(makeFailRequest(e))
 	fr.ObserveResponse(&BaseRequest{}, nil)
@@ -85,7 +85,7 @@ func (s *FailRateSuite) TestIgnoreRequestsWithoutAttempts(c *C) {
 func (s *FailRateSuite) TestNoSuccesses(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	fr.ObserveResponse(makeFailRequest(e))
 
@@ -96,7 +96,7 @@ func (s *FailRateSuite) TestNoSuccesses(c *C) {
 func (s *FailRateSuite) TestNoFailures(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 	fr.ObserveResponse(makeOkRequest(e))
 
@@ -108,7 +108,7 @@ func (s *FailRateSuite) TestNoFailures(c *C) {
 func (s *FailRateSuite) TestMultipleBuckets(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
 	fr.ObserveResponse(makeOkRequest(e))
@@ -128,7 +128,7 @@ func (s *FailRateSuite) TestMultipleBuckets(c *C) {
 func (s *FailRateSuite) TestOverwriteBuckets(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
 	fr.ObserveResponse(makeOkRequest(e))
@@ -154,7 +154,7 @@ func (s *FailRateSuite) TestOverwriteBuckets(c *C) {
 func (s *FailRateSuite) TestInactiveBuckets(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 3, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 3, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
 	fr.ObserveResponse(makeOkRequest(e))
@@ -182,7 +182,7 @@ func (s *FailRateSuite) TestInactiveBuckets(c *C) {
 func (s *FailRateSuite) TestLongPeriodsOfInactivity(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 2, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 2, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
 	fr.ObserveResponse(makeOkRequest(e))
@@ -202,7 +202,7 @@ func (s *FailRateSuite) TestLongPeriodsOfInactivity(c *C) {
 func (s *FailRateSuite) TestReset(c *C) {
 	e := MustParseUrl("http://localhost:5000")
 
-	fr, err := NewFailRateMeter(e, 1, time.Second, s.tm, nil)
+	fr, err := NewRollingMeter(e, 1, time.Second, s.tm, nil)
 	c.Assert(err, IsNil)
 
 	fr.ObserveResponse(makeOkRequest(e))

@@ -1,8 +1,10 @@
 package roundrobin
 
 import (
+	"fmt"
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
+	. "github.com/mailgun/vulcan/metrics"
 	. "github.com/mailgun/vulcan/request"
 	. "launchpad.net/gocheck"
 	"testing"
@@ -26,7 +28,12 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 }
 
 func (s *RoundRobinSuite) newRR() *RoundRobin {
-	r, err := NewRoundRobinWithOptions(Options{TimeProvider: s.tm})
+	handler, err := NewFSMHandlerWithOptions(s.tm, FSMDefaultProbingPeriod)
+	if err != nil {
+		panic(err)
+	}
+
+	r, err := NewRoundRobinWithOptions(Options{TimeProvider: s.tm, FailureHandler: handler})
 	if err != nil {
 		panic(err)
 	}
@@ -37,6 +44,29 @@ func (s *RoundRobinSuite) TestNoEndpoints(c *C) {
 	r := s.newRR()
 	_, err := r.NextEndpoint(s.req)
 	c.Assert(err, NotNil)
+}
+
+func (s *RoundRobinSuite) TestDefaultArgs(c *C) {
+	r, err := NewRoundRobin()
+	c.Assert(err, IsNil)
+
+	a := MustParseUrl("http://localhost:5000")
+	b := MustParseUrl("http://localhost:5001")
+
+	r.AddEndpoint(a)
+	r.AddEndpoint(b)
+
+	u, err := r.NextEndpoint(s.req)
+	c.Assert(err, IsNil)
+	c.Assert(u, Equals, a)
+
+	u, err = r.NextEndpoint(s.req)
+	c.Assert(err, IsNil)
+	c.Assert(u, Equals, b)
+
+	u, err = r.NextEndpoint(s.req)
+	c.Assert(err, IsNil)
+	c.Assert(u, Equals, a)
 }
 
 // Subsequent calls to load balancer with 1 endpoint are ok
@@ -120,6 +150,85 @@ func (s *RoundRobinSuite) TestRemoveEndpoint(c *C) {
 	u, err = r.NextEndpoint(s.req)
 	c.Assert(err, IsNil)
 	c.Assert(u, Equals, uA)
+}
+
+func (s *RoundRobinSuite) TestFindEndpoint(c *C) {
+	r := s.newRR()
+
+	uA := MustParseUrl("http://localhost:5000")
+	uB := MustParseUrl("http://localhost:5001")
+	r.AddEndpoint(uA)
+	r.AddEndpoint(uB)
+
+	c.Assert(r.FindEndpoint(uA).GetId(), Equals, uA.GetId())
+	c.Assert(r.FindEndpoint(uB).GetId(), Equals, uB.GetId())
+	c.Assert(r.FindEndpoint(MustParseUrl("http://localhost:5003")), IsNil)
+
+	c.Assert(r.FindEndpointById(""), IsNil)
+	c.Assert(r.FindEndpointById(uA.GetId()).GetId(), Equals, uA.GetId())
+}
+
+func (s *RoundRobinSuite) advanceTime(d time.Duration) {
+	s.tm.CurrentTime = s.tm.CurrentTime.Add(d)
+}
+
+func (s *RoundRobinSuite) TestReactsOnFailures(c *C) {
+	handler, err := NewFSMHandlerWithOptions(s.tm, FSMDefaultProbingPeriod)
+	c.Assert(err, IsNil)
+
+	r, err := NewRoundRobinWithOptions(
+		Options{
+			TimeProvider:   s.tm,
+			FailureHandler: handler,
+		})
+	c.Assert(err, IsNil)
+
+	a := MustParseUrl("http://localhost:5000")
+	aM := &TestMeter{Rate: 0.5}
+
+	b := MustParseUrl("http://localhost:5001")
+	bM := &TestMeter{Rate: 0}
+
+	r.AddEndpointWithOptions(a, EndpointOptions{Meter: aM})
+	r.AddEndpointWithOptions(b, EndpointOptions{Meter: bM})
+
+	countA, countB := 0, 0
+	for i := 0; i < 100; i += 1 {
+		e, err := r.NextEndpoint(s.req)
+		if e.GetId() == a.GetId() {
+			countA += 1
+		} else {
+			countB += 1
+		}
+		c.Assert(e, NotNil)
+		c.Assert(err, IsNil)
+		s.advanceTime(time.Duration(time.Second))
+		r.ObserveResponse(s.req, &BaseAttempt{Endpoint: e})
+	}
+	c.Assert(countB > countA*2, Equals, true)
+}
+
+// Make sure that failover avoids to hit the same endpoint
+func (s *RoundRobinSuite) TestFailoverAvoidsSameEndpoint(c *C) {
+	r := s.newRR()
+
+	uA := MustParseUrl("http://localhost:5000")
+	uB := MustParseUrl("http://localhost:5001")
+	r.AddEndpoint(uA)
+	r.AddEndpoint(uB)
+
+	failedRequest := &BaseRequest{
+		Attempts: []Attempt{
+			&BaseAttempt{
+				Endpoint: uA,
+				Error:    fmt.Errorf("Something failed"),
+			},
+		},
+	}
+
+	u, err := r.NextEndpoint(failedRequest)
+	c.Assert(err, IsNil)
+	c.Assert(u, Equals, uB)
 }
 
 // Removing endpoints from the load balancer works fine as well

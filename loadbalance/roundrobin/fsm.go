@@ -11,33 +11,46 @@ import (
 type FSMState int
 
 const (
-	FSMStart    = iota // initial state of the fsm
-	FSMProbing  = iota // fsm is trying some theory
-	FSMRollback = iota // fsm is rolling back
-	FSMRevert   = iota // fsm is getting back to the original state
+	// Initial state of the fsm
+	FSMStart = iota
+	// State machine is trying some theory
+	FSMProbing = iota
+	// State machine is rolling back
+	FSMRollback = iota
+	// Stat machine is getting back to the original state
+	FSMRevert = iota
 )
 
 const (
-	FSMMaxWeight            = 16384
+	FSMMaxWeight            = 4096
 	FSMGrowFactor           = 8
 	FSMDefaultProbingPeriod = 4 * time.Second
 )
 
-// This is the tiny DFA that tries to play with weights to improve over the overall error rate
+// This is the tiny FSM that tries to play with weights to improve over the overall error rate
 // to see if it helps and falls back if taking the load off the bad upstream makes the situation worse.
 type FSMHandler struct {
-	timeProvider        timetools.TimeProvider
-	backoffDuration     time.Duration      // duration that we use to backoff or apply any theory
-	state               FSMState           // Current state of the state machione
-	timer               time.Time          // Timer is set to give probing some time to take place
-	probedGoodEndpoints []*changedEndpoint // Probing changes endpoint weights and remembers the weight so it can go back in case of failure
-	weightChanges       int
+	timeProvider    timetools.TimeProvider
+	backoffDuration time.Duration      // Time that freezes state machine to accumulate stats after updating the weights
+	state           FSMState           // Current state of the state machine
+	timer           time.Time          // Timer is set to give probing some time to take place
+	probedEndpoints []*changedEndpoint // Probing changes endpoint weights and remembers the weight so it can go back in case of failure
+	weightChanges   int
 }
 
 type changedEndpoint struct {
 	failRatioBefore float64
 	endpoint        *WeightedEndpoint
 	weightBefore    int
+	newWeight       int
+}
+
+func (ce *changedEndpoint) GetEndpoint() *WeightedEndpoint {
+	return ce.endpoint
+}
+
+func (ce *changedEndpoint) GetWeight() int {
+	return ce.newWeight
 }
 
 func NewFSMHandler() (*FSMHandler, error) {
@@ -57,25 +70,26 @@ func NewFSMHandlerWithOptions(timeProvider timetools.TimeProvider, duration time
 	}, nil
 }
 
-func (fsm *FSMHandler) reset() {
+func (fsm *FSMHandler) GetState() FSMState {
+	return fsm.state
+}
+
+func (fsm *FSMHandler) Reset() {
 	fsm.state = FSMStart
 	fsm.timer = fsm.timeProvider.UtcNow().Add(-1 * time.Second)
-	fsm.probedGoodEndpoints = nil
+	fsm.probedEndpoints = nil
 	fsm.weightChanges = 0
 }
 
 func (fsm *FSMHandler) String() string {
-	if fsm.timerExpired() {
-		return fmt.Sprintf("FSM(state=%s)", stateToString(fsm.state))
-	} else {
-		return fmt.Sprintf("FSM(state=%s, timer=%s)", stateToString(fsm.state), fsm.timer.Sub(fsm.timeProvider.UtcNow()))
-	}
+	return fmt.Sprintf("FSM(state=%s)", stateToString(fsm.state))
 }
 
-func (fsm *FSMHandler) updateWeights(endpoints []*WeightedEndpoint) error {
-	if len(endpoints) == 0 {
-		fmt.Errorf("No endpoints supplied")
+func (fsm *FSMHandler) AdjustWeights(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error) {
+	if len(endpoints) < 2 {
+		return nil, nil
 	}
+
 	switch fsm.state {
 	case FSMStart:
 		return fsm.onStart(endpoints)
@@ -86,29 +100,33 @@ func (fsm *FSMHandler) updateWeights(endpoints []*WeightedEndpoint) error {
 	case FSMRevert:
 		return fsm.onRollback(endpoints)
 	}
-	return fmt.Errorf("Invalid state I am in")
+	return nil, fmt.Errorf("Unsupported state")
 }
 
-func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) error {
+func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error) {
+	w := &WeightWatcher{fsm: fsm}
 	failRate := avgFailRate(endpoints)
 	// No errors, so let's see if we can recover weights of previosly changed endpoints to the original state
 	if failRate == 0 {
 		// If we have previoulsy changed endpoints try to restore weights to the original state
 		for _, e := range endpoints {
-			if e.effectiveWeight != e.weight {
+			if e.GetEffectiveWeight() != e.GetOriginalWeight() {
 				// Adjust effective weight back to the original weight in stages
-				e.setEffectiveWeight(decrease(e.GetOriginalWeight(), e.GetEffectiveWeight()))
-				log.Infof("%s RESTORING %s", fsm, e)
-				fsm.setTimer()
-				fsm.state = FSMRevert
+				w.setWeight(e, decrease(e.GetOriginalWeight(), e.GetEffectiveWeight()))
 			}
 		}
-		return nil
+		weights := w.getWeights()
+		// We have just tried to restore the weights, go to revert state
+		if len(weights) != 0 {
+			fsm.setTimer()
+			fsm.state = FSMRevert
+		}
+		return weights, nil
 	} else {
 		log.Infof("%s reports average fail rate %f", fsm, failRate)
 		if !metricsReady(endpoints) {
 			log.Infof("%s skip cycle, metrics are not ready yet", fsm)
-			return nil
+			return nil, nil
 		}
 		// Select endpoints with highest error rates and lower their weight
 		good, bad := splitEndpoints(endpoints)
@@ -116,47 +134,63 @@ func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) error {
 		log.Infof("%s worse endpoints: %s", fsm, bad)
 		// No endpoints that are different by their quality
 		if len(bad) == 0 || len(good) == 0 {
-			log.Infof("%s all endpoints behave in the same manner, can do nothing", fsm)
-			return nil
+			log.Infof("%s all endpoints have roughly same error rate", fsm)
+			return nil, nil
 		}
-		fsm.probedGoodEndpoints = adjustWeights(good, bad)
-		fsm.setTimer()
-		fsm.state = FSMProbing
-		return nil
-	}
-}
-
-func (fsm *FSMHandler) onProbing(endpoints []*WeightedEndpoint) error {
-	if !fsm.timerExpired() {
-		return nil
-	}
-	// Now revise the good endpoints and see if we made situation worse
-	for _, e := range fsm.probedGoodEndpoints {
-		if e.failRatioBefore > e.endpoint.failRateMeter.GetRate() {
-			// Oops, we made it worse, revert the weights back and go to rollback state
-			for _, e := range fsm.probedGoodEndpoints {
-				e.endpoint.setEffectiveWeight(e.weightBefore)
+		// Increase weight on good endpoints
+		for _, e := range good {
+			if increase(e.GetEffectiveWeight()) <= FSMMaxWeight {
+				w.setWeight(e, increase(e.GetEffectiveWeight()))
 			}
-			fsm.probedGoodEndpoints = nil
-			fsm.state = FSMRollback
-			fsm.setTimer()
-			return nil
 		}
+		weights := w.getWeights()
+		if len(weights) != 0 {
+			fsm.state = FSMProbing
+			fsm.probedEndpoints = w.getChangedEndpoints()
+			fsm.setTimer()
+		}
+		return weights, nil
 	}
-	log.Infof("%s probing successfull, COMMITING the new rates", fsm)
-	// We have not made the situation worse, so
-	// go back to the starting point and continue the cycle
-	fsm.state = FSMStart
-	return nil
 }
 
-func (fsm *FSMHandler) onRollback(endpoints []*WeightedEndpoint) error {
+func (fsm *FSMHandler) onProbing(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error) {
 	if !fsm.timerExpired() {
-		return nil
+		return nil, nil
 	}
-	log.Infof("%s Timer expired pals", fsm)
+
+	// Now revise the good endpoints and see if we made situation worse
+	w := &WeightWatcher{fsm: fsm}
+	for _, e := range fsm.probedEndpoints {
+		if greater(e.endpoint.failRateMeter.GetRate(), e.failRatioBefore) {
+			// Oops, we made it worse, revert the weights back and go to rollback state
+			for _, e := range fsm.probedEndpoints {
+				w.setWeight(e.endpoint, e.weightBefore)
+			}
+		}
+	}
+
+	weights := w.getWeights()
+	// This means that we've just reversed the rates
+	if len(weights) != 0 {
+		fsm.probedEndpoints = nil
+		fsm.state = FSMRollback
+		fsm.setTimer()
+		return weights, nil
+	}
+
+	// We have not made the situation worse, so go back to the starting point and continue the cycle
+	log.Infof("%s Probing new rates was successfull, COMMITING the new rates", fsm)
 	fsm.state = FSMStart
-	return nil
+	return nil, nil
+}
+
+func (fsm *FSMHandler) onRollback(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error) {
+	if !fsm.timerExpired() {
+		return nil, nil
+	}
+	log.Infof("%s timer expired", fsm)
+	fsm.state = FSMStart
+	return nil, nil
 }
 
 func (fsm *FSMHandler) setTimer() {
@@ -190,23 +224,6 @@ func metricsReady(endpoints []*WeightedEndpoint) bool {
 	return true
 }
 
-func adjustWeights(good, bad []*WeightedEndpoint) []*changedEndpoint {
-	changedEndpoints := make([]*changedEndpoint, len(good))
-	for i, e := range good {
-		changed := &changedEndpoint{
-			weightBefore:    e.GetEffectiveWeight(),
-			failRatioBefore: e.failRateMeter.GetRate(),
-			endpoint:        e,
-		}
-		changedEndpoints[i] = changed
-		if increase(e.GetEffectiveWeight()) < FSMMaxWeight {
-			e.setEffectiveWeight(increase(e.GetEffectiveWeight()))
-			log.Infof("FSM updated weight %s", e)
-		}
-	}
-	return changedEndpoints
-}
-
 // Compare two fail rates by neglecting the insignificant differences
 func greater(a, b float64) bool {
 	return math.Floor(a*10) > math.Ceil(b*10)
@@ -234,13 +251,6 @@ func decrease(target, current int) int {
 	}
 }
 
-func abs(a int) int {
-	if a > 0 {
-		return a
-	}
-	return -1 * a
-}
-
 func stateToString(state FSMState) string {
 	switch state {
 	case FSMStart:
@@ -253,4 +263,48 @@ func stateToString(state FSMState) string {
 		return "REVERT"
 	}
 	return "UNKNOWN"
+}
+
+type WeightWatcher struct {
+	weights map[string]*changedEndpoint
+	fsm     *FSMHandler
+}
+
+func (w *WeightWatcher) setWeight(we *WeightedEndpoint, weight int) {
+	if w.weights == nil {
+		w.weights = make(map[string]*changedEndpoint)
+	}
+	log.Infof("%s proposing weight of %s to %d", w.fsm, we, weight)
+	w.weights[we.GetId()] = &changedEndpoint{
+		newWeight:       weight,
+		weightBefore:    we.GetEffectiveWeight(),
+		failRatioBefore: we.failRateMeter.GetRate(),
+		endpoint:        we,
+	}
+}
+
+func (w *WeightWatcher) getWeights() []SuggestedWeight {
+	if len(w.weights) == 0 {
+		return nil
+	}
+	out := make([]SuggestedWeight, len(w.weights))
+	i := 0
+	for _, w := range w.weights {
+		out[i] = w
+		i += 1
+	}
+	return out
+}
+
+func (w *WeightWatcher) getChangedEndpoints() []*changedEndpoint {
+	if len(w.weights) == 0 {
+		return nil
+	}
+	out := make([]*changedEndpoint, len(w.weights))
+	i := 0
+	for _, w := range w.weights {
+		out[i] = w
+		i += 1
+	}
+	return out
 }

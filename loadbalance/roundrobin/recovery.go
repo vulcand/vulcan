@@ -1,12 +1,13 @@
 package roundrobin
 
 type FailureHandler interface {
-	// WeightedRoundRobin sends the endpoints with weights as well as the current error rate
-	// so the policy can make some intelligent choices and update weights.
-	// returns true in case if any of the endpoints weights have been updated, false otherwise
+	// Returns error if something bad happened, returns suggested weights
+	AdjustWeights(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error)
+	// Resets internal state if any exists
+	Reset()
+}
 
-	// returns error if something bad happened
-	updateWeights(endpoints []*WeightedEndpoint) error
-	// Should provide an ability to reset itself
-	reset()
+type SuggestedWeight interface {
+	GetEndpoint() *WeightedEndpoint
+	GetWeight() int
 }
