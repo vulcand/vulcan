@@ -8,50 +8,42 @@ import (
 	"time"
 )
 
+// This handler increases weights on endpoints that perform better than others
+// it also rolls back to original weights if the endpoints have changed.
+type FSMHandler struct {
+	// As usual, control time in tests
+	timeProvider timetools.TimeProvider
+	// Time that freezes state machine to accumulate stats after updating the weights
+	backoffDuration time.Duration
+	// Current state of the state machine
+	state FSMState
+	// Timer is set to give probing some time to take place
+	timer time.Time
+	// Probing changes endpoint weights and remembers the weight so it can go back in case of failure
+	probedEndpoints []*changedEndpoint
+}
+
 type FSMState int
 
 const (
-	// Initial state of the fsm
+	// Initial state of the FSM
 	FSMStart = iota
-	// State machine is trying some theory
+	// FSM has increased weights and accumulates stats
 	FSMProbing = iota
-	// State machine is rolling back
+	// FSM rolls back the weights to original ones after unsucessful adjustment
 	FSMRollback = iota
 	// Stat machine is getting back to the original state
 	FSMRevert = iota
 )
 
 const (
-	FSMMaxWeight            = 4096
-	FSMGrowFactor           = 8
+	// This is the maximum weight that handler will set for the endpoint
+	FSMMaxWeight = 4096
+	// Multiplier for the endpoint weight
+	FSMGrowFactor = 8
+	// This is how long handler after any action taken on the weights
 	FSMDefaultProbingPeriod = 4 * time.Second
 )
-
-// This is the tiny FSM that tries to play with weights to improve over the overall error rate
-// to see if it helps and falls back if taking the load off the bad upstream makes the situation worse.
-type FSMHandler struct {
-	timeProvider    timetools.TimeProvider
-	backoffDuration time.Duration      // Time that freezes state machine to accumulate stats after updating the weights
-	state           FSMState           // Current state of the state machine
-	timer           time.Time          // Timer is set to give probing some time to take place
-	probedEndpoints []*changedEndpoint // Probing changes endpoint weights and remembers the weight so it can go back in case of failure
-	weightChanges   int
-}
-
-type changedEndpoint struct {
-	failRatioBefore float64
-	endpoint        *WeightedEndpoint
-	weightBefore    int
-	newWeight       int
-}
-
-func (ce *changedEndpoint) GetEndpoint() *WeightedEndpoint {
-	return ce.endpoint
-}
-
-func (ce *changedEndpoint) GetWeight() int {
-	return ce.newWeight
-}
 
 func NewFSMHandler() (*FSMHandler, error) {
 	return NewFSMHandlerWithOptions(&timetools.RealTime{}, FSMDefaultProbingPeriod)
@@ -70,26 +62,12 @@ func NewFSMHandlerWithOptions(timeProvider timetools.TimeProvider, duration time
 	}, nil
 }
 
-func (fsm *FSMHandler) GetState() FSMState {
-	return fsm.state
-}
-
-func (fsm *FSMHandler) Reset() {
-	fsm.state = FSMStart
-	fsm.timer = fsm.timeProvider.UtcNow().Add(-1 * time.Second)
-	fsm.probedEndpoints = nil
-	fsm.weightChanges = 0
-}
-
-func (fsm *FSMHandler) String() string {
-	return fmt.Sprintf("FSM(state=%s)", stateToString(fsm.state))
-}
-
+// Called on every load balancer NextEndpoint call. In case if there's nothing to do, returns nil, nil
 func (fsm *FSMHandler) AdjustWeights(endpoints []*WeightedEndpoint) ([]SuggestedWeight, error) {
+	// In this case adjusting weights would have no effect, so do nothing
 	if len(endpoints) < 2 {
 		return nil, nil
 	}
-
 	switch fsm.state {
 	case FSMStart:
 		return fsm.onStart(endpoints)
@@ -116,7 +94,7 @@ func (fsm *FSMHandler) onStart(endpoints []*WeightedEndpoint) ([]SuggestedWeight
 			}
 		}
 		weights := w.getWeights()
-		// We have just tried to restore the weights, go to revert state
+		// We have just restored the weights, go to revert state.
 		if len(weights) != 0 {
 			fsm.setTimer()
 			fsm.state = FSMRevert
@@ -199,6 +177,20 @@ func (fsm *FSMHandler) setTimer() {
 
 func (fsm *FSMHandler) timerExpired() bool {
 	return fsm.timer.Before(fsm.timeProvider.UtcNow())
+}
+
+func (fsm *FSMHandler) GetState() FSMState {
+	return fsm.state
+}
+
+func (fsm *FSMHandler) Reset() {
+	fsm.state = FSMStart
+	fsm.timer = fsm.timeProvider.UtcNow().Add(-1 * time.Second)
+	fsm.probedEndpoints = nil
+}
+
+func (fsm *FSMHandler) String() string {
+	return fmt.Sprintf("FSM(state=%s)", stateToString(fsm.state))
 }
 
 // Splits endpoint into two groups of endpoints with bad performance and good performance. It does compare relative
@@ -307,4 +299,19 @@ func (w *WeightWatcher) getChangedEndpoints() []*changedEndpoint {
 		i += 1
 	}
 	return out
+}
+
+type changedEndpoint struct {
+	failRatioBefore float64
+	endpoint        *WeightedEndpoint
+	weightBefore    int
+	newWeight       int
+}
+
+func (ce *changedEndpoint) GetEndpoint() *WeightedEndpoint {
+	return ce.endpoint
+}
+
+func (ce *changedEndpoint) GetWeight() int {
+	return ce.newWeight
 }

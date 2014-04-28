@@ -1,3 +1,4 @@
+// HTTP location with load balancing and pluggable middlewares
 package httploc
 
 import (
@@ -20,27 +21,34 @@ import (
 
 // Location with built in failover and load balancing support
 type HttpLocation struct {
-	id              string
-	transport       *http.Transport
-	loadBalancer    LoadBalancer // Load balancer controls endpoints in this location
-	options         Options      // Additional parameters
-	observerChain   *ObserverChain
+	// Unique identifier of this location
+	id string
+	// Transport with customized timeouts
+	transport *http.Transport
+	// Load balancer controls endpoints for this location
+	loadBalancer LoadBalancer
+	// Timeouts, failover and other optional settings
+	options Options
+	// Chain with pluggable middlewares that can intercept the request
 	middlewareChain *MiddlewareChain
+	// Chain of observers that watch the request
+	observerChain *ObserverChain
 }
 
-// Additional options to control this location, such as timeouts and so on
+// Additional options to control this location, such as timeouts
 type Options struct {
 	Timeouts struct {
-		Read time.Duration // Socket read timeout (before we receive the first reply header)
-		Dial time.Duration // Socket connect timeout
+		// Socket read timeout (before we receive the first reply header)
+		Read time.Duration
+		// Socket connect timeout
+		Dial time.Duration
 	}
-	ShouldFailover failover.Predicate // Predicate that defines when requests are allowed to failover
-
-	// Used to set forwarding headers
+	// Predicate that defines when requests are allowed to failover
+	ShouldFailover failover.Predicate
+	// Used in forwarding headers
 	Hostname string
 	// In this case appends new forward info to the existing header
 	TrustForwardHeader bool
-
 	// Time provider (useful for testing purposes)
 	TimeProvider timetools.TimeProvider
 }
@@ -87,8 +95,7 @@ func (l *HttpLocation) GetObserverChain() *ObserverChain {
 	return l.observerChain
 }
 
-// Round trips the request to one of the endpoints, returns the streamed
-// request body length in bytes and the endpoint reply.
+// Round trips the request to one of the endpoints and returns the response
 func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 	for {
 		_, err := req.GetBody().Seek(0, 0)
@@ -102,7 +109,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 			return nil, err
 		}
 
-		// Rewrites the request: adds headers, changes urls
+		// Adds headers, changes urls
 		newRequest := l.rewriteRequest(req.GetHttpRequest(), endpoint)
 
 		// In case if error is not nil, we allow load balancer to choose the next endpoint
@@ -127,16 +134,14 @@ func (l *HttpLocation) GetId() string {
 	return l.id
 }
 
+// Unwind middlewares iterator in reverse order
 func (l *HttpLocation) unwindIter(it *MiddlewareIter, req Request, a Attempt) {
 	for v := it.Prev(); v != nil; v = it.Prev() {
 		v.ProcessResponse(req, a)
 	}
 }
 
-// Proxy the request to the given endpoint, in case if endpoint is down
-// or failover code sequence has been recorded as the reply, return the error.
-// Failover sequence - is a special response code from the endpoint that indicates
-// that endpoint is shutting down and is not willing to accept new requests.
+// Proxy the request to the given endpoint, execute observers and middlewares chains
 func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request, httpReq *http.Request) (*http.Response, error) {
 
 	a := &BaseAttempt{Endpoint: endpoint}
@@ -198,8 +203,7 @@ func (l *HttpLocation) rewriteRequest(req *http.Request, endpoint Endpoint) *htt
 	}
 	outReq.Header.Set(headers.XForwardedServer, l.options.Hostname)
 
-	// Remove hop-by-hop headers to the backend.  Especially
-	// important is "Connection" because we want a persistent
+	// Remove hop-by-hop headers to the backend.  Especially important is "Connection" because we want a persistent
 	// connection, regardless of what the client sent to us.
 	netutils.RemoveHeaders(headers.HopHeaders, outReq.Header)
 	return outReq
@@ -229,7 +233,7 @@ func parseOptions(o Options) (Options, error) {
 		o.TimeProvider = &timetools.RealTime{}
 	}
 	if o.ShouldFailover == nil {
-		// Failover on erros for 2 times maximum on GET requests only.
+		// Failover on errors for 2 times maximum on GET requests only.
 		o.ShouldFailover = failover.And(failover.MaxAttempts(2), failover.OnErrors, failover.OnGets)
 	}
 	return o, nil

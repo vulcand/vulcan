@@ -1,3 +1,4 @@
+// Locations round trip the http request to the app specific backends
 package location
 
 import (
@@ -6,13 +7,15 @@ import (
 	"net/http"
 )
 
-// Location accepts proxy request and returns response or results in error
+// Location accepts proxy request and round trips it to the backend
 type Location interface {
+	// Unique identifier of this location
 	GetId() string
+	// Forward the request to a specific location and return the response
 	RoundTrip(Request) (*http.Response, error)
 }
 
-// Lcation used in tests
+// This location is used in tests
 type Loc struct {
 	Id   string
 	Name string

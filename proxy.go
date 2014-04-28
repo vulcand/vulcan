@@ -1,5 +1,4 @@
-// This package contains the proxy core - the main proxy function that accepts and modifies
-// request, forwards or denies it.
+// This package contains the reverse proxy that implements http.HandlerFunc
 package vulcan
 
 import (
@@ -14,29 +13,50 @@ import (
 	"sync/atomic"
 )
 
-// Reverse proxy settings, what loadbalancing algo to use,
-// timeouts, rate limiting backend
-type Options struct {
-	// Formatter that takes a status code and formats it into proxy response
-	ErrorFormatter errors.Formatter
-	// Router decides where does the request go and what load balancer handles it
-	Router route.Router
-}
-
 type Proxy struct {
-	// Router defines where does request go
+	// Router selects a location for each request
 	router route.Router
-	// Connection settings, load balancing algo to use, callbacks and watchers
+	// Options like ErrorFormatter
 	options Options
 	// Counter that is used to provide unique identifiers for requests
 	lastRequestId int64
 }
 
+type Options struct {
+	// Takes a status code and formats it into proxy response
+	ErrorFormatter errors.Formatter
+}
+
+// Accepts requests, round trips it to the endpoint and writes backe the response.
+func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Record the request body so we can replay it on errors.
+	body, err := netutils.NewBodyBuffer(r.Body)
+	if err != nil {
+		log.Errorf("Request read error %s", err)
+		p.replyError(errors.FromStatus(http.StatusBadRequest), w, r)
+	}
+	defer body.Close()
+	r.Body = body
+
+	req := &request.BaseRequest{
+		HttpRequest: r,
+		Id:          atomic.AddInt64(&p.lastRequestId, 1),
+		Body:        body,
+	}
+
+	err = p.proxyRequest(w, req)
+	if err != nil {
+		log.Errorf("%s failed: %s", req, err)
+		p.replyError(err, w, r)
+	}
+}
+
+// Creates a proxy with a given router
 func NewProxy(router route.Router) (*Proxy, error) {
 	return NewProxyWithOptions(router, Options{})
 }
 
-// Creates reverse proxy that acts like http server.
+// Creates reverse proxy that acts like http request handler
 func NewProxyWithOptions(router route.Router, o Options) (*Proxy, error) {
 	o, err := validateOptions(o)
 	if err != nil {
@@ -54,41 +74,13 @@ func (p *Proxy) GetRouter() route.Router {
 	return p.router
 }
 
-// Main request handler, accepts requests, round trips it to the endpoint and writes backe the response.
-func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// We are allowed to fallback in case of endpoint failure,
-	// record the request body so we can replay it on errors.
-	body, err := netutils.NewBodyBuffer(r.Body)
-	if err != nil {
-		log.Errorf("Request read error %s", err)
-		p.replyError(errors.FromStatus(http.StatusBadRequest), w, r)
-	}
-	defer body.Close()
-	r.Body = body
-
-	// Wrap the original request into wrapper with more detailed information available
-	req := &request.BaseRequest{
-		HttpRequest: r,
-		Id:          atomic.AddInt64(&p.lastRequestId, 1),
-		Body:        body,
-	}
-
-	err = p.proxyRequest(w, req)
-	if err != nil {
-		log.Errorf("%s failed: %s", req, err)
-		p.replyError(err, w, r)
-	}
-}
-
-// Round trips the request to one of the endpoints, returns the streamed
-// request body length in bytes and the endpoint reply.
+// Round trips the request to the selected location and writes back the response
 func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
-
 	location, err := p.router.Route(req)
 	if err != nil {
 		return err
 	}
-	// Router could not find a matching location
+	// Router could not find a matching location, we can do nothing more
 	if location == nil {
 		log.Errorf("%s failed to route", req)
 		return errors.FromStatus(http.StatusBadGateway)
@@ -108,7 +100,7 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) er
 // Helper function to reply with http errors
 func (p *Proxy) replyError(err error, w http.ResponseWriter, req *http.Request) {
 	// Discard the request body, so that clients can actually receive the response
-	// Otherwise they can only see lost connection
+	// otherwise they can only see lost connection
 	// TODO: actually check this
 	proxyError, ok := err.(errors.ProxyError)
 	if !ok {
