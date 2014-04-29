@@ -1,4 +1,4 @@
-// This package implements dynamic weighted round robin algo.
+// Dynamic weighted round robin load balancer
 package roundrobin
 
 import (

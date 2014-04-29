@@ -1,4 +1,8 @@
-/* Package that defines predicates allowing vulcan to failover request, e.g.:
+// Predicates controlling when request should be retried
+package failover
+
+/*
+Examples:
 
 * OnGets - allows to failover only get requests
 * OnErrors - allows to failover on errors
@@ -9,10 +13,7 @@ And(OnGets, MaxFails(2), Or(OnErrors, OnResponseCode(408))
 
 This will create predicate that allows failover for get requests with maximum 2 proxy attempts with failover
 triggered on errors or when upstream returns special http response code 408.
-
 */
-
-package failover
 
 import (
 	. "github.com/mailgun/vulcan/request"

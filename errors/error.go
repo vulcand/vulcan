@@ -1,3 +1,4 @@
+// Utility functions for producing errorneous http responses
 package errors
 
 import (

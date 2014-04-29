@@ -1,3 +1,4 @@
+// Middlewares can modify or intercept requests and responses
 package middleware
 
 import (

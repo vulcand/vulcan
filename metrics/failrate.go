@@ -1,3 +1,4 @@
+// In memory request performance metrics
 package metrics
 
 import (

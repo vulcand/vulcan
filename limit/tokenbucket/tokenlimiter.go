@@ -1,3 +1,4 @@
+// Tokenbucket based request rate limiter
 package tokenbucket
 
 import (

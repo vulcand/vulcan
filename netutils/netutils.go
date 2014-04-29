@@ -1,3 +1,4 @@
+// Network related utilities
 package netutils
 
 import (

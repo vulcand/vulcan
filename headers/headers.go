@@ -1,3 +1,4 @@
+// Constants with common HTTP headers
 package headers
 
 const (

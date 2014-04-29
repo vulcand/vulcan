@@ -1,3 +1,4 @@
+// Simultaneous connection limiter
 package connlimit
 
 import (

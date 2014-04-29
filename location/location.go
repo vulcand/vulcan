@@ -1,4 +1,4 @@
-// Locations round trip the http request to the app specific backends
+// Interfaces for location - round trip the http request to backends
 package location
 
 import (

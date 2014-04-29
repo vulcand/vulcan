@@ -69,6 +69,24 @@ func (s *LocSuite) newProxy(l LoadBalancer) (*HttpLocation, *httptest.Server) {
 	return s.newProxyWithParams(l, time.Duration(0), time.Duration(0))
 }
 
+// No avialable endpoints
+func (s *LocSuite) TestNoEndpoints(c *C) {
+	_, proxy := s.newProxy(s.newRoundRobin())
+	defer proxy.Close()
+
+	response, _ := Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
+}
+
+// No avialable endpoints
+func (s *LocSuite) TestAllEndpointsAreDown(c *C) {
+	_, proxy := s.newProxy(s.newRoundRobin("http://localhost:63999"))
+	defer proxy.Close()
+
+	response, _ := Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
+}
+
 // Success, make sure we've successfully proxied the response
 func (s *LocSuite) TestSuccess(c *C) {
 	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {

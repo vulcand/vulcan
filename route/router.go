@@ -1,3 +1,4 @@
+// Route the request to a location
 package route
 
 import (

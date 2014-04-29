@@ -1,3 +1,4 @@
+// Interfaces for request limiting
 package limit
 
 import (

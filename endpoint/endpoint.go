@@ -1,6 +1,5 @@
-/*This package represents varuous backend endpoints
-processing requests
-*/
+/*Endpoints - final destination of the http request
+ */
 package endpoint
 
 import (

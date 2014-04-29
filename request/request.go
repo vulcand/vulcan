@@ -1,3 +1,4 @@
+// Wrapper around http.Request with additional features
 package request
 
 import (
