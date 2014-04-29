@@ -22,6 +22,7 @@ func (s *ChainSuite) TestMiddlewareEmptyChain(c *C) {
 	chain := NewMiddlewareChain()
 	iter := chain.GetIter()
 
+	c.Assert(iter.Cur(), Equals, Middleware(nil))
 	c.Assert(iter.Next(), Equals, Middleware(nil))
 	c.Assert(iter.Next(), Equals, Middleware(nil))
 
@@ -38,7 +39,9 @@ func (s *ChainSuite) TestMiddlewareChainSingleElement(c *C) {
 	iter := chain.GetIter()
 
 	c.Assert(iter.Next(), Equals, r)
+	c.Assert(iter.Cur(), Equals, r)
 	c.Assert(iter.Next(), Equals, Middleware(nil))
+	c.Assert(iter.Cur(), Equals, Middleware(nil))
 
 	c.Assert(iter.Prev(), Equals, r)
 	c.Assert(iter.Prev(), Equals, Middleware(nil))
@@ -54,13 +57,17 @@ func (s *ChainSuite) TestMiddlewareIteration(c *C) {
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
+	c.Assert(iter.Cur(), Equals, m1)
 	c.Assert(iter.Next(), Equals, m2)
+	c.Assert(iter.Cur(), Equals, m2)
 	c.Assert(iter.Next(), Equals, nil)
 	c.Assert(iter.Next(), Equals, nil)
 
 	// And back
 	c.Assert(iter.Prev(), Equals, m2)
+	c.Assert(iter.Cur(), Equals, m2)
 	c.Assert(iter.Prev(), Equals, m1)
+	c.Assert(iter.Cur(), Equals, m1)
 	c.Assert(iter.Prev(), Equals, nil)
 	c.Assert(iter.Prev(), Equals, nil)
 }

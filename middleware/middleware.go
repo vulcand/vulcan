@@ -28,3 +28,46 @@ type Observer interface {
 	// Will be called after every request to the endpoint
 	ObserveResponse(r Request, a Attempt)
 }
+
+type ProcessRequestFn func(r Request) (*http.Response, error)
+type ProcessResponseFn func(r Request, a Attempt)
+
+// Wraps the functions to create a middleware compatible interface
+type MiddlewareWrapper struct {
+	OnRequest  ProcessRequestFn
+	OnResponse ProcessResponseFn
+}
+
+func (cb *MiddlewareWrapper) ProcessRequest(r Request) (*http.Response, error) {
+	if cb.OnRequest != nil {
+		return cb.OnRequest(r)
+	}
+	return nil, nil
+}
+
+func (cb *MiddlewareWrapper) ProcessResponse(r Request, a Attempt) {
+	if cb.OnResponse != nil {
+		cb.OnResponse(r, a)
+	}
+}
+
+type ObserveRequestFn func(r Request)
+type ObserveResponseFn func(r Request, a Attempt)
+
+// Wraps the functions to create a observer compatible interface
+type ObserverWrapper struct {
+	OnRequest  ObserveRequestFn
+	OnResponse ObserveResponseFn
+}
+
+func (cb *ObserverWrapper) ObserveRequest(r Request) {
+	if cb.OnRequest != nil {
+		cb.OnRequest(r)
+	}
+}
+
+func (cb *ObserverWrapper) ObserveResponse(r Request, a Attempt) {
+	if cb.OnResponse != nil {
+		cb.OnResponse(r, a)
+	}
+}
