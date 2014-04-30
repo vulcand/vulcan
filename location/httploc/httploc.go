@@ -136,7 +136,7 @@ func (l *HttpLocation) GetId() string {
 
 // Unwind middlewares iterator in reverse order
 func (l *HttpLocation) unwindIter(it *MiddlewareIter, req Request, a Attempt) {
-	for v := it.Cur(); v != nil; v = it.Prev() {
+	for v := it.Prev(); v != nil; v = it.Prev() {
 		v.ProcessResponse(req, a)
 	}
 }
