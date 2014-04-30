@@ -142,6 +142,42 @@ func (s *LocSuite) TestMiddlewareInterceptsRequest(c *C) {
 		},
 	}
 
+	location.GetMiddlewareChain().Append("auth", auth)
+
+	response, bodyBytes := Get(c, proxy.URL, s.authHeaders, "hello!")
+	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
+	c.Assert(string(bodyBytes), Equals, "Intercepted Request")
+
+	// Auth middleware has been called on response as well
+	c.Assert(calls["authReq"], Equals, 1)
+	c.Assert(calls["authRe"], Equals, 1)
+}
+
+// Test scenario when middleware intercepts the request
+func (s *LocSuite) TestMultipleMiddlewaresRequestIntercepted(c *C) {
+	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm endpoint"))
+	})
+	defer server.Close()
+
+	location, proxy := s.newProxy(s.newRoundRobin(server.URL))
+	defer proxy.Close()
+
+	calls := make(map[string]int)
+
+	auth := &MiddlewareWrapper{
+		OnRequest: func(r Request) (*http.Response, error) {
+			calls["authReq"] += 1
+			return netutils.NewTextResponse(
+				r.GetHttpRequest(),
+				http.StatusForbidden,
+				"Intercepted Request"), nil
+		},
+		OnResponse: func(r Request, a Attempt) {
+			calls["authRe"] += 1
+		},
+	}
+
 	cb := &MiddlewareWrapper{
 		OnRequest: func(r Request) (*http.Response, error) {
 			calls["cbReq"] += 1

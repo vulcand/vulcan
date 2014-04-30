@@ -68,14 +68,6 @@ func (m *MiddlewareIter) Prev() Middleware {
 	return val.(Middleware)
 }
 
-func (m *MiddlewareIter) Cur() Middleware {
-	val := m.iter.cur()
-	if val == nil {
-		return nil
-	}
-	return val.(Middleware)
-}
-
 type ObserverChain struct {
 	chain *chain
 }
@@ -252,13 +244,6 @@ func (it *iter) prev() interface{} {
 	}
 	it.index -= 1
 	if it.index < 0 {
-		return nil
-	}
-	return it.callbacks[it.index].cb
-}
-
-func (it *iter) cur() interface{} {
-	if it.index < 0 || it.index >= len(it.callbacks) {
 		return nil
 	}
 	return it.callbacks[it.index].cb
