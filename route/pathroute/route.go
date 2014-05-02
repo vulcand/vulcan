@@ -48,6 +48,7 @@ func (m *PathRouter) Route(req Request) (Location, error) {
 	if len(path) == 0 {
 		path = "/"
 	}
+
 	matches := m.expression.FindStringSubmatchIndex(path)
 	if len(matches) < 2 {
 		return nil, nil
@@ -121,6 +122,10 @@ func (m *PathRouter) RemoveLocation(location Location) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	if location == nil {
+		return fmt.Errorf("Pass location to remove")
+	}
+
 	for i, p := range m.locations {
 		if p.location == location {
 			// Note this is safe due to the way go does range iterations by snapshotting the ranged list
@@ -143,7 +148,7 @@ func (m *PathRouter) RemoveLocation(location Location) error {
 
 func buildMapping(locations []locPair) (*regexp.Regexp, error) {
 	if len(locations) == 0 {
-		return nil, fmt.Errorf("No locations")
+		return nil, nil
 	}
 	out := &bytes.Buffer{}
 	out.WriteString("^")
