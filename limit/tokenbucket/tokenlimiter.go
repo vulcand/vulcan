@@ -56,6 +56,18 @@ func NewTokenLimiterWithOptions(mapper MapperFn, rate Rate, o Options) (*TokenLi
 	}, nil
 }
 
+func (tl *TokenLimiter) GetRate() Rate {
+	return tl.rate
+}
+
+func (tl *TokenLimiter) GetBurst() int {
+	return tl.options.Burst
+}
+
+func (tl *TokenLimiter) GetCapacity() int {
+	return tl.options.Capacity
+}
+
 func (tl *TokenLimiter) ProcessRequest(r Request) (*http.Response, error) {
 	tl.mutex.Lock()
 	defer tl.mutex.Unlock()

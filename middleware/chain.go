@@ -196,6 +196,8 @@ func (c *chain) remove(id string) error {
 		return fmt.Errorf("Callback with id: %s not found", id)
 	}
 	c.callbacks = append(c.callbacks[:i], c.callbacks[i+1:]...)
+	delete(c.indexes, id)
+
 	for i, cb := range c.callbacks {
 		c.indexes[cb.id] = i
 	}

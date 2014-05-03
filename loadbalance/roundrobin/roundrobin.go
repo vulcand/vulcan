@@ -151,22 +151,6 @@ func (r *RoundRobin) adjustWeights() {
 	r.resetIterator()
 }
 
-func (r *RoundRobin) FindEndpoint(endpoint Endpoint) Endpoint {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	e, _ := r.findEndpointById(endpoint.GetId())
-	return e
-}
-
-func (r *RoundRobin) FindEndpointById(endpointId string) Endpoint {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	e, _ := r.findEndpointById(endpointId)
-	return e
-}
-
 func (r *RoundRobin) GetEndpoints() []*WeightedEndpoint {
 	return r.endpoints
 }
@@ -184,7 +168,7 @@ func (r *RoundRobin) AddEndpointWithOptions(endpoint Endpoint, options EndpointO
 		return fmt.Errorf("Endpoint can't be nil")
 	}
 
-	if e, _ := r.findEndpointById(endpoint.GetId()); e != nil {
+	if e, _ := r.findEndpointByUrl(endpoint.GetUrl()); e != nil {
 		return fmt.Errorf("Endpoint already exists")
 	}
 
@@ -210,16 +194,29 @@ func (r *RoundRobin) resetState() {
 	}
 }
 
-func (r *RoundRobin) findEndpointById(endpointId string) (*WeightedEndpoint, int) {
+func (r *RoundRobin) findEndpointByUrl(iu *url.URL) (*WeightedEndpoint, int) {
 	if len(r.endpoints) == 0 {
 		return nil, -1
 	}
 	for i, e := range r.endpoints {
-		if e.endpoint.GetId() == endpointId {
+		u := e.GetUrl()
+		if u.Path == iu.Path && u.Host == iu.Host && u.Scheme == iu.Scheme {
 			return e, i
 		}
 	}
 	return nil, -1
+}
+
+func (r *RoundRobin) FindEndpointById(id string) *WeightedEndpoint {
+	if len(r.endpoints) == 0 {
+		return nil
+	}
+	for _, e := range r.endpoints {
+		if e.GetId() == id {
+			return e
+		}
+	}
+	return nil
 }
 
 func (rr *RoundRobin) newWeightedEndpoint(endpoint Endpoint, options EndpointOptions) (*WeightedEndpoint, error) {
@@ -253,7 +250,7 @@ func (r *RoundRobin) RemoveEndpoint(endpoint Endpoint) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	e, index := r.findEndpointById(endpoint.GetId())
+	e, index := r.findEndpointByUrl(endpoint.GetUrl())
 	if e == nil {
 		return fmt.Errorf("Endpoint not found")
 	}
@@ -279,7 +276,7 @@ func (rr *RoundRobin) ObserveResponse(req Request, a Attempt) {
 	if a == nil || a.GetEndpoint() == nil {
 		return
 	}
-	we, _ := rr.findEndpointById(a.GetEndpoint().GetId())
+	we, _ := rr.findEndpointByUrl(a.GetEndpoint().GetUrl())
 	if we == nil {
 		return
 	}

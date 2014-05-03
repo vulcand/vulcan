@@ -44,6 +44,16 @@ func (s *ChainSuite) TestMiddlewareChainSingleElement(c *C) {
 	c.Assert(iter.Prev(), Equals, Middleware(nil))
 }
 
+func (s *ChainSuite) TestMiddlewareChainAddRemoveGet(c *C) {
+	chain := NewMiddlewareChain()
+
+	r := &Recorder{}
+	chain.Append("r", r)
+	c.Assert(chain.Get("r"), NotNil)
+	chain.Remove("r")
+	c.Assert(chain.Get("r"), IsNil)
+}
+
 func (s *ChainSuite) TestMiddlewareIteration(c *C) {
 	chain := NewMiddlewareChain()
 

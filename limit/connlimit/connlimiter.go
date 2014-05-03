@@ -84,3 +84,11 @@ func (cl *ConnectionLimiter) GetConnectionCount() int64 {
 	defer cl.mutex.Unlock()
 	return cl.totalConnections
 }
+
+func (cl *ConnectionLimiter) GetMaxConnections() int {
+	return cl.maxConnections
+}
+
+func (cl *ConnectionLimiter) SetMaxConnections(max int) {
+	cl.maxConnections = max
+}

@@ -152,6 +152,15 @@ func (s *RoundRobinSuite) TestRemoveEndpoint(c *C) {
 	c.Assert(u, Equals, uA)
 }
 
+func (s *RoundRobinSuite) TestAddSameEndpoint(c *C) {
+	r := s.newRR()
+
+	uA := MustParseUrl("http://localhost:5000")
+	uB := MustParseUrl("http://localhost:5000")
+	r.AddEndpoint(uA)
+	c.Assert(r.AddEndpoint(uB), NotNil)
+}
+
 func (s *RoundRobinSuite) TestFindEndpoint(c *C) {
 	r := s.newRR()
 
@@ -159,10 +168,6 @@ func (s *RoundRobinSuite) TestFindEndpoint(c *C) {
 	uB := MustParseUrl("http://localhost:5001")
 	r.AddEndpoint(uA)
 	r.AddEndpoint(uB)
-
-	c.Assert(r.FindEndpoint(uA).GetId(), Equals, uA.GetId())
-	c.Assert(r.FindEndpoint(uB).GetId(), Equals, uB.GetId())
-	c.Assert(r.FindEndpoint(MustParseUrl("http://localhost:5003")), IsNil)
 
 	c.Assert(r.FindEndpointById(""), IsNil)
 	c.Assert(r.FindEndpointById(uA.GetId()).GetId(), Equals, uA.GetId())
