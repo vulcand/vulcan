@@ -15,6 +15,7 @@ all:
 	go install github.com/mailgun/vulcan # installs library
 	go install github.com/mailgun/vulcan/vulcan # and service
 deps:
+	go get -v -u code.google.com/p/go.tools/cover
 	go get -v -u github.com/axw/gocov
 	go install github.com/axw/gocov/gocov
 	go get -v -u github.com/golang/glog
