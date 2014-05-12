@@ -45,3 +45,21 @@ func MakeMapRequestHeader(header string) MapperFn {
 		return req.GetHttpRequest().Header.Get(header), 1, nil
 	}
 }
+
+// Converts varaiable string to a mapper function used in rate limiters
+func VariableToMapper(variable string) (MapperFn, error) {
+	if variable == "client.ip" {
+		return MapClientIp, nil
+	}
+	if variable == "request.host" {
+		return MapRequestHost, nil
+	}
+	if strings.HasPrefix(variable, "request.header.") {
+		header := strings.TrimPrefix(variable, "request.header.")
+		if len(header) == 0 {
+			return nil, fmt.Errorf("Wrong header: %s", header)
+		}
+		return MakeMapRequestHeader(header), nil
+	}
+	return nil, fmt.Errorf("Unsupported limiting variable: '%s'", variable)
+}
