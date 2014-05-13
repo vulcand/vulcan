@@ -310,7 +310,6 @@ func (p *ReverseProxy) replyError(err error, w http.ResponseWriter, req *http.Re
 	// Discard the request body, so that clients can actually receive the response
 	// Otherwise they can only see lost connection
 	// TODO: actually check this
-	io.Copy(ioutil.Discard, req.Body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpErr.StatusCode)
 	w.Write(httpErr.Body)
