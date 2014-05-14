@@ -99,7 +99,7 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	glog.Infof("Start serving Request %s %s", req.Method, req.RequestURI, runtime.NumGoroutine())
+	glog.Infof("Start serving Request %s %s %d", req.Method, req.RequestURI, runtime.NumGoroutine())
 	defer glog.Infof("End serving Request %s %s", req.Method, req.RequestURI)
 
 	// Ask controller for instructions
