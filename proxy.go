@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"runtime"
 	"time"
 )
 
@@ -98,7 +99,8 @@ func NewReverseProxy(s *ProxySettings) (*ReverseProxy, error) {
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	glog.Infof("Serving Request %s %s", req.Method, req.RequestURI)
+	glog.Infof("Start serving Request %s %s", req.Method, req.RequestURI, runtime.NumGoroutine())
+	defer glog.Infof("End serving Request %s %s", req.Method, req.RequestURI)
 
 	// Ask controller for instructions
 	instructions, err := p.controller.GetInstructions(req)
