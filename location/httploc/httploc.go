@@ -67,10 +67,10 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 	}
 
 	observerChain := NewObserverChain()
-	observerChain.Append(BalancerId, loadBalancer)
+	observerChain.Add(BalancerId, loadBalancer)
 
 	middlewareChain := NewMiddlewareChain()
-	middlewareChain.Append(BalancerId, loadBalancer)
+	middlewareChain.Add(BalancerId, 0, loadBalancer)
 
 	return &HttpLocation{
 		id:           id,

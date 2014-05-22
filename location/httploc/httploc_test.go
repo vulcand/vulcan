@@ -142,7 +142,7 @@ func (s *LocSuite) TestMiddlewareInterceptsRequest(c *C) {
 		},
 	}
 
-	location.GetMiddlewareChain().Append("auth", auth)
+	location.GetMiddlewareChain().Add("auth", 0, auth)
 
 	response, bodyBytes := Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
@@ -197,9 +197,9 @@ func (s *LocSuite) TestMultipleMiddlewaresRequestIntercepted(c *C) {
 		},
 	}
 
-	location.GetMiddlewareChain().Append("auth", auth)
-	location.GetMiddlewareChain().Append("cb", cb)
-	location.GetObserverChain().Append("ob", observer)
+	location.GetMiddlewareChain().Add("auth", 0, auth)
+	location.GetMiddlewareChain().Add("cb", 1, cb)
+	location.GetObserverChain().Add("ob", observer)
 
 	response, bodyBytes := Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusForbidden)
