@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	. "github.com/mailgun/vulcan/request"
+	"sort"
 	"sync"
 )
 
@@ -18,20 +19,20 @@ func NewMiddlewareChain() *MiddlewareChain {
 	}
 }
 
-func (c *MiddlewareChain) Append(id string, m Middleware) error {
-	return c.chain.append(id, m)
+func (c *MiddlewareChain) Add(id string, priority int, m Middleware) error {
+	return c.chain.append(id, priority, m)
 }
 
-func (c *MiddlewareChain) Upsert(id string, m Middleware) {
-	c.chain.upsert(id, m)
+func (c *MiddlewareChain) Upsert(id string, priority int, m Middleware) {
+	c.chain.upsert(id, priority, m)
 }
 
 func (c *MiddlewareChain) Remove(id string) error {
 	return c.chain.remove(id)
 }
 
-func (c *MiddlewareChain) Update(id string, m Middleware) error {
-	return c.chain.update(id, m)
+func (c *MiddlewareChain) Update(id string, priority int, m Middleware) error {
+	return c.chain.update(id, priority, m)
 }
 
 func (c *MiddlewareChain) Get(id string) Middleware {
@@ -78,12 +79,12 @@ func NewObserverChain() *ObserverChain {
 	}
 }
 
-func (c *ObserverChain) Append(id string, o Observer) error {
-	return c.chain.append(id, o)
+func (c *ObserverChain) Add(id string, o Observer) error {
+	return c.chain.append(id, 0, o)
 }
 
 func (c *ObserverChain) Upsert(id string, o Observer) {
-	c.chain.upsert(id, o)
+	c.chain.upsert(id, 0, o)
 }
 
 func (c *ObserverChain) Remove(id string) error {
@@ -91,7 +92,7 @@ func (c *ObserverChain) Remove(id string) error {
 }
 
 func (c *ObserverChain) Update(id string, o Observer) error {
-	return c.chain.update(id, o)
+	return c.chain.update(id, 0, o)
 }
 
 func (c *ObserverChain) Get(id string) Observer {
@@ -126,64 +127,90 @@ type chain struct {
 }
 
 type callback struct {
-	id string
-	cb interface{}
+	id       string
+	priority int
+	cb       interface{}
+}
+
+type callbacks []*callback
+
+func (c callbacks) Len() int {
+	return len(c)
+}
+
+func (c callbacks) Less(i, j int) bool {
+	return c[i].priority < c[j].priority
+}
+
+func (c callbacks) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
 }
 
 func newChain() *chain {
 	return &chain{
 		mutex:     &sync.RWMutex{},
-		callbacks: []*callback{},
-		indexes:   make(map[string]int),
+		callbacks: callbacks{},
 	}
 }
 
-func (c *chain) append(id string, cb interface{}) error {
+func (c *chain) append(id string, priority int, cb interface{}) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if _, found := c.indexes[id]; found {
+	if p, _ := c.find(id); p != nil {
 		return fmt.Errorf("Callback with id: %s already exists", id)
 	}
-	c.callbacks = append(c.callbacks, &callback{id, cb})
-	c.indexes[id] = len(c.callbacks) - 1
+	c.callbacks = append(c.callbacks, &callback{id, priority, cb})
+	sort.Stable((callbacks)(c.callbacks))
 	return nil
 }
 
-func (c *chain) update(id string, cb interface{}) error {
+func (c *chain) find(id string) (*callback, int) {
+	for i, c := range c.callbacks {
+		if c.id == id {
+			return c, i
+		}
+	}
+	return nil, -1
+}
+
+func (c *chain) update(id string, priority int, cb interface{}) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	i, found := c.indexes[id]
-	if !found {
+	p, _ := c.find(id)
+	if p == nil {
 		return fmt.Errorf("Callback with id: %s not found", id)
 	}
-	c.callbacks[i].cb = cb
+	p.cb = cb
+	p.priority = priority
+	sort.Stable((callbacks)(c.callbacks))
 	return nil
 }
 
-func (c *chain) upsert(id string, cb interface{}) {
+func (c *chain) upsert(id string, priority int, cb interface{}) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	i, found := c.indexes[id]
-	if !found {
-		c.callbacks = append(c.callbacks, &callback{id, cb})
-		c.indexes[id] = len(c.callbacks) - 1
+	p, _ := c.find(id)
+	if p == nil {
+		c.callbacks = append(c.callbacks, &callback{id, priority, cb})
 	} else {
-		c.callbacks[i].cb = cb
+		p.cb = cb
+		p.priority = priority
 	}
+	sort.Stable((callbacks)(c.callbacks))
 }
 
 func (c *chain) get(id string) interface{} {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	i, found := c.indexes[id]
-	if !found {
+	p, _ := c.find(id)
+	if p == nil {
 		return nil
 	} else {
-		return c.callbacks[i].cb
+		return p.cb
 	}
 }
 
@@ -191,16 +218,12 @@ func (c *chain) remove(id string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	i, found := c.indexes[id]
-	if !found {
+	p, i := c.find(id)
+	if p == nil {
 		return fmt.Errorf("Callback with id: %s not found", id)
 	}
 	c.callbacks = append(c.callbacks[:i], c.callbacks[i+1:]...)
-	delete(c.indexes, id)
-
-	for i, cb := range c.callbacks {
-		c.indexes[cb.id] = i
-	}
+	sort.Stable((callbacks)(c.callbacks))
 	return nil
 }
 

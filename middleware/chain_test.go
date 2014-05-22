@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	//	"fmt"
 	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
 	. "launchpad.net/gocheck"
@@ -33,7 +32,7 @@ func (s *ChainSuite) TestMiddlewareChainSingleElement(c *C) {
 	chain := NewMiddlewareChain()
 
 	r := &Recorder{}
-	chain.Append("r", r)
+	chain.Add("r", 0, r)
 
 	iter := chain.GetIter()
 
@@ -48,7 +47,7 @@ func (s *ChainSuite) TestMiddlewareChainAddRemoveGet(c *C) {
 	chain := NewMiddlewareChain()
 
 	r := &Recorder{}
-	chain.Append("r", r)
+	chain.Add("r", 0, r)
 	c.Assert(chain.Get("r"), NotNil)
 	chain.Remove("r")
 	c.Assert(chain.Get("r"), IsNil)
@@ -59,8 +58,8 @@ func (s *ChainSuite) TestMiddlewareIteration(c *C) {
 
 	m1 := &Recorder{}
 	m2 := &Recorder{}
-	chain.Append("m1", m1)
-	chain.Append("m2", m2)
+	chain.Add("m1", 0, m1)
+	chain.Add("m2", 0, m2)
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
@@ -75,21 +74,42 @@ func (s *ChainSuite) TestMiddlewareIteration(c *C) {
 	c.Assert(iter.Prev(), Equals, nil)
 }
 
+func (s *ChainSuite) TestMiddlewarePriorityIteration(c *C) {
+	chain := NewMiddlewareChain()
+
+	m1 := &Recorder{}
+	m2 := &Recorder{}
+	chain.Add("m1", 1, m1)
+	chain.Add("m2", 0, m2)
+
+	iter := chain.GetIter()
+	c.Assert(iter.Next(), Equals, m2)
+	c.Assert(iter.Next(), Equals, m1)
+	c.Assert(iter.Next(), Equals, nil)
+	c.Assert(iter.Next(), Equals, nil)
+
+	// And back
+	c.Assert(iter.Prev(), Equals, m1)
+	c.Assert(iter.Prev(), Equals, m2)
+	c.Assert(iter.Prev(), Equals, nil)
+	c.Assert(iter.Prev(), Equals, nil)
+}
+
 // Make sure updates to the chain do not affect the iterators created before updates
 func (s *ChainSuite) TestMiddlewareVersionedIteration(c *C) {
 	chain := NewMiddlewareChain()
 
 	m1 := &Recorder{}
 	m2 := &Recorder{}
-	chain.Append("m1", m1)
-	chain.Append("m2", m2)
+	chain.Add("m1", 0, m1)
+	chain.Add("m2", 0, m2)
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
 	c.Assert(iter.Next(), Equals, m2)
 
 	m3 := &Recorder{}
-	chain.Append("m3", m3)
+	chain.Add("m3", 0, m3)
 
 	c.Assert(iter.Next(), Equals, nil)
 	c.Assert(iter.Prev(), Equals, m2)
@@ -107,7 +127,7 @@ func (s *ChainSuite) TestConcurrentConsumption(c *C) {
 	chain := NewMiddlewareChain()
 
 	r := &Recorder{}
-	chain.Append("r", r)
+	chain.Add("r", 0, r)
 
 	wg := &sync.WaitGroup{}
 
@@ -142,8 +162,8 @@ func (s *ChainSuite) TestObserverChainOrder(c *C) {
 
 	r1 := &Recorder{Header: http.Header{"X-Call": []string{"r1"}}}
 	r2 := &Recorder{Header: http.Header{"X-Call": []string{"r2"}}}
-	chain.Append("r1", r1)
-	chain.Append("r2", r2)
+	chain.Add("r1", r1)
+	chain.Add("r2", r2)
 
 	req := makeRequest()
 
@@ -158,13 +178,13 @@ func (s *ChainSuite) TestObserverChainOrder(c *C) {
 	c.Assert(req.GetHttpRequest().Header["X-Call"], DeepEquals, []string{"r1", "r2", "r2", "r1"})
 }
 
-func (s *ChainSuite) TestUpdatePreservesOrder(c *C) {
+func (s *ChainSuite) TestUpdateValuePreservesOrder(c *C) {
 	chain := NewMiddlewareChain()
 
 	m1 := &Recorder{}
 	m2 := &Recorder{}
-	chain.Append("b", m1)
-	chain.Append("a", m2)
+	chain.Add("b", 0, m1)
+	chain.Add("a", 0, m2)
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
@@ -173,7 +193,7 @@ func (s *ChainSuite) TestUpdatePreservesOrder(c *C) {
 
 	// Now update the middleware to something else
 	m3 := &Recorder{}
-	chain.Update("b", m3)
+	chain.Update("b", 0, m3)
 
 	iter2 := chain.GetIter()
 	c.Assert(iter2.Next(), Equals, m3)
@@ -181,13 +201,36 @@ func (s *ChainSuite) TestUpdatePreservesOrder(c *C) {
 	c.Assert(iter2.Next(), Equals, nil)
 }
 
+func (s *ChainSuite) TestUpdatePriorityChangesOrder(c *C) {
+	chain := NewMiddlewareChain()
+
+	m1 := &Recorder{}
+	m2 := &Recorder{}
+	chain.Add("a", 0, m1)
+	chain.Add("b", 1, m2)
+
+	iter := chain.GetIter()
+	c.Assert(iter.Next(), Equals, m1)
+	c.Assert(iter.Next(), Equals, m2)
+	c.Assert(iter.Next(), IsNil)
+
+	// Now update the middleware to something else and update priority
+	m3 := &Recorder{}
+	c.Assert(chain.Update("b", -1, m3), IsNil)
+
+	iter2 := chain.GetIter()
+	c.Assert(iter2.Next(), Equals, m3)
+	c.Assert(iter2.Next(), Equals, m1)
+	c.Assert(iter2.Next(), IsNil)
+}
+
 func (s *ChainSuite) TestUpsertPreservesOrder(c *C) {
 	chain := NewMiddlewareChain()
 
 	m1 := &Recorder{}
 	m2 := &Recorder{}
-	chain.Append("b", m1)
-	chain.Append("a", m2)
+	chain.Add("b", 0, m1)
+	chain.Add("a", 0, m2)
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
@@ -195,7 +238,7 @@ func (s *ChainSuite) TestUpsertPreservesOrder(c *C) {
 
 	// Now update the middleware to something else
 	m3 := &Recorder{}
-	chain.Upsert("b", m3)
+	chain.Upsert("b", 0, m3)
 
 	iter = chain.GetIter()
 	c.Assert(iter.Next(), Equals, m3)
@@ -207,8 +250,8 @@ func (s *ChainSuite) TestRemove(c *C) {
 
 	m1 := &Recorder{}
 	m2 := &Recorder{}
-	chain.Append("m1", m1)
-	chain.Append("m2", m2)
+	chain.Add("m1", 0, m1)
+	chain.Add("m2", 0, m2)
 	c.Assert(chain.Remove("m1"), IsNil)
 
 	iter := chain.GetIter()
@@ -220,7 +263,7 @@ func (s *ChainSuite) TestUpsertNew(c *C) {
 	chain := NewMiddlewareChain()
 
 	m1 := &Recorder{}
-	chain.Upsert("m1", m1)
+	chain.Upsert("m1", 0, m1)
 
 	iter := chain.GetIter()
 	c.Assert(iter.Next(), Equals, m1)
@@ -234,8 +277,8 @@ func (s *ChainSuite) TestMiddlewareChainGet(c *C) {
 	m1 := &Recorder{}
 	m2 := &Recorder{}
 
-	chain.Append("m1", m1)
-	chain.Append("m2", m2)
+	chain.Add("m1", 0, m1)
+	chain.Add("m2", 0, m2)
 
 	c.Assert(chain.Get("m1"), Equals, m1)
 	c.Assert(chain.Get("m2"), Equals, m2)
@@ -249,8 +292,8 @@ func (s *ChainSuite) TestObserverChainGet(c *C) {
 	m1 := &Recorder{}
 	m2 := &Recorder{}
 
-	chain.Append("m1", m1)
-	chain.Append("m2", m2)
+	chain.Add("m1", m1)
+	chain.Add("m2", m2)
 
 	c.Assert(chain.Get("m1"), Equals, m1)
 	c.Assert(chain.Get("m2"), Equals, m2)
@@ -260,13 +303,13 @@ func (s *ChainSuite) TestAlreadyExists(c *C) {
 	chain := NewMiddlewareChain()
 
 	m := &Recorder{}
-	c.Assert(chain.Append("r", m), IsNil)
-	c.Assert(chain.Append("r", m), NotNil)
+	c.Assert(chain.Add("r", 0, m), IsNil)
+	c.Assert(chain.Add("r", 0, m), NotNil)
 }
 
 func (s *ChainSuite) TestUpdateNotFound(c *C) {
 	chain := NewMiddlewareChain()
-	c.Assert(chain.Update("m", nil), NotNil)
+	c.Assert(chain.Update("m", 0, nil), NotNil)
 }
 
 func (s *ChainSuite) TestRemoveNotFound(c *C) {
