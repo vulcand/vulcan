@@ -48,3 +48,27 @@ func (s *ProxySuite) TestFailure(c *C) {
 	response, _ := Get(c, proxyServer.URL, nil, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
 }
+
+func (s *ProxySuite) TestReadTimeout(c *C) {
+	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm endpoint"))
+	})
+	defer server.Close()
+
+	proxy, err := NewProxy(&ConstRouter{&ConstHttpLocation{server.URL}})
+	c.Assert(err, IsNil)
+
+	// Set a very short read timeout
+	proxyServer := httptest.NewUnstartedServer(proxy)
+	proxyServer.Config.ReadTimeout = time.Millisecond
+	proxyServer.Start()
+	defer proxyServer.Close()
+
+	value := make([]byte, 65636)
+	for i := 0; i < len(value); i += 1 {
+		value[i] = byte(i % 255)
+	}
+
+	response, _ := Get(c, proxyServer.URL, nil, string(value))
+	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
+}
