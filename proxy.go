@@ -31,9 +31,10 @@ type Options struct {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Record the request body so we can replay it on errors.
 	body, err := netutils.NewBodyBuffer(r.Body)
-	if err != nil {
+	if err != nil || body == nil {
 		log.Errorf("Request read error %s", err)
 		p.replyError(errors.FromStatus(http.StatusBadRequest), w, r)
+		return
 	}
 	defer body.Close()
 	r.Body = body
