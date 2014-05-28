@@ -171,6 +171,9 @@ func (s *RoundRobinSuite) TestFindEndpoint(c *C) {
 
 	c.Assert(r.FindEndpointById(""), IsNil)
 	c.Assert(r.FindEndpointById(uA.GetId()).GetId(), Equals, uA.GetId())
+	c.Assert(r.FindEndpointByUrl(uA.GetUrl().String()).GetId(), Equals, uA.GetId())
+	c.Assert(r.FindEndpointByUrl(""), IsNil)
+	c.Assert(r.FindEndpointByUrl("http://localhost wrong url 5000"), IsNil)
 }
 
 func (s *RoundRobinSuite) advanceTime(d time.Duration) {

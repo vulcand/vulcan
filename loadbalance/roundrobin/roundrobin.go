@@ -7,6 +7,7 @@ import (
 	timetools "github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/metrics"
+	"github.com/mailgun/vulcan/netutils"
 	. "github.com/mailgun/vulcan/request"
 	"net/http"
 	"net/url"
@@ -205,6 +206,15 @@ func (r *RoundRobin) findEndpointByUrl(iu *url.URL) (*WeightedEndpoint, int) {
 		}
 	}
 	return nil, -1
+}
+
+func (r *RoundRobin) FindEndpointByUrl(url string) *WeightedEndpoint {
+	out, err := netutils.ParseUrl(url)
+	if err != nil {
+		return nil
+	}
+	found, _ := r.findEndpointByUrl(out)
+	return found
 }
 
 func (r *RoundRobin) FindEndpointById(id string) *WeightedEndpoint {
