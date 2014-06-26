@@ -28,7 +28,7 @@ func (s *RoundRobinSuite) SetUpSuite(c *C) {
 }
 
 func (s *RoundRobinSuite) newRR() *RoundRobin {
-	handler, err := NewFSMHandlerWithOptions(s.tm, FSMDefaultProbingPeriod)
+	handler, err := NewFSMHandlerWithOptions(s.tm)
 	if err != nil {
 		panic(err)
 	}
@@ -181,7 +181,7 @@ func (s *RoundRobinSuite) advanceTime(d time.Duration) {
 }
 
 func (s *RoundRobinSuite) TestReactsOnFailures(c *C) {
-	handler, err := NewFSMHandlerWithOptions(s.tm, FSMDefaultProbingPeriod)
+	handler, err := NewFSMHandlerWithOptions(s.tm)
 	c.Assert(err, IsNil)
 
 	r, err := NewRoundRobinWithOptions(
