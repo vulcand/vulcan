@@ -99,7 +99,6 @@ func (s *FSMSuite) TestFSMSplit(c *C) {
 	}
 	for _, v := range vals {
 		good, bad := splitEndpoints(v.endpoints)
-		fmt.Printf("Good %v, bad %v\n", good, bad)
 		for _, id := range v.good {
 			c.Assert(good[fmt.Sprintf("http://localhost:500%d", id)], Equals, true)
 		}
@@ -217,27 +216,43 @@ func (s *FSMSuite) TestRevert(c *C) {
 
 // Case when the increasing weights went wrong and the good endpoints started failing
 func (s *FSMSuite) TestProbingUnsuccessfull(c *C) {
-	endpoints := newW(0.5, 0.01)
+	endpoints := newW(0.5, 0.5, 0, 0, 0)
 	f := s.newF(endpoints)
 
-	good := endpoints[1]
 	adjusted, err := f.AdjustWeights()
 
 	// It will adjust weight and set timer
 	c.Assert(err, IsNil)
-	c.Assert(getWeights(adjusted), DeepEquals, []int{1, FSMGrowFactor})
+	c.Assert(getWeights(adjusted), DeepEquals, []int{1, 1, FSMGrowFactor, FSMGrowFactor, FSMGrowFactor})
 	for _, a := range adjusted {
 		a.GetEndpoint().setEffectiveWeight(a.GetWeight())
 	}
-
 	// Times has passed and good endpoint appears to behave worse now, oh no!
-	good.GetMeter().(*metrics.TestMeter).Rate = 0.5
+	for _, e := range endpoints {
+		e.GetMeter().(*metrics.TestMeter).Rate = 0.5
+	}
 	s.advanceTime(endpoints[0].meter.GetWindowSize()/2 + time.Second)
 
 	// As long as all endpoints are equally bad now, we will revert weights back
 	adjusted, err = f.AdjustWeights()
 	c.Assert(err, IsNil)
-	c.Assert(getWeights(adjusted), DeepEquals, []int{1, 1})
+	c.Assert(getWeights(adjusted), DeepEquals, []int{1, 1, 1, 1, 1})
+}
+
+func (s *FSMSuite) TestNormalize(c *C) {
+	weights := newWeights(1, 2, 3, 4)
+	c.Assert(weights, DeepEquals, normalizeWeights(weights))
+	c.Assert(newWeights(1, 1, 1, 4), DeepEquals, normalizeWeights(newWeights(4, 4, 4, 16)))
+}
+
+func (s *FSMSuite) TestMedian(c *C) {
+	c.Assert(median([]float64{0.1, 0.2}), Equals, (float64(0.1)+float64(0.2))/2.0)
+	c.Assert(median([]float64{0.3, 0.2, 0.5}), Equals, 0.3)
+}
+
+func (s *FSMSuite) TestMedianEndpoint(c *C) {
+	c.Assert(medianEndpoint(newW(0.1, 0.2)), Equals, (float64(0.1)+float64(0.2))/2.0)
+	c.Assert(medianEndpoint(newW(0.5, 0.1, 0.2)), Equals, 0.2)
 }
 
 func newW(failRates ...float64) []*WeightedEndpoint {
@@ -257,6 +272,17 @@ func getWeights(weights []SuggestedWeight) []int {
 	out := make([]int, len(weights))
 	for i, w := range weights {
 		out[i] = w.GetWeight()
+	}
+	return out
+}
+
+func newWeights(weights ...int) []SuggestedWeight {
+	out := make([]SuggestedWeight, len(weights))
+	for i, w := range weights {
+		out[i] = &EndpointWeight{
+			Weight:   w,
+			Endpoint: &WeightedEndpoint{endpoint: endpoint.MustParseUrl(fmt.Sprintf("http://localhost:500%d", i))},
+		}
 	}
 	return out
 }

@@ -55,7 +55,8 @@ func (fsm *FSMHandler) Init(endpoints []*WeightedEndpoint) {
 	fsm.timer = fsm.timeProvider.UtcNow().Add(-1 * time.Second)
 }
 
-// Called on every load balancer NextEndpoint call. In case if there's nothing to do, returns nil, nil
+// Called on every load balancer NextEndpoint call, returns the suggested weights
+// on every call, can adjust weights if needed.
 func (fsm *FSMHandler) AdjustWeights() ([]SuggestedWeight, error) {
 	// In this case adjusting weights would have no effect, so do nothing
 	if len(fsm.endpoints) < 2 {
@@ -68,32 +69,20 @@ func (fsm *FSMHandler) AdjustWeights() ([]SuggestedWeight, error) {
 	if !fsm.timerExpired() {
 		return fsm.lastWeights, nil
 	}
-
-	// No errors, so let's see if we can recover weights of previosly changed endpoints to the original state
-	if !fsm.foundFailures() {
+	// Select endpoints with highest error rates and lower their weight
+	good, bad := splitEndpoints(fsm.endpoints)
+	// No endpoints that are different by their quality, so converge weights
+	if len(bad) == 0 || len(good) == 0 {
 		weights, changed := fsm.convergeWeights()
 		if changed {
 			fsm.lastWeights = weights
 			fsm.setTimer()
-			return fsm.lastWeights, nil
 		}
-		return fsm.originalWeights, nil
-	} else {
-		// Select endpoints with highest error rates and lower their weight
-		good, bad := splitEndpoints(fsm.endpoints)
-		// No endpoints that are different by their quality, so converge weights
-		if len(bad) == 0 || len(good) == 0 {
-			weights, changed := fsm.convergeWeights()
-			if changed {
-				fsm.lastWeights = weights
-				fsm.setTimer()
-			}
-			return fsm.lastWeights, nil
-		}
-		fsm.lastWeights = fsm.adjustWeights(good, bad)
-		fsm.setTimer()
 		return fsm.lastWeights, nil
 	}
+	fsm.lastWeights = fsm.adjustWeights(good, bad)
+	fsm.setTimer()
+	return fsm.lastWeights, nil
 }
 
 func (fsm *FSMHandler) convergeWeights() ([]SuggestedWeight, bool) {
@@ -143,15 +132,6 @@ func normalizeWeights(weights []SuggestedWeight) []SuggestedWeight {
 		w.SetWeight(w.GetWeight() / gcd)
 	}
 	return weights
-}
-
-func (fsm *FSMHandler) foundFailures() bool {
-	for _, e := range fsm.endpoints {
-		if e.meter.GetRate() != 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func (fsm *FSMHandler) setTimer() {
