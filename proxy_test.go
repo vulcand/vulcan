@@ -72,5 +72,5 @@ func (s *ProxySuite) TestReadTimeout(c *C) {
 	}
 
 	response, _ := Get(c, proxyServer.URL, nil, string(value))
-	c.Assert(response.StatusCode, Equals, http.StatusBadRequest)
+	c.Assert(response.StatusCode, Equals, http.StatusRequestTimeout)
 }
