@@ -50,6 +50,8 @@ func (s *ProxySuite) TestFailure(c *C) {
 }
 
 func (s *ProxySuite) TestReadTimeout(c *C) {
+	c.Skip("This test is not stable")
+
 	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi, I'm endpoint"))
 	})
