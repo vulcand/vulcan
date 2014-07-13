@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/netutils"
+	"io"
 	"net/http"
 	"sync"
 	"time"
 )
 
-// Wrapper around http request that provides more info about http.Request
+// Request is a rapper around http request that provides more info about http.Request
 type Request interface {
 	GetHttpRequest() *http.Request              // Original http request
 	SetHttpRequest(*http.Request)               // Can be used to set http request
@@ -20,9 +21,21 @@ type Request interface {
 	GetAttempts() []Attempt                     // Returns last attempts to proxy request, may be nil if there are no attempts
 	GetLastAttempt() Attempt                    // Convenience method returning the last attempt, may be nil if there are no attempts
 	String() string                             // Debugging string representation of the request
-	SetUserData(key string, baton interface{})  //Provide storage space for data that survives with the request
-	GetUserData(key string) (interface{}, bool) //Fetch user data set from previously SetUserData call
-	DeleteUserData(key string)                  //Clean up user data set from previously SetUserData call
+	SetUserData(key string, baton interface{})  // Provide storage space for data that survives with the request
+	GetUserData(key string) (interface{}, bool) // Fetch user data set from previously SetUserData call
+	DeleteUserData(key string)                  // Clean up user data set from previously SetUserData call
+}
+
+// BodyReader is an interface for customized request readers (e.g. the ones setting custom limits)
+type BodyReader interface {
+	ReadBody(input io.Reader) (netutils.MultiReader, error)
+}
+
+type BaseBodyReader struct {
+}
+
+func (*BaseBodyReader) ReadBody(input io.Reader) (netutils.MultiReader, error) {
+	return netutils.NewBodyBuffer(input)
 }
 
 type Attempt interface {

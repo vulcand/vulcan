@@ -3,18 +3,22 @@ package httploc
 
 import (
 	"fmt"
-	log "github.com/mailgun/gotools-log"
-	timetools "github.com/mailgun/gotools-time"
-	. "github.com/mailgun/vulcan/endpoint"
-	"github.com/mailgun/vulcan/failover"
-	. "github.com/mailgun/vulcan/loadbalance"
-	. "github.com/mailgun/vulcan/middleware"
-	"github.com/mailgun/vulcan/netutils"
-	. "github.com/mailgun/vulcan/request"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"time"
+
+	log "github.com/mailgun/gotools-log"
+	timetools "github.com/mailgun/gotools-time"
+
+	"github.com/mailgun/vulcan/endpoint"
+	"github.com/mailgun/vulcan/errors"
+	"github.com/mailgun/vulcan/failover"
+	"github.com/mailgun/vulcan/loadbalance"
+	"github.com/mailgun/vulcan/middleware"
+	"github.com/mailgun/vulcan/netutils"
+	"github.com/mailgun/vulcan/request"
 )
 
 // Location with built in failover and load balancing support
@@ -24,23 +28,47 @@ type HttpLocation struct {
 	// Transport with customized timeouts
 	transport *http.Transport
 	// Load balancer controls endpoints for this location
-	loadBalancer LoadBalancer
+	loadBalancer loadbalance.LoadBalancer
 	// Timeouts, failover and other optional settings
 	options Options
 	// Chain with pluggable middlewares that can intercept the request
-	middlewareChain *MiddlewareChain
+	middlewareChain *middleware.MiddlewareChain
 	// Chain of observers that watch the request
-	observerChain *ObserverChain
+	observerChain *middleware.ObserverChain
+}
+
+type Timeouts struct {
+	// Socket read timeout (before we receive the first reply header)
+	Read time.Duration
+	// Socket connect timeout
+	Dial time.Duration
+	// TLS handshake timeout
+	TlsHandshake time.Duration
+}
+
+type KeepAlive struct {
+	// Keepalive period
+	Period time.Duration
+	// How many idle connections will be kept per host
+	MaxIdleConnsPerHost int
+}
+
+// Limits contains various limits one can supply for a location.
+type Limits struct {
+	MaxMemBodyBytes int64 // Maximum size to keep in memory before buffering to disk
+	MaxBodyBytes    int64 // Maximum size of a request body in bytes
 }
 
 // Additional options to control this location, such as timeouts
 type Options struct {
-	Timeouts struct {
-		// Socket read timeout (before we receive the first reply header)
-		Read time.Duration
-		// Socket connect timeout
-		Dial time.Duration
-	}
+	Timeouts Timeouts
+
+	// Controls KeepAlive settins for backend servers
+	KeepAlive KeepAlive
+
+	// Limits contains various limits one can supply for a location.
+	Limits Limits
+
 	// Predicate that defines when requests are allowed to failover
 	ShouldFailover failover.Predicate
 	// Used in forwarding headers
@@ -51,11 +79,11 @@ type Options struct {
 	TimeProvider timetools.TimeProvider
 }
 
-func NewLocation(id string, loadBalancer LoadBalancer) (*HttpLocation, error) {
+func NewLocation(id string, loadBalancer loadbalance.LoadBalancer) (*HttpLocation, error) {
 	return NewLocationWithOptions(id, loadBalancer, Options{})
 }
 
-func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*HttpLocation, error) {
+func NewLocationWithOptions(id string, loadBalancer loadbalance.LoadBalancer, o Options) (*HttpLocation, error) {
 	if loadBalancer == nil {
 		return nil, fmt.Errorf("Provide load balancer")
 	}
@@ -64,10 +92,10 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 		return nil, err
 	}
 
-	observerChain := NewObserverChain()
+	observerChain := middleware.NewObserverChain()
 	observerChain.Add(BalancerId, loadBalancer)
 
-	middlewareChain := NewMiddlewareChain()
+	middlewareChain := middleware.NewMiddlewareChain()
 	middlewareChain.Add(RewriterId, -2, &Rewriter{TrustForwardHeader: o.TrustForwardHeader, Hostname: o.Hostname})
 	middlewareChain.Add(BalancerId, -1, loadBalancer)
 
@@ -75,10 +103,12 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 		id:           id,
 		loadBalancer: loadBalancer,
 		transport: &http.Transport{
-			Dial: func(network, addr string) (net.Conn, error) {
-				return net.DialTimeout(network, addr, o.Timeouts.Dial)
-			},
+			Dial: (&net.Dialer{
+				Timeout:   o.Timeouts.Dial,
+				KeepAlive: o.KeepAlive.Period,
+			}).Dial,
 			ResponseHeaderTimeout: o.Timeouts.Read,
+			TLSHandshakeTimeout:   o.Timeouts.TlsHandshake,
 		},
 		options:         o,
 		middlewareChain: middlewareChain,
@@ -86,17 +116,29 @@ func NewLocationWithOptions(id string, loadBalancer LoadBalancer, o Options) (*H
 	}, nil
 }
 
-func (l *HttpLocation) GetMiddlewareChain() *MiddlewareChain {
+func (l *HttpLocation) ReadBody(reader io.Reader) (netutils.MultiReader, error) {
+	return netutils.NewBodyBufferWithOptions(reader, netutils.BodyBufferOptions{
+		MemBufferBytes: l.options.Limits.MaxMemBodyBytes,
+		MaxSizeBytes:   l.options.Limits.MaxBodyBytes,
+	})
+}
+
+func (l *HttpLocation) GetMiddlewareChain() *middleware.MiddlewareChain {
 	return l.middlewareChain
 }
 
-func (l *HttpLocation) GetObserverChain() *ObserverChain {
+func (l *HttpLocation) GetObserverChain() *middleware.ObserverChain {
 	return l.observerChain
 }
 
 // Round trips the request to one of the endpoints and returns the response
-func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
+func (l *HttpLocation) RoundTrip(req request.Request) (*http.Response, error) {
 	originalRequest := req.GetHttpRequest()
+
+	if re, err := l.limitRequestSize(req); err != nil || err != nil {
+		return re, err
+	}
+
 	for {
 		_, err := req.GetBody().Seek(0, 0)
 		if err != nil {
@@ -126,7 +168,7 @@ func (l *HttpLocation) RoundTrip(req Request) (*http.Response, error) {
 	return nil, fmt.Errorf("All endpoints failed")
 }
 
-func (l *HttpLocation) GetLoadBalancer() LoadBalancer {
+func (l *HttpLocation) GetLoadBalancer() loadbalance.LoadBalancer {
 	return l.loadBalancer
 }
 
@@ -135,16 +177,26 @@ func (l *HttpLocation) GetId() string {
 }
 
 // Unwind middlewares iterator in reverse order
-func (l *HttpLocation) unwindIter(it *MiddlewareIter, req Request, a Attempt) {
+func (l *HttpLocation) unwindIter(it *middleware.MiddlewareIter, req request.Request, a request.Attempt) {
 	for v := it.Prev(); v != nil; v = it.Prev() {
 		v.ProcessResponse(req, a)
 	}
 }
 
-// Proxy the request to the given endpoint, execute observers and middlewares chains
-func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request) (*http.Response, error) {
+func (l *HttpLocation) limitRequestSize(req request.Request) (*http.Response, error) {
+	if l.options.Limits.MaxBodyBytes <= 0 {
+		return nil, nil
+	}
+	if req.GetHttpRequest().ContentLength > l.options.Limits.MaxBodyBytes {
+		return nil, errors.FromStatus(http.StatusRequestEntityTooLarge)
+	}
+	return nil, nil
+}
 
-	a := &BaseAttempt{Endpoint: endpoint}
+// Proxy the request to the given endpoint, execute observers and middlewares chains
+func (l *HttpLocation) proxyToEndpoint(endpoint endpoint.Endpoint, req request.Request) (*http.Response, error) {
+
+	a := &request.BaseAttempt{Endpoint: endpoint}
 
 	l.observerChain.ObserveRequest(req)
 	defer l.observerChain.ObserveResponse(req, a)
@@ -170,7 +222,7 @@ func (l *HttpLocation) proxyToEndpoint(endpoint Endpoint, req Request) (*http.Re
 	return a.Response, a.Error
 }
 
-func (l *HttpLocation) copyRequest(req *http.Request, endpoint Endpoint) *http.Request {
+func (l *HttpLocation) copyRequest(req *http.Request, endpoint endpoint.Endpoint) *http.Request {
 	outReq := new(http.Request)
 	*outReq = *req // includes shallow copies of maps, but we handle this below
 
@@ -192,16 +244,31 @@ func (l *HttpLocation) copyRequest(req *http.Request, endpoint Endpoint) *http.R
 
 // Standard dial and read timeouts, can be overriden when supplying location
 const (
-	DefaultHttpReadTimeout = time.Duration(10) * time.Second
-	DefaultHttpDialTimeout = time.Duration(10) * time.Second
+	DefaultHttpReadTimeout     = time.Duration(10) * time.Second
+	DefaultHttpDialTimeout     = time.Duration(10) * time.Second
+	DefaultTlsHandshakeTimeout = time.Duration(10) * time.Second
+	DefaultKeepAlivePeriod     = time.Duration(30) * time.Second
+	DefaultMaxIdleConnsPerHost = 2
 )
 
 func parseOptions(o Options) (Options, error) {
+	if o.Limits.MaxMemBodyBytes <= 0 {
+		o.Limits.MaxMemBodyBytes = netutils.DefaultMemBufferBytes
+	}
 	if o.Timeouts.Read <= time.Duration(0) {
 		o.Timeouts.Read = DefaultHttpReadTimeout
 	}
 	if o.Timeouts.Dial <= time.Duration(0) {
 		o.Timeouts.Dial = DefaultHttpDialTimeout
+	}
+	if o.Timeouts.TlsHandshake <= time.Duration(0) {
+		o.Timeouts.TlsHandshake = DefaultTlsHandshakeTimeout
+	}
+	if o.KeepAlive.Period <= time.Duration(0) {
+		o.KeepAlive.Period = DefaultKeepAlivePeriod
+	}
+	if o.KeepAlive.MaxIdleConnsPerHost <= 0 {
+		o.KeepAlive.MaxIdleConnsPerHost = DefaultMaxIdleConnsPerHost
 	}
 
 	if o.Hostname == "" {

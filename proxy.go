@@ -2,16 +2,17 @@
 package vulcan
 
 import (
-	log "github.com/mailgun/gotools-log"
-	"github.com/mailgun/vulcan/errors"
-	"github.com/mailgun/vulcan/netutils"
-	"github.com/mailgun/vulcan/request"
-	"github.com/mailgun/vulcan/route"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"sync/atomic"
+
+	log "github.com/mailgun/gotools-log"
+	"github.com/mailgun/vulcan/errors"
+	"github.com/mailgun/vulcan/netutils"
+	"github.com/mailgun/vulcan/request"
+	"github.com/mailgun/vulcan/route"
 )
 
 type Proxy struct {
@@ -30,25 +31,7 @@ type Options struct {
 
 // Accepts requests, round trips it to the endpoint, and writes back the response.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Record the request body so we can replay it on errors.
-	body, err := netutils.NewBodyBuffer(r.Body)
-	if err != nil || body == nil {
-		log.Errorf("Request read error %s", err)
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			p.replyError(errors.FromStatus(http.StatusRequestTimeout), w, r)
-		} else {
-			p.replyError(errors.FromStatus(http.StatusBadRequest), w, r)
-		}
-		return
-	}
-	defer body.Close()
-	r.Body = body
-
-	req := request.NewBaseRequest(r, atomic.AddInt64(&p.lastRequestId, 1), body)
-
-	err = p.proxyRequest(w, req)
-	if err != nil {
-		log.Errorf("%s failed: %s", req, err)
+	if err := p.proxyRequest(w, r); err != nil {
 		p.replyError(err, w, r)
 	}
 }
@@ -77,16 +60,45 @@ func (p *Proxy) GetRouter() route.Router {
 }
 
 // Round trips the request to the selected location and writes back the response
-func (p *Proxy) proxyRequest(w http.ResponseWriter, req *request.BaseRequest) error {
+func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request) error {
+
+	// Create a unique request with sequential ids that will be passed to all interfaces.
+	req := request.NewBaseRequest(r, atomic.AddInt64(&p.lastRequestId, 1), nil)
 	location, err := p.router.Route(req)
 	if err != nil {
 		return err
 	}
-	// Router could not find a matching location, we can do nothing more
+
+	// Router could not find a matching location, we can do nothing else.
 	if location == nil {
 		log.Errorf("%s failed to route", req)
 		return errors.FromStatus(http.StatusBadGateway)
 	}
+
+	// The next step is to read the body based on the location settings
+	var reader request.BodyReader
+	if customReader, ok := location.(request.BodyReader); ok {
+		reader = customReader
+	} else {
+		reader = &request.BaseBodyReader{}
+	}
+
+	// Record the request body so we can replay it on errors.
+	body, err := reader.ReadBody(r.Body)
+	if err != nil || body == nil {
+		log.Errorf("Request read error %s", err)
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return errors.FromStatus(http.StatusRequestTimeout)
+		} else if _, ok := err.(*netutils.MaxSizeReachedError); ok {
+			return errors.FromStatus(http.StatusRequestEntityTooLarge)
+		} else {
+			return errors.FromStatus(http.StatusBadRequest)
+		}
+	}
+	defer body.Close()
+	r.Body = body
+	req.Body = body
+
 	response, err := location.RoundTrip(req)
 	if response != nil {
 		netutils.CopyHeaders(w.Header(), response.Header)
