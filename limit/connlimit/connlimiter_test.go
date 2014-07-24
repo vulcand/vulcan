@@ -2,7 +2,7 @@ package connlimit
 
 import (
 	"github.com/mailgun/vulcan/request"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"net/http"
 	"testing"
 )

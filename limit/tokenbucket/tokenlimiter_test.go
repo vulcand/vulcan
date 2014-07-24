@@ -4,7 +4,7 @@ import (
 	"github.com/mailgun/gotools-time"
 	. "github.com/mailgun/vulcan/limit"
 	"github.com/mailgun/vulcan/request"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"net/http"
 	"time"
 )

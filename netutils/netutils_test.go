@@ -1,7 +1,7 @@
 package netutils
 
 import (
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"net/http"
 	"net/url"
 	"testing"
