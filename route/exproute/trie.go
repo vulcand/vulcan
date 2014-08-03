@@ -82,7 +82,7 @@ type trieNode struct {
 	requestMatchers []matcher
 }
 
-func (e *trieNode) isLeaf() bool {
+func (e *trieNode) isMatching() bool {
 	return len(e.requestMatchers) != 0
 }
 
@@ -105,8 +105,8 @@ func (e *trieNode) String() string {
 	} else {
 		self = fmt.Sprintf("%c", e.char)
 	}
-	if e.isLeaf() {
-		return fmt.Sprintf("leaf(%s)", self)
+	if e.isMatching() {
+		return fmt.Sprintf("match(%s)", self)
 	} else if e.isRoot() {
 		return fmt.Sprintf("root")
 	} else {
@@ -121,18 +121,6 @@ func (e *trieNode) equals(o *trieNode) bool {
 }
 
 func (e *trieNode) merge(o *trieNode) (*trieNode, error) {
-	if e.isLeaf() && o.isLeaf() {
-		return mergeLeafs(e, o)
-	}
-
-	if e.isLeaf() {
-		return mergeWithLeaf(o, e)
-	}
-
-	if o.isLeaf() {
-		return mergeWithLeaf(e, o)
-	}
-
 	children := make([]*trieNode, 0, len(e.children))
 	merged := make(map[*trieNode]bool)
 
@@ -169,7 +157,7 @@ func (e *trieNode) merge(o *trieNode) (*trieNode, error) {
 		char:            e.char,
 		children:        children,
 		patternMatcher:  e.patternMatcher,
-		requestMatchers: e.requestMatchers,
+		requestMatchers: append(e.requestMatchers, o.requestMatchers...),
 	}, nil
 }
 

@@ -51,14 +51,14 @@ func (s *TrieSuite) TestPrintTries(c *C) {
 	s.testPathToTrie(c, "/a", `
 root
  node(/)
-  leaf(a)
+  match(a)
 `)
 
 	// Path wit default string parameter
 	s.testPathToTrie(c, "/<param1>", `
 root
  node(/)
-  leaf(<string:param1>)
+  match(<string:param1>)
 `)
 
 	// Path with trailing parameter
@@ -67,7 +67,7 @@ root
  node(/)
   node(m)
    node(/)
-    leaf(<string:param1>)
+    match(<string:param1>)
 `)
 
 	// Path with  parameter in the middle
@@ -78,7 +78,7 @@ root
    node(/)
     node(<string:param1>)
      node(/)
-      leaf(a)
+      match(a)
 `)
 
 	// Path with two parameters
@@ -89,7 +89,7 @@ root
    node(/)
     node(<string:param1>)
      node(/)
-      leaf(<string:param2>)
+      match(<string:param2>)
 `)
 
 }
@@ -104,8 +104,8 @@ func (s *TrieSuite) TestMergeTriesCommonPrefix(c *C) {
 	expected := `
 root
  node(/)
-  leaf(a)
-  leaf(b)
+  match(a)
+  match(b)
 `
 	c.Assert(printTrie(t3.(*trie)), Equals, expected)
 
@@ -123,8 +123,8 @@ func (s *TrieSuite) TestMergeTriesSubtree(c *C) {
 	expected := `
 root
  node(/)
-  leaf(a)
-   leaf(a)
+  match(a)
+   match(a)
 `
 	c.Assert(printTrie(t3.(*trie)), Equals, expected)
 
@@ -147,8 +147,8 @@ root
    node(/)
     node(<string:name>)
      node(/)
-      leaf(b)
-      leaf(c)
+      match(b)
+      match(c)
 `
 	c.Assert(printTrie(t3.(*trie)), Equals, expected)
 
@@ -171,10 +171,10 @@ root
    node(/)
     node(<string:name1>)
      node(/)
-      leaf(b)
+      match(b)
     node(<string:name2>)
      node(/)
-      leaf(c)
+      match(c)
 `
 	c.Assert(printTrie(t3.(*trie)), Equals, expected)
 
@@ -193,7 +193,7 @@ func (s *TrieSuite) TestMergeTriesWithSamePath(c *C) {
 	expected := `
 root
  node(/)
-  leaf(a)
+  match(a)
 `
 	c.Assert(printTrie(t3.(*trie)), Equals, expected)
 	// The first location will match as it will always go first
