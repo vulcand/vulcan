@@ -5,7 +5,7 @@ import (
 	timetools "github.com/mailgun/gotools-time"
 	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/metrics"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"time"
 )
 

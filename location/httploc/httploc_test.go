@@ -13,7 +13,7 @@ import (
 	. "github.com/mailgun/vulcan/request"
 	. "github.com/mailgun/vulcan/route"
 	. "github.com/mailgun/vulcan/testutils"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"net/http"
 	"net/http/httptest"
 	"testing"

@@ -2,7 +2,7 @@ package tokenbucket
 
 import (
 	"github.com/mailgun/gotools-time"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"testing"
 	"time"
 )

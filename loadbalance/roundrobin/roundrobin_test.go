@@ -6,7 +6,7 @@ import (
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/metrics"
 	. "github.com/mailgun/vulcan/request"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 	"testing"
 	"time"
 )
