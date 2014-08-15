@@ -3,7 +3,6 @@ package vulcan
 
 import (
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"sync/atomic"
@@ -75,30 +74,6 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 		return errors.FromStatus(http.StatusBadGateway)
 	}
 
-	// The next step is to read the body based on the location settings
-	var reader request.BodyReader
-	if customReader, ok := location.(request.BodyReader); ok {
-		reader = customReader
-	} else {
-		reader = &request.BaseBodyReader{}
-	}
-
-	// Record the request body so we can replay it on errors.
-	body, err := reader.ReadBody(r.Body)
-	if err != nil || body == nil {
-		log.Errorf("Request read error %s", err)
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return errors.FromStatus(http.StatusRequestTimeout)
-		} else if _, ok := err.(*netutils.MaxSizeReachedError); ok {
-			return errors.FromStatus(http.StatusRequestEntityTooLarge)
-		} else {
-			return errors.FromStatus(http.StatusBadRequest)
-		}
-	}
-	defer body.Close()
-	r.Body = body
-	req.Body = body
-
 	response, err := location.RoundTrip(req)
 	if response != nil {
 		netutils.CopyHeaders(w.Header(), response.Header)
@@ -111,17 +86,9 @@ func (p *Proxy) proxyRequest(w http.ResponseWriter, r *http.Request) error {
 	}
 }
 
-// Helper function to reply with http errors
+// replyError is a helper function that takes error and replies with HTTP compatible error to the client.
 func (p *Proxy) replyError(err error, w http.ResponseWriter, req *http.Request) {
-	// Discard the request body, so that clients can actually receive the response
-	// otherwise they can only see lost connection
-	// TODO: actually check this
-	proxyError, ok := err.(errors.ProxyError)
-	if !ok {
-		proxyError = errors.FromStatus(http.StatusBadGateway)
-	}
-
-	io.Copy(ioutil.Discard, req.Body)
+	proxyError := convertError(err)
 	statusCode, body, contentType := p.options.ErrorFormatter.Format(proxyError)
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(statusCode)
@@ -133,4 +100,18 @@ func validateOptions(o Options) (Options, error) {
 		o.ErrorFormatter = &errors.JsonFormatter{}
 	}
 	return o, nil
+}
+
+func convertError(err error) errors.ProxyError {
+	switch e := err.(type) {
+	case errors.ProxyError:
+		return e
+	case net.Error:
+		if e.Timeout() {
+			return errors.FromStatus(http.StatusRequestTimeout)
+		}
+	case *netutils.MaxSizeReachedError:
+		return errors.FromStatus(http.StatusRequestEntityTooLarge)
+	}
+	return errors.FromStatus(http.StatusBadGateway)
 }

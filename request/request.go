@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/netutils"
-	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -16,6 +15,7 @@ type Request interface {
 	GetHttpRequest() *http.Request              // Original http request
 	SetHttpRequest(*http.Request)               // Can be used to set http request
 	GetId() int64                               // Request id that is unique to this running process
+	SetBody(netutils.MultiReader)               // Sets request body
 	GetBody() netutils.MultiReader              // Request body fully read and stored in effective manner (buffered to disk for large requests)
 	AddAttempt(Attempt)                         // Add last proxy attempt to the request
 	GetAttempts() []Attempt                     // Returns last attempts to proxy request, may be nil if there are no attempts
@@ -24,18 +24,6 @@ type Request interface {
 	SetUserData(key string, baton interface{})  // Provide storage space for data that survives with the request
 	GetUserData(key string) (interface{}, bool) // Fetch user data set from previously SetUserData call
 	DeleteUserData(key string)                  // Clean up user data set from previously SetUserData call
-}
-
-// BodyReader is an interface for customized request readers (e.g. the ones setting custom limits)
-type BodyReader interface {
-	ReadBody(input io.Reader) (netutils.MultiReader, error)
-}
-
-type BaseBodyReader struct {
-}
-
-func (*BaseBodyReader) ReadBody(input io.Reader) (netutils.MultiReader, error) {
-	return netutils.NewBodyBuffer(input)
 }
 
 type Attempt interface {
@@ -101,6 +89,10 @@ func (br *BaseRequest) SetHttpRequest(r *http.Request) {
 
 func (br *BaseRequest) GetId() int64 {
 	return br.Id
+}
+
+func (br *BaseRequest) SetBody(b netutils.MultiReader) {
+	br.Body = b
 }
 
 func (br *BaseRequest) GetBody() netutils.MultiReader {

@@ -21,7 +21,7 @@ type Limiter interface {
 
 // MapperFn takes the request and returns token that corresponds to the  request and the amount of tokens this request is going to consume, e.g.
 // * Client ip rate limiter - token is a client ip, amount is 1 request
-// * Client ip bandwitdh limiter - token is a client ip, amount is number of bytes to consume
+// * Client ip bandwidth limiter - token is a client ip, amount is number of bytes to consume
 // In case of error returns non nil error, in this case rate limiter will reject the request.
 type MapperFn func(r request.Request) (token string, amount int64, err error)
 

@@ -184,6 +184,27 @@ func (s *LocSuite) TestChunkedEncodingLimitReached(c *C) {
 	c.Assert(status, Equals, "HTTP/1.0 413 Request Entity Too Large\r\n")
 }
 
+func (s *LocSuite) TestUpdateLimit(c *C) {
+	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hi, I'm endpoint!"))
+	})
+	defer server.Close()
+
+	location, proxy := s.newProxyWithParams(s.newRoundRobin(server.URL), 0, 0, 4, 1024)
+	defer proxy.Close()
+
+	response, _ := Get(c, proxy.URL, s.authHeaders, "Hello, this request is longer than 8 bytes")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	options := location.GetOptions()
+	options.Limits.MaxBodyBytes = 8
+	err := location.SetOptions(options)
+	c.Assert(err, IsNil)
+
+	response, _ = Get(c, proxy.URL, s.authHeaders, "Hello, this request is longer than 8 bytes")
+	c.Assert(response.StatusCode, Equals, http.StatusRequestEntityTooLarge)
+}
+
 func (s *LocSuite) TestFailover(c *C) {
 	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi, I'm endpoint"))
