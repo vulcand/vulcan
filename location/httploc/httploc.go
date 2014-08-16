@@ -326,7 +326,7 @@ func parseOptions(o Options) (Options, error) {
 	}
 	if o.ShouldFailover == nil {
 		// Failover on errors for 2 times maximum on GET requests only.
-		o.ShouldFailover = failover.And(failover.MaxAttempts(2), failover.OnErrors, failover.OnGets)
+		o.ShouldFailover = failover.And(failover.AttemptsLe(2), failover.IsNetworkError, failover.RequestMethodEq("GET"))
 	}
 	return o, nil
 }
