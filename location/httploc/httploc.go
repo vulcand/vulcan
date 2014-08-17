@@ -117,6 +117,9 @@ func (l *HttpLocation) SetOptions(o Options) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
+	if err := l.middlewareChain.Update(RewriterId, -2, &Rewriter{TrustForwardHeader: o.TrustForwardHeader, Hostname: o.Hostname}); err != nil {
+		return err
+	}
 	l.options = options
 	l.setTransport(newTransport(options))
 	return nil

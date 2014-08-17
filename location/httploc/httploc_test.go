@@ -205,6 +205,35 @@ func (s *LocSuite) TestUpdateLimit(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusRequestEntityTooLarge)
 }
 
+func (s *LocSuite) TestUpdateForwardHeader(c *C) {
+	var header string
+	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header.Get("X-Forwarded-Server")
+		w.Write([]byte("Hi, I'm endpoint!"))
+	})
+	defer server.Close()
+
+	location, proxy := s.newProxy(s.newRoundRobin(server.URL))
+	defer proxy.Close()
+
+	options := location.GetOptions()
+	options.Hostname = "host1"
+	location.SetOptions(options)
+
+	response, _ := Get(c, proxy.URL, s.authHeaders, "Hello")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(header, Equals, "host1")
+
+	options = location.GetOptions()
+	options.Hostname = "host2"
+	err := location.SetOptions(options)
+	c.Assert(err, IsNil)
+
+	response, _ = Get(c, proxy.URL, s.authHeaders, "Hello")
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(header, Equals, "host2")
+}
+
 func (s *LocSuite) TestFailover(c *C) {
 	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi, I'm endpoint"))
