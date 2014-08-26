@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -456,4 +457,25 @@ func (s *LocSuite) TestFailoverHeaders(c *C) {
 	response, _ := Get(c, proxy.URL, s.authHeaders, "hello!")
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(finalHeaders, DeepEquals, []string{"call"})
+}
+
+func (s *LocSuite) TestRewritesURLsWithEncodedPath(c *C) {
+	path := "log/http%3A%2F%2Fwww.site.com%2Fsomething"
+
+	server := NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+		uri := fmt.Sprintf("%s://%s/%s", r.URL.Scheme, r.URL.Host, path)
+		c.Assert(r.RequestURI, Equals, uri)
+	})
+	defer server.Close()
+
+	_, proxy := s.newProxy(s.newRoundRobin("http://localhost:63999", server.URL))
+	defer proxy.Close()
+
+	url, _ := url.Parse(proxy.URL)
+	url.Opaque = fmt.Sprintf("//%s/%s", url.Host, path)
+
+	request, _ := http.NewRequest("GET", url.String(), nil)
+	request.URL = url
+
+	http.DefaultClient.Do(request)
 }
