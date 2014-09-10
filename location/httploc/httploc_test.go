@@ -469,7 +469,7 @@ func (s *LocSuite) TestRewritesURLsWithEncodedPath(c *C) {
 	_, proxy := s.newProxy(s.newRoundRobin(server.URL))
 	defer proxy.Close()
 
-	path := "/log/http%3A%2F%2Fwww.site.com%2Fsomething"
+	path := "/log/http%3A%2F%2Fwww.site.com%2Fsomething?a=b"
 	url := netutils.MustParseUrl(proxy.URL)
 	url.Opaque = path
 

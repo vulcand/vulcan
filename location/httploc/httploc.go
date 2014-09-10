@@ -275,7 +275,8 @@ func (l *HttpLocation) copyRequest(req *http.Request, body netutils.MultiReader,
 	outReq.URL.Scheme = endpointURL.Scheme
 	outReq.URL.Host = endpointURL.Host
 	outReq.URL.Opaque = req.RequestURI
-	outReq.URL.RawQuery = req.URL.RawQuery
+	// raw query is already included in RequestURI, so ignore it to avoid dupes
+	outReq.URL.RawQuery = ""
 
 	outReq.Proto = "HTTP/1.1"
 	outReq.ProtoMajor = 1
