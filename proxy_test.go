@@ -34,7 +34,8 @@ func (s *ProxySuite) TestSuccess(c *C) {
 	proxyServer := httptest.NewServer(proxy)
 	defer proxyServer.Close()
 
-	response, bodyBytes := Get(c, proxyServer.URL, nil, "hello!")
+	response, bodyBytes, err := MakeRequest(proxyServer.URL, Opts{})
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	c.Assert(string(bodyBytes), Equals, "Hi, I'm endpoint")
 }
@@ -45,7 +46,8 @@ func (s *ProxySuite) TestFailure(c *C) {
 	proxyServer := httptest.NewServer(proxy)
 	defer proxyServer.Close()
 
-	response, _ := Get(c, proxyServer.URL, nil, "hello!")
+	response, _, err := MakeRequest(proxyServer.URL, Opts{})
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusBadGateway)
 }
 
@@ -71,6 +73,7 @@ func (s *ProxySuite) TestReadTimeout(c *C) {
 		value[i] = byte(i % 255)
 	}
 
-	response, _ := Get(c, proxyServer.URL, nil, string(value))
+	response, _, err := MakeRequest(proxyServer.URL, Opts{Body: string(value)})
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusRequestTimeout)
 }
