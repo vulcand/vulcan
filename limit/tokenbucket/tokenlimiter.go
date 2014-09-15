@@ -3,7 +3,7 @@ package tokenbucket
 
 import (
 	"fmt"
-	"github.com/mailgun/gotools-time"
+	"github.com/mailgun/timetools"
 	"github.com/mailgun/ttlmap"
 	"github.com/mailgun/vulcan/errors"
 	"github.com/mailgun/vulcan/limit"

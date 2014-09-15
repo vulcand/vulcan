@@ -1,7 +1,7 @@
 package tokenbucket
 
 import (
-	"github.com/mailgun/gotools-time"
+	"github.com/mailgun/timetools"
 	. "gopkg.in/check.v1"
 	"testing"
 	"time"
