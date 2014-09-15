@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/mailgun/gotools-log"
-	timetools "github.com/mailgun/gotools-time"
+	"github.com/mailgun/log"
+	"github.com/mailgun/timetools"
 
 	"github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/errors"

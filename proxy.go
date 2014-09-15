@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync/atomic"
 
-	log "github.com/mailgun/gotools-log"
+	"github.com/mailgun/log"
 	"github.com/mailgun/vulcan/errors"
 	"github.com/mailgun/vulcan/netutils"
 	"github.com/mailgun/vulcan/request"

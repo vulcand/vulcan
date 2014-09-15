@@ -1,7 +1,7 @@
 package vulcan
 
 import (
-	timetools "github.com/mailgun/gotools-time"
+	"github.com/mailgun/timetools"
 	. "github.com/mailgun/vulcan/location"
 	. "github.com/mailgun/vulcan/route"
 	. "github.com/mailgun/vulcan/testutils"

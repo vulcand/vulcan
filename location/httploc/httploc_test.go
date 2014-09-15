@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	timetools "github.com/mailgun/gotools-time"
+	"github.com/mailgun/timetools"
 	"github.com/mailgun/vulcan"
 	. "github.com/mailgun/vulcan/endpoint"
 	"github.com/mailgun/vulcan/headers"

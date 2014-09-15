@@ -2,7 +2,7 @@ package roundrobin
 
 import (
 	"fmt"
-	log "github.com/mailgun/gotools-log"
+	"github.com/mailgun/log"
 	. "github.com/mailgun/vulcan/endpoint"
 	. "github.com/mailgun/vulcan/metrics"
 	"net/url"
