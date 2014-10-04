@@ -2,11 +2,7 @@ test: clean
 	go test -v ./... -cover
 
 deps:
-
-	go get -v -u github.com/mailgun/gotools-log
-	go get -v -u github.com/mailgun/gotools-time
-	go get -v -u github.com/mailgun/ttlmap
-	go get gopkg.in/check.v1
+	go get -v -u ./...
 
 clean:
 	find . -name flymake_* -delete
