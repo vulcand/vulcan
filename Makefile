@@ -2,7 +2,8 @@ test: clean
 	go test -v ./... -cover
 
 deps:
-	go get -v -u ./...
+	go list -f '{{join .Deps "\n"}} \
+{{join .TestImports "\n"}}' ./... |  xargs go list -e -f '{{if not .Standard}}{{.ImportPath}}{{end}}' | grep -v `go list` | xargs go get -u -v
 
 clean:
 	find . -name flymake_* -delete
