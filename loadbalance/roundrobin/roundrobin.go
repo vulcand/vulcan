@@ -75,7 +75,7 @@ func (r *RoundRobin) NextEndpoint(req Request) (Endpoint, error) {
 	// that reduces the probability of the scenario when failover hits same endpoint
 	// on the next attempt and fails, so users will see a failed request.
 	var endpoint Endpoint
-	for _, _ = range r.endpoints {
+	for _ = range r.endpoints {
 		endpoint, err = r.nextEndpoint(req)
 		if err != nil {
 			return nil, err

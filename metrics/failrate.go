@@ -68,7 +68,7 @@ func (em *RollingMeter) Reset() {
 	em.lastBucket = -1
 	em.countedBuckets = 0
 	em.lastUpdated = time.Time{}
-	for i, _ := range em.success {
+	for i := range em.success {
 		em.success[i] = 0
 		em.failure[i] = 0
 	}
