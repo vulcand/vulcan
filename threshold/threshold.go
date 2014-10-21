@@ -26,7 +26,7 @@ type RequestToString func(req request.Request) string
 // RequestToInt defines mapper function that maps a request to some int (e.g extracts response code)
 type RequestToInt func(req request.Request) int
 
-// RequestMethod returns mapper of the request to it's method e.g. POST
+// RequestMethod returns mapper of the request to its method e.g. POST
 func RequestMethod() RequestToString {
 	return func(r request.Request) string {
 		return r.GetHttpRequest().Method
@@ -63,7 +63,7 @@ func IsNetworkError() Predicate {
 	}
 }
 
-// Function that returns predicate by joining the passed predicates with AND
+// AND returns predicate by joining the passed predicates with logical 'and'
 func AND(fns ...Predicate) Predicate {
 	return func(req request.Request) bool {
 		for _, fn := range fns {
@@ -75,7 +75,7 @@ func AND(fns ...Predicate) Predicate {
 	}
 }
 
-// Function that returns predicate by joining the passed predicates with OR
+// OR returns predicate by joining the passed predicates with logical 'or'
 func OR(fns ...Predicate) Predicate {
 	return func(req request.Request) bool {
 		for _, fn := range fns {
@@ -105,7 +105,7 @@ func EQ(m interface{}, value interface{}) (Predicate, error) {
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
 
-// EQ returns predicate that tests for inequality of the value of the mapper and the constant
+// NEQ returns predicate that tests for inequality of the value of the mapper and the constant
 func NEQ(m interface{}, value interface{}) (Predicate, error) {
 	p, err := EQ(m, value)
 	if err != nil {
@@ -132,7 +132,7 @@ func GT(m interface{}, value interface{}) (Predicate, error) {
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
 
-// LT returns predicate that tests that value of the mapper function is less or equal to the constant
+// LE returns predicate that tests that value of the mapper function is less than or equal to the constant
 func LE(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
@@ -141,7 +141,7 @@ func LE(m interface{}, value interface{}) (Predicate, error) {
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
 
-// GE returns predicate that tests that value of the mapper function is less or equal to the constant
+// GE returns predicate that tests that value of the mapper function is greater than or equal to the constant
 func GE(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
