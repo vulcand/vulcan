@@ -329,8 +329,12 @@ func parseOptions(o Options) (Options, error) {
 		o.TimeProvider = &timetools.RealTime{}
 	}
 	if o.ShouldFailover == nil {
-		// Failover on errors for 2 times maximum on GET requests only.
-		o.ShouldFailover = failover.And(failover.AttemptsLe(2), failover.IsNetworkError, failover.RequestMethodEq("GET"))
+		// Failover on network errors for 2 times maximum on GET requests only.
+		p, err := failover.ParseExpression(`Attempts() < 2 && IsNetworkError() && RequestMethod() == "GET"`)
+		if err != nil {
+			return o, err
+		}
+		o.ShouldFailover = p
 	}
 	return o, nil
 }
