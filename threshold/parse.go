@@ -1,4 +1,4 @@
-package failover
+package threshold
 
 import (
 	"fmt"
@@ -11,14 +11,14 @@ import (
 func ParseExpression(in string) (Predicate, error) {
 	p, err := predicate.NewParser(predicate.Def{
 		Operators: predicate.Operators{
-			AND: And,
-			OR:  Or,
-			EQ:  Eq,
-			NEQ: Neq,
-			LT:  Lt,
-			LE:  Le,
-			GT:  Gt,
-			GE:  Ge,
+			AND: AND,
+			OR:  OR,
+			EQ:  EQ,
+			NEQ: NEQ,
+			LT:  LT,
+			LE:  LE,
+			GT:  GT,
+			GE:  GE,
 		},
 		Functions: map[string]interface{}{
 			"RequestMethod":  RequestMethod,

@@ -1,4 +1,4 @@
-package failover
+package threshold
 
 import (
 	"fmt"
@@ -11,12 +11,12 @@ import (
 
 func Test(t *testing.T) { TestingT(t) }
 
-type FailoverSuite struct {
+type ThresholdSuite struct {
 }
 
-var _ = Suite(&FailoverSuite{})
+var _ = Suite(&ThresholdSuite{})
 
-func (s *FailoverSuite) TestSuccessOnGets(c *C) {
+func (s *ThresholdSuite) TestSuccessOnGets(c *C) {
 	p, err := ParseExpression(`RequestMethod() == "GET"`)
 	c.Assert(err, IsNil)
 
@@ -24,7 +24,7 @@ func (s *FailoverSuite) TestSuccessOnGets(c *C) {
 	c.Assert(p(&BaseRequest{HttpRequest: &http.Request{Method: "POST"}}), Equals, false)
 }
 
-func (s *FailoverSuite) TestSuccessOnGetsLegacy(c *C) {
+func (s *ThresholdSuite) TestSuccessOnGetsLegacy(c *C) {
 	p, err := ParseExpression(`RequestMethodEq("GET")`)
 	c.Assert(err, IsNil)
 
@@ -32,7 +32,7 @@ func (s *FailoverSuite) TestSuccessOnGetsLegacy(c *C) {
 	c.Assert(p(&BaseRequest{HttpRequest: &http.Request{Method: "POST"}}), Equals, false)
 }
 
-func (s *FailoverSuite) TestSuccessOnGetsAndErrors(c *C) {
+func (s *ThresholdSuite) TestSuccessOnGetsAndErrors(c *C) {
 	p, err := ParseExpression(`(RequestMethod() == "GET") && IsNetworkError()`)
 	c.Assert(err, IsNil)
 
@@ -51,7 +51,7 @@ func (s *FailoverSuite) TestSuccessOnGetsAndErrors(c *C) {
 	c.Assert(p(req), Equals, true)
 }
 
-func (s *FailoverSuite) TestLegacyIsNetworkError(c *C) {
+func (s *ThresholdSuite) TestLegacyIsNetworkError(c *C) {
 	p, err := ParseExpression(`ResponseCodeEq(503) || IsNetworkError`)
 	c.Assert(err, IsNil)
 
@@ -89,7 +89,7 @@ func (s *FailoverSuite) TestLegacyIsNetworkError(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestResponseCodeOrError(c *C) {
+func (s *ThresholdSuite) TestResponseCodeOrError(c *C) {
 	p, err := ParseExpression(`ResponseCode() == 503 || IsNetworkError()`)
 	c.Assert(err, IsNil)
 
@@ -127,7 +127,7 @@ func (s *FailoverSuite) TestResponseCodeOrError(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestAttemptsLeLegacy(c *C) {
+func (s *ThresholdSuite) TestAttemptsLeLegacy(c *C) {
 	p, err := ParseExpression(`AttemptsLe(1)`)
 	c.Assert(err, IsNil)
 
@@ -149,7 +149,7 @@ func (s *FailoverSuite) TestAttemptsLeLegacy(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestAttemptsLt(c *C) {
+func (s *ThresholdSuite) TestAttemptsLt(c *C) {
 	p, err := ParseExpression(`Attempts() < 1`)
 	c.Assert(err, IsNil)
 
@@ -171,7 +171,7 @@ func (s *FailoverSuite) TestAttemptsLt(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestAttemptsGt(c *C) {
+func (s *ThresholdSuite) TestAttemptsGt(c *C) {
 	p, err := ParseExpression(`Attempts() > 1`)
 	c.Assert(err, IsNil)
 
@@ -193,7 +193,7 @@ func (s *FailoverSuite) TestAttemptsGt(c *C) {
 	c.Assert(p(req), Equals, true)
 }
 
-func (s *FailoverSuite) TestAttemptsGe(c *C) {
+func (s *ThresholdSuite) TestAttemptsGe(c *C) {
 	p, err := ParseExpression(`Attempts() >= 1`)
 	c.Assert(err, IsNil)
 
@@ -224,7 +224,7 @@ func (s *FailoverSuite) TestAttemptsGe(c *C) {
 	c.Assert(p(req), Equals, true)
 }
 
-func (s *FailoverSuite) TestAttemptsNe(c *C) {
+func (s *ThresholdSuite) TestAttemptsNe(c *C) {
 	p, err := ParseExpression(`Attempts() != 1`)
 	c.Assert(err, IsNil)
 
@@ -243,7 +243,7 @@ func (s *FailoverSuite) TestAttemptsNe(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestComplexExpression(c *C) {
+func (s *ThresholdSuite) TestComplexExpression(c *C) {
 	p, err := ParseExpression(`(ResponseCode() == 503 || IsNetworkError()) && Attempts() <= 1`)
 	c.Assert(err, IsNil)
 
@@ -271,7 +271,7 @@ func (s *FailoverSuite) TestComplexExpression(c *C) {
 	c.Assert(p(req), Equals, false)
 }
 
-func (s *FailoverSuite) TestInvalidCases(c *C) {
+func (s *ThresholdSuite) TestInvalidCases(c *C) {
 	cases := []string{
 		")(",                                 // invalid expression
 		"1",                                  // standalone literal
