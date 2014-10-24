@@ -26,6 +26,9 @@ type RequestToString func(req request.Request) string
 // RequestToInt defines mapper function that maps a request to some int (e.g extracts response code)
 type RequestToInt func(req request.Request) int
 
+// RequestToFloat64 defines mapper function that maps a request to some float64 (e.g extracts some ratio)
+type RequestToFloat64 func(req request.Request) float64
+
 // RequestMethod returns mapper of the request to its method e.g. POST
 func RequestMethod() RequestToString {
 	return func(r request.Request) string {
@@ -119,6 +122,8 @@ func LT(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
 		return intLT(mapper, value)
+	case RequestToFloat64:
+		return float64LT(mapper, value)
 	}
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
@@ -128,6 +133,8 @@ func GT(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
 		return intGT(mapper, value)
+	case RequestToFloat64:
+		return float64GT(mapper, value)
 	}
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
@@ -137,6 +144,8 @@ func LE(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
 		return intLE(mapper, value)
+	case RequestToFloat64:
+		return float64LE(mapper, value)
 	}
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
@@ -146,6 +155,8 @@ func GE(m interface{}, value interface{}) (Predicate, error) {
 	switch mapper := m.(type) {
 	case RequestToInt:
 		return intGE(mapper, value)
+	case RequestToFloat64:
+		return float64GE(mapper, value)
 	}
 	return nil, fmt.Errorf("unsupported argument: %T", m)
 }
@@ -204,6 +215,56 @@ func intGE(m RequestToInt, val interface{}) (Predicate, error) {
 	value, ok := val.(int)
 	if !ok {
 		return nil, fmt.Errorf("expected int, got %T", val)
+	}
+	return func(req request.Request) bool {
+		return m(req) >= value
+	}, nil
+}
+
+func float64EQ(m RequestToFloat64, val interface{}) (Predicate, error) {
+	value, ok := val.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expected float64, got %T", val)
+	}
+	return func(req request.Request) bool {
+		return m(req) == value
+	}, nil
+}
+
+func float64LT(m RequestToFloat64, val interface{}) (Predicate, error) {
+	value, ok := val.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expected float64, got %T", val)
+	}
+	return func(req request.Request) bool {
+		return m(req) < value
+	}, nil
+}
+
+func float64GT(m RequestToFloat64, val interface{}) (Predicate, error) {
+	value, ok := val.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expected float64, got %T", val)
+	}
+	return func(req request.Request) bool {
+		return m(req) > value
+	}, nil
+}
+
+func float64LE(m RequestToFloat64, val interface{}) (Predicate, error) {
+	value, ok := val.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expected float64, got %T", val)
+	}
+	return func(req request.Request) bool {
+		return m(req) <= value
+	}, nil
+}
+
+func float64GE(m RequestToFloat64, val interface{}) (Predicate, error) {
+	value, ok := val.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expected float64, got %T", val)
 	}
 	return func(req request.Request) bool {
 		return m(req) >= value
