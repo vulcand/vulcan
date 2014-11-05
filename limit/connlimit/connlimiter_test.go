@@ -1,10 +1,11 @@
 package connlimit
 
 import (
-	"github.com/mailgun/vulcan/request"
-	. "gopkg.in/check.v1"
 	"net/http"
 	"testing"
+
+	"github.com/mailgun/vulcan/request"
+	. "gopkg.in/check.v1"
 )
 
 func TestConn(t *testing.T) { TestingT(t) }
