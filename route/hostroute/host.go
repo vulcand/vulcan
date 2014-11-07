@@ -30,9 +30,37 @@ func (h *HostRouter) Route(req Request) (Location, error) {
 
 	hostname := strings.Split(strings.ToLower(req.GetHttpRequest().Host), ":")[0]
 	matcher, exists := h.routers[hostname]
+
+	// search for wildcard domains
 	if !exists {
+		hostname := strings.Split(hostname, ".")
+		for key, value := range h.routers {
+			keys := strings.Split(key, ".")
+
+			if len(hostname) != len(keys) {
+				continue
+			}
+
+			matches := true
+			for i := len(hostname) - 1; i >= 0; i-- {
+				if keys[i] == "*" {
+					continue
+				}
+
+				if hostname[i] != keys[i] {
+					matches = false
+					break
+				}
+			}
+
+			if matches {
+				return value.Route(req)
+			}
+		}
+
 		return nil, nil
 	}
+
 	return matcher.Route(req)
 }
 
