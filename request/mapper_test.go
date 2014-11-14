@@ -1,18 +1,19 @@
-package limit
+package request
 
 import (
-	. "gopkg.in/check.v1"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestLimit(t *testing.T) { TestingT(t) }
+func TestMapper(t *testing.T) { TestingT(t) }
 
-type LimitSuite struct {
+type MapperSuite struct {
 }
 
-var _ = Suite(&LimitSuite{})
+var _ = Suite(&MapperSuite{})
 
-func (s *LimitSuite) TestVariableToMapper(c *C) {
+func (s *MapperSuite) TestVariableToMapper(c *C) {
 	m, err := VariableToMapper("client.ip")
 	c.Assert(err, IsNil)
 	c.Assert(m, NotNil)

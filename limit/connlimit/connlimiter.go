@@ -3,29 +3,29 @@ package connlimit
 
 import (
 	"fmt"
-	"github.com/mailgun/vulcan/errors"
-	"github.com/mailgun/vulcan/limit"
-	"github.com/mailgun/vulcan/netutils"
-	"github.com/mailgun/vulcan/request"
 	"net/http"
 	"sync"
+
+	"github.com/mailgun/vulcan/errors"
+	"github.com/mailgun/vulcan/netutils"
+	"github.com/mailgun/vulcan/request"
 )
 
 // This limiter tracks concurrent connection per token
 // and is capable of rejecting connections if they are failed
 type ConnectionLimiter struct {
 	mutex            *sync.Mutex
-	mapper           limit.MapperFn
+	mapper           request.MapperFn
 	connections      map[string]int64
 	maxConnections   int64
 	totalConnections int64
 }
 
 func NewClientIpLimiter(maxConnections int64) (*ConnectionLimiter, error) {
-	return NewConnectionLimiter(limit.MapClientIp, maxConnections)
+	return NewConnectionLimiter(request.MapClientIp, maxConnections)
 }
 
-func NewConnectionLimiter(mapper limit.MapperFn, maxConnections int64) (*ConnectionLimiter, error) {
+func NewConnectionLimiter(mapper request.MapperFn, maxConnections int64) (*ConnectionLimiter, error) {
 	if mapper == nil {
 		return nil, fmt.Errorf("Mapper function can not be nil")
 	}

@@ -1,12 +1,12 @@
 package tokenbucket
 
 import (
-	"github.com/mailgun/timetools"
-	. "github.com/mailgun/vulcan/limit"
-	"github.com/mailgun/vulcan/request"
-	. "gopkg.in/check.v1"
 	"net/http"
 	"time"
+
+	"github.com/mailgun/timetools"
+	"github.com/mailgun/vulcan/request"
+	. "gopkg.in/check.v1"
 )
 
 type LimiterSuite struct {
@@ -24,7 +24,7 @@ func (s *LimiterSuite) SetUpSuite(c *C) {
 // We've hit the limit and were able to proceed on the next time run
 func (s *LimiterSuite) TestHitLimit(c *C) {
 	l, err := NewTokenLimiterWithOptions(
-		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
+		request.MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
 	c.Assert(err, IsNil)
 	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
@@ -46,7 +46,7 @@ func (s *LimiterSuite) TestHitLimit(c *C) {
 // We've failed to extract client ip
 func (s *LimiterSuite) TestFailure(c *C) {
 	l, err := NewTokenLimiterWithOptions(
-		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
+		request.MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 	c.Assert(err, IsNil)
 
 	_, err = l.ProcessRequest(makeRequest(""))
@@ -62,7 +62,7 @@ func (s *LimiterSuite) TestInvalidParams(c *C) {
 // Make sure rates from different ips are controlled separatedly
 func (s *LimiterSuite) TestIsolation(c *C) {
 	l, err := NewTokenLimiterWithOptions(
-		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
+		request.MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
 	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
 	c.Assert(err, IsNil)
@@ -82,7 +82,7 @@ func (s *LimiterSuite) TestIsolation(c *C) {
 // Make sure that expiration works (Expiration is triggered after significant amount of time passes)
 func (s *LimiterSuite) TestExpiration(c *C) {
 	l, err := NewTokenLimiterWithOptions(
-		MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
+		request.MapClientIp, Rate{Units: 1, Period: time.Second}, Options{TimeProvider: s.tm})
 
 	re, err := l.ProcessRequest(makeRequest("1.2.3.4"))
 	c.Assert(re, IsNil)

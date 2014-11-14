@@ -3,22 +3,22 @@ package tokenbucket
 
 import (
 	"fmt"
-	"github.com/mailgun/timetools"
-	"github.com/mailgun/ttlmap"
-	"github.com/mailgun/vulcan/errors"
-	"github.com/mailgun/vulcan/limit"
-	"github.com/mailgun/vulcan/netutils"
-	"github.com/mailgun/vulcan/request"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/mailgun/timetools"
+	"github.com/mailgun/ttlmap"
+	"github.com/mailgun/vulcan/errors"
+	"github.com/mailgun/vulcan/netutils"
+	"github.com/mailgun/vulcan/request"
 )
 
 type TokenLimiter struct {
 	buckets *ttlmap.TtlMap
 	mutex   *sync.Mutex
 	options Options
-	mapper  limit.MapperFn
+	mapper  request.MapperFn
 	rate    Rate
 }
 
@@ -26,15 +26,15 @@ type Options struct {
 	Rate         Rate  // Average allowed rate
 	Burst        int64 // Burst size
 	Capacity     int   // Overall capacity (maximum sumultaneuously active tokens)
-	Mapper       limit.MapperFn
+	Mapper       request.MapperFn
 	TimeProvider timetools.TimeProvider
 }
 
-func NewTokenLimiter(mapper limit.MapperFn, rate Rate) (*TokenLimiter, error) {
+func NewTokenLimiter(mapper request.MapperFn, rate Rate) (*TokenLimiter, error) {
 	return NewTokenLimiterWithOptions(mapper, rate, Options{})
 }
 
-func NewTokenLimiterWithOptions(mapper limit.MapperFn, rate Rate, o Options) (*TokenLimiter, error) {
+func NewTokenLimiterWithOptions(mapper request.MapperFn, rate Rate, o Options) (*TokenLimiter, error) {
 	if mapper == nil {
 		return nil, fmt.Errorf("Provide mapper function")
 	}
