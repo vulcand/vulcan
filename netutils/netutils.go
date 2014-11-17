@@ -22,7 +22,7 @@ func CopyUrl(in *url.URL) *url.URL {
 
 // RawPath returns escaped url path section
 func RawPath(in string) (string, error) {
-	u, err := url.Parse(in)
+	u, err := url.ParseRequestURI(in)
 	if err != nil {
 		return "", err
 	}
