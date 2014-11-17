@@ -22,9 +22,16 @@ func CopyUrl(in *url.URL) *url.URL {
 
 // RawPath returns escaped url path section
 func RawPath(in string) (string, error) {
-	u, err := ParseUrl(in)
+	u, err := url.Parse(in)
 	if err != nil {
 		return "", err
+	}
+	if u.Opaque != "" {
+		return u.Opaque, nil
+	}
+	// This is local URL, has no host, return as-is
+	if u.Host == "" {
+		return in, nil
 	}
 	vals := strings.SplitN(in, u.Host, 2)
 	if len(vals) != 2 {

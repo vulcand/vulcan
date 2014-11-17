@@ -35,6 +35,8 @@ func (s *NetUtilsSuite) TestURLRawPath(c *C) {
 		{"http://google.com/", "/"},
 		{"http://google.com/a?q=b", "/a"},
 		{"http://google.com/%2Fvalue/hello", "/%2Fvalue/hello"},
+		{"/home", "/home"},
+		{"/home%2F", "/home%2F"},
 	}
 	for _, v := range vals {
 		out, err := RawPath(v.URL)
