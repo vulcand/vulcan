@@ -1,8 +1,5 @@
 /*
-Expression based request router, supports functions and combinations of functions in form
-
 see http://godoc.org/github.com/mailgun/route for documentation on the language
-
 */
 package exproute
 
