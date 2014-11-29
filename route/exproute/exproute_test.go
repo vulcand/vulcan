@@ -34,7 +34,7 @@ func (s *RouteSuite) TestConvertPath(c *C) {
 	}
 	for i, t := range tc {
 		comment := Commentf("tc%d", i)
-		c.Assert(convertPath(t.in), Equals, t.out, comment)
+		c.Assert(FromLegacy(t.in), Equals, t.out, comment)
 	}
 }
 

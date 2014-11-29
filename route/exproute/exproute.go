@@ -24,7 +24,7 @@ func NewExpRouter() *ExpRouter {
 }
 
 func (e *ExpRouter) GetLocationByExpression(expr string) location.Location {
-	v := e.r.GetRoute(convertPath(expr))
+	v := e.r.GetRoute(FromLegacy(expr))
 	if v == nil {
 		return nil
 	}
@@ -32,11 +32,11 @@ func (e *ExpRouter) GetLocationByExpression(expr string) location.Location {
 }
 
 func (e *ExpRouter) AddLocation(expr string, l location.Location) error {
-	return e.r.AddRoute(convertPath(expr), l)
+	return e.r.AddRoute(FromLegacy(expr), l)
 }
 
 func (e *ExpRouter) RemoveLocationByExpression(expr string) error {
-	return e.r.RemoveRoute(convertPath(expr))
+	return e.r.RemoveRoute(FromLegacy(expr))
 }
 
 func (e *ExpRouter) Route(req request.Request) (location.Location, error) {
@@ -50,8 +50,13 @@ func (e *ExpRouter) Route(req request.Request) (location.Location, error) {
 	return l.(location.Location), nil
 }
 
-// convertPath changes strings to structured format /hello -> RegexpRoute("/hello") and leaves structured strings unchanged.
-func convertPath(in string) string {
+// IsValid checks if the given expression is a valid route
+func IsValid(expr string) bool {
+	return route.IsValid(expr)
+}
+
+// FromLegacy changes legacy paths to new format /hello -> PathRegexp("/hello") and leaves expressions in new format unchanged.
+func FromLegacy(in string) string {
 	if !strings.Contains(in, "(") {
 		return fmt.Sprintf(`PathRegexp(%#v)`, in)
 	}
