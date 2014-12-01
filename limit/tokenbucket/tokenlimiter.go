@@ -95,6 +95,16 @@ func NewLimiter(defaultRates *RateSet, capacity int, mapper limit.MapperFn, conf
 	}, nil
 }
 
+// DefaultRates returns the default rate set of the limiter. The only reason to
+// Provide this method is to facilitate testing.
+func (tl *TokenLimiter) DefaultRates() *RateSet {
+	defaultRates := NewRateSet()
+	for _, r := range tl.defaultRates.m {
+		defaultRates.Add(r.period, r.average, r.burst)
+	}
+	return defaultRates
+}
+
 func (tl *TokenLimiter) ProcessRequest(r request.Request) (*http.Response, error) {
 	tl.mutex.Lock()
 	defer tl.mutex.Unlock()
