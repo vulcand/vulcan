@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	. "github.com/mailgun/vulcan/request"
+	"net/http"
 	"sort"
 	"sync"
 )
@@ -46,6 +47,25 @@ func (c *MiddlewareChain) Get(id string) Middleware {
 func (c *MiddlewareChain) GetIter() *MiddlewareIter {
 	return &MiddlewareIter{
 		iter: c.chain.getIter(),
+	}
+}
+
+func (c *MiddlewareChain) ProcessRequest(r Request) (*http.Response, error) {
+	it := c.chain.getIter()
+	for v := it.next(); v != nil; v = it.next() {
+		resp, err := v.(Middleware).ProcessRequest(r)
+		if resp != nil || err != nil {
+			break
+			return resp, err
+		}
+	}
+	return nil, nil
+}
+
+func (c *MiddlewareChain) ProcessResponse(r Request, a Attempt) {
+	it := c.chain.getReverseIter()
+	for v := it.next(); v != nil; v = it.next() {
+		v.(Middleware).ProcessResponse(r, a)
 	}
 }
 
