@@ -55,6 +55,7 @@ func (c *MiddlewareChain) ProcessRequest(r Request) (*http.Response, error) {
 	for v := it.next(); v != nil; v = it.next() {
 		// Track how deep we've gotten in the middleware chain
 		c.chain.callDepth = it.index + 1
+
 		resp, err := v.(Middleware).ProcessRequest(r)
 		if resp != nil || err != nil {
 			break
