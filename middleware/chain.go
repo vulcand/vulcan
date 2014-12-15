@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	. "github.com/mailgun/vulcan/request"
+	"net/http"
 	"sort"
 	"sync"
 )
@@ -46,6 +47,33 @@ func (c *MiddlewareChain) Get(id string) Middleware {
 func (c *MiddlewareChain) GetIter() *MiddlewareIter {
 	return &MiddlewareIter{
 		iter: c.chain.getIter(),
+	}
+}
+
+func (c *MiddlewareChain) ProcessRequest(r Request) (*http.Response, error) {
+	it := c.chain.getIter()
+	for v := it.next(); v != nil; v = it.next() {
+		// Track how deep we've gotten in the middleware chain
+		c.chain.callDepth = it.index + 1
+
+		resp, err := v.(Middleware).ProcessRequest(r)
+		if resp != nil || err != nil {
+			return resp, err
+		}
+	}
+
+	return nil, nil
+}
+
+func (c *MiddlewareChain) ProcessResponse(r Request, a Attempt) {
+	it := c.chain.getReverseIter()
+
+	// Set the iterator to start at the furthest spot we got in the chain during ProcessRequest
+	currentIndex := c.chain.callDepth
+	it.index = len(it.callbacks) - currentIndex
+
+	for v := it.next(); v != nil; v = it.next() {
+		v.(Middleware).ProcessResponse(r, a)
 	}
 }
 
@@ -122,6 +150,7 @@ func (c *ObserverChain) ObserveResponse(r Request, a Attempt) {
 type chain struct {
 	mutex     *sync.RWMutex
 	callbacks []*callback
+	callDepth int            // how deep into the chain we get on ProcessRequest / ObserveRequest. 1 based
 	indexes   map[string]int // Indexes for in place updates
 	iter      *iter          //current version of iterator
 }
