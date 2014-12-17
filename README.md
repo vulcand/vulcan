@@ -1,25 +1,11 @@
-[![Build Status](https://travis-ci.org/mailgun/vulcan.png)](https://travis-ci.org/mailgun/vulcan)
-[![Coverage Status](https://coveralls.io/repos/mailgun/vulcan/badge.png?branch=master)](https://coveralls.io/r/mailgun/vulcan?branch=master)
-
-
-Reverse proxy library
-----------------------
-
-Vulcan is a low level library that provides reverse proxy functionality to golang programs
-
-* Docs: http://www.vulcanproxy.com
-* Used by: https://github.com/mailgun/vulcand
-
-Features
---------
-
-* Load balancing
-* Request routing
-* Error detection and failure recovery
-* Connection and rate limiting
-* Pluggable middlewares
 
 Status
 ------
 
-* Hardening and covering by tests, use at own risk
+This library has been refactored into: https://github.com/mailgun/oxy and is being deprecated
+
+
+[OXY](https://github.com/mailgun/oxy) is compatible with HTTP standard library, provides the same features as Vulcan and is simpler to use. Please consider using it instead.
+
+Vulcan library will stay there for a while in case if you are using it, but I would suggest consider migrating. Vulcand project is currently migrating to oxy library.
+
